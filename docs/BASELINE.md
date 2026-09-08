@@ -28,16 +28,18 @@ node perf/benchmarks/run-benchmark.mjs
 
 ## 3. Initial Baseline Results (`baseline-v1`)
 
-Recorded against Next.js 16 production standalone build on 2026-09-08:
+Recorded against Next.js 16 production standalone build on 2026-09-08 for Mirza Footwear (Traditional Indian & Formal Leather Catalog):
 
 | Route | Path | HTTP Status | Response Size | TTFB (p75) | Duration (p75) | Duration (Avg) |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Homepage** | `/us/en` | 200 OK | 106.6 KB | 3.4 ms | 18.8 ms | 18.0 ms |
-| **Product Listing (PLP)** | `/us/en/products` | 200 OK | 86.4 KB | 3.3 ms | 23.5 ms | 20.8 ms |
-| **Product Detail (PDP)** | `/us/en/products/mirza-velocity-carbon-pro` | 200 OK | 78.2 KB | 3.1 ms | 17.0 ms | 13.5 ms |
-| **Category View** | `/us/en/c/running` | 200 OK | 89.5 KB | 3.6 ms | 23.9 ms | 20.6 ms |
-| **Cart View** | `/us/en/cart` | 200 OK | 69.7 KB | 3.2 ms | 13.4 ms | 12.3 ms |
-| **Search Query** | `/us/en/products?q=carbon` | 200 OK | 86.3 KB | 3.2 ms | 21.4 ms | 19.5 ms |
+| **Homepage** | `/us/en` | 200 OK | 122.5 KB | 3.6 ms | 19.1 ms | 18.7 ms |
+| **Product Listing (PLP)** | `/us/en/products` | 200 OK | 93.7 KB | 3.6 ms | 24.2 ms | 23.2 ms |
+| **PDP (Imperial Oxford)** | `/us/en/products/mirza-imperial-wholecut-oxford` | 200 OK | 78.8 KB | 3.1 ms | 15.1 ms | 13.9 ms |
+| **PDP (Royal Jutti)** | `/us/en/products/mirza-royal-embroidered-jutti` | 200 OK | 78.2 KB | 3.3 ms | 12.7 ms | 11.9 ms |
+| **Category (Formal & Office)** | `/us/en/c/formal-office` | 200 OK | 96.9 KB | 3.6 ms | 26.6 ms | 25.0 ms |
+| **Category (Traditional Indian)** | `/us/en/c/traditional-indian` | 200 OK | 96.9 KB | 3.4 ms | 23.0 ms | 21.7 ms |
+| **Cart View** | `/us/en/cart` | 200 OK | 70.3 KB | 2.4 ms | 11.1 ms | 10.1 ms |
+| **Search Query** | `/us/en/products?q=oxford` | 200 OK | 93.7 KB | 2.6 ms | 16.6 ms | 16.0 ms |
 
 ---
 

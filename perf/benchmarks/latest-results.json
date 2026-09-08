@@ -1,71 +1,93 @@
 {
-  "timestamp": "2026-09-08T15:37:03.893Z",
+  "timestamp": "2026-09-08T15:44:05.939Z",
   "results": [
     {
       "name": "Homepage",
       "path": "/us/en",
       "statusCode": 200,
-      "bytes": 109148,
-      "sizeKb": "106.6",
-      "avgTtfbMs": "3.4",
-      "avgDurationMs": "18.0",
+      "bytes": 125457,
+      "sizeKb": "122.5",
+      "avgTtfbMs": "3.6",
+      "avgDurationMs": "18.7",
       "minDurationMs": "15.7",
-      "p75DurationMs": "18.8"
+      "p75DurationMs": "19.1"
     },
     {
       "name": "Products Listing (PLP)",
       "path": "/us/en/products",
       "statusCode": 200,
-      "bytes": 88440,
-      "sizeKb": "86.4",
-      "avgTtfbMs": "3.3",
-      "avgDurationMs": "20.8",
-      "minDurationMs": "15.2",
-      "p75DurationMs": "23.5"
-    },
-    {
-      "name": "Product Detail (PDP)",
-      "path": "/us/en/products/mirza-velocity-carbon-pro",
-      "statusCode": 200,
-      "bytes": 80122,
-      "sizeKb": "78.2",
-      "avgTtfbMs": "3.1",
-      "avgDurationMs": "13.5",
-      "minDurationMs": "10.1",
-      "p75DurationMs": "17.0"
-    },
-    {
-      "name": "Category (Running)",
-      "path": "/us/en/c/running",
-      "statusCode": 200,
-      "bytes": 91618,
-      "sizeKb": "89.5",
+      "bytes": 95996,
+      "sizeKb": "93.7",
       "avgTtfbMs": "3.6",
-      "avgDurationMs": "20.6",
-      "minDurationMs": "15.7",
-      "p75DurationMs": "23.9"
+      "avgDurationMs": "23.2",
+      "minDurationMs": "19.8",
+      "p75DurationMs": "24.2"
+    },
+    {
+      "name": "PDP (Imperial Oxford)",
+      "path": "/us/en/products/mirza-imperial-wholecut-oxford",
+      "statusCode": 200,
+      "bytes": 80697,
+      "sizeKb": "78.8",
+      "avgTtfbMs": "3.1",
+      "avgDurationMs": "13.9",
+      "minDurationMs": "10.6",
+      "p75DurationMs": "15.1"
+    },
+    {
+      "name": "PDP (Royal Jutti)",
+      "path": "/us/en/products/mirza-royal-embroidered-jutti",
+      "statusCode": 200,
+      "bytes": 80107,
+      "sizeKb": "78.2",
+      "avgTtfbMs": "3.3",
+      "avgDurationMs": "11.9",
+      "minDurationMs": "10.0",
+      "p75DurationMs": "12.7"
+    },
+    {
+      "name": "Category (Formal & Office)",
+      "path": "/us/en/c/formal-office",
+      "statusCode": 200,
+      "bytes": 99186,
+      "sizeKb": "96.9",
+      "avgTtfbMs": "3.6",
+      "avgDurationMs": "25.0",
+      "minDurationMs": "21.1",
+      "p75DurationMs": "26.6"
+    },
+    {
+      "name": "Category (Traditional Indian)",
+      "path": "/us/en/c/traditional-indian",
+      "statusCode": 200,
+      "bytes": 99196,
+      "sizeKb": "96.9",
+      "avgTtfbMs": "3.4",
+      "avgDurationMs": "21.7",
+      "minDurationMs": "17.5",
+      "p75DurationMs": "23.0"
     },
     {
       "name": "Cart View",
       "path": "/us/en/cart",
       "statusCode": 200,
-      "bytes": 71421,
-      "sizeKb": "69.7",
-      "avgTtfbMs": "3.2",
-      "avgDurationMs": "12.3",
-      "minDurationMs": "10.0",
-      "p75DurationMs": "13.4"
+      "bytes": 71950,
+      "sizeKb": "70.3",
+      "avgTtfbMs": "2.4",
+      "avgDurationMs": "10.1",
+      "minDurationMs": "8.5",
+      "p75DurationMs": "11.1"
     },
     {
       "name": "Search Query",
-      "path": "/us/en/products?q=carbon",
+      "path": "/us/en/products?q=oxford",
       "statusCode": 200,
-      "bytes": 88397,
-      "sizeKb": "86.3",
-      "avgTtfbMs": "3.2",
-      "avgDurationMs": "19.5",
-      "minDurationMs": "16.2",
-      "p75DurationMs": "21.4"
+      "bytes": 95953,
+      "sizeKb": "93.7",
+      "avgTtfbMs": "2.6",
+      "avgDurationMs": "16.0",
+      "minDurationMs": "14.5",
+      "p75DurationMs": "16.6"
     }
   ]
 }

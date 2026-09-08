@@ -16,10 +16,12 @@ const ITERATIONS = parseInt(process.env.BENCHMARK_ITERATIONS || '5', 10);
 const ROUTES = [
   { name: 'Homepage', path: '/us/en' },
   { name: 'Products Listing (PLP)', path: '/us/en/products' },
-  { name: 'Product Detail (PDP)', path: '/us/en/products/mirza-velocity-carbon-pro' },
-  { name: 'Category (Running)', path: '/us/en/c/running' },
+  { name: 'PDP (Imperial Oxford)', path: '/us/en/products/mirza-imperial-wholecut-oxford' },
+  { name: 'PDP (Royal Jutti)', path: '/us/en/products/mirza-royal-embroidered-jutti' },
+  { name: 'Category (Formal & Office)', path: '/us/en/c/formal-office' },
+  { name: 'Category (Traditional Indian)', path: '/us/en/c/traditional-indian' },
   { name: 'Cart View', path: '/us/en/cart' },
-  { name: 'Search Query', path: '/us/en/products?q=carbon' },
+  { name: 'Search Query', path: '/us/en/products?q=oxford' },
 ];
 
 async function measureRoute(name, routePath) {

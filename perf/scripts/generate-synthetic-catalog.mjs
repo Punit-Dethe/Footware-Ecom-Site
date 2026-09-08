@@ -9,15 +9,14 @@ const DEFAULT_SPREE_URL = process.env.SPREE_API_URL || 'http://localhost:4000';
 const DEFAULT_API_KEY = process.env.SPREE_PUBLISHABLE_KEY || '';
 
 const FOOTWEAR_TAXONOMIES = [
-  { name: 'Running', description: 'High-performance running shoes and marathon trainers' },
-  { name: 'Lifestyle & Sneakers', description: 'Everyday lifestyle and streetwear silhouettes' },
-  { name: 'Basketball', description: 'Court-ready high-top and low-top basketball footwear' },
-  { name: 'Trail & Outdoor', description: 'Rugged terrain, waterproof hiking and trail running footwear' },
-  { name: 'Training & Gym', description: 'Cross-training, lifting, and HIIT footwear' },
+  { name: 'Formal & Office Shoes', description: 'Goodyear-welted Oxfords, Brogues, and Monk Straps for boardroom distinction.' },
+  { name: 'Traditional Indian Footwear', description: 'Ceremonial Juttis, authentic Mojaris, handcrafted Kolhapuris, and royal Peshawaris.' },
+  { name: 'Loafers & Slip-Ons', description: 'Saddle Penny Loafers and Venetian slip-ons handcrafted from vegetable-tanned leather.' },
+  { name: 'Leather Boots', description: 'Refined Chelsea and Chukka boots with burnished patina and all-day comfort.' },
 ];
 
-const SIZES = ['US 7', 'US 7.5', 'US 8', 'US 8.5', 'US 9', 'US 9.5', 'US 10', 'US 10.5', 'US 11', 'US 12'];
-const COLORS = ['Triple Black', 'Cloud White', 'Volt Orange', 'Midnight Navy', 'Metallic Silver'];
+const SIZES = ['UK/India 6', 'UK/India 7', 'UK/India 8', 'UK/India 9', 'UK/India 10', 'UK/India 11', 'UK/India 12'];
+const COLORS = ['Mahogany Tan', 'Deep Oxblood', 'Antique Cognac', 'Midnight Black', 'Espresso Brown', 'Regal Gold'];
 
 console.log(`[Catalog Generator] Spree URL: ${DEFAULT_SPREE_URL}`);
 console.log(`[Catalog Generator] Taxonomy Categories: ${FOOTWEAR_TAXONOMIES.map(t => t.name).join(', ')}`);
