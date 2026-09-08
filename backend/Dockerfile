@@ -97,10 +97,11 @@ RUN bundle install && \
 
 # Copy application code
 COPY --from=ctx /rails-src ./
+RUN chmod +x bin/*
 
 # Precompile bootsnap code for faster boot times and assets
 RUN bundle exec bootsnap precompile app/ lib/ && \
-  SECRET_KEY_BASE_DUMMY=1 ./bin/rails assets:precompile
+  SECRET_KEY_BASE_DUMMY=1 bundle exec rails assets:precompile
 
 # Development stage: inherits the build stage (which has build-essential,
 # libpq-dev, etc. and a full bundle minus dev/test). Adds the dev/test gems
@@ -137,7 +138,6 @@ FROM base
 # Run and own only the runtime files as a non-root user for security
 RUN groupadd --system --gid 1000 rails && \
   useradd rails --uid 1000 --gid 1000 --create-home --shell /bin/bash
-USER 1000:1000
 
 # Copy built artifacts: gems, application. tailwindcss-ruby's exe/ (the
 # ~105MB standalone Tailwind CLI) is excluded — it's only used by
@@ -145,6 +145,8 @@ USER 1000:1000
 # Bundler.require keeps working at boot.
 COPY --chown=rails:rails --from=build --exclude=ruby/*/gems/tailwindcss-ruby-*/exe "${BUNDLE_PATH}" "${BUNDLE_PATH}"
 COPY --chown=rails:rails --from=build /rails /rails
+RUN chmod +x /rails/bin/*
+USER 1000:1000
 
 # React Dashboard, served by Rails at /dashboard (see the dashboard stage
 # above). The bundle is origin-relative — it works on any host.
