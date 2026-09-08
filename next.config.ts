@@ -1,7 +1,12 @@
+import bundleAnalyzer from "@next/bundle-analyzer";
 import { withSentryConfig } from "@sentry/nextjs";
 import type { NextConfig } from "next";
 import type { RemotePattern } from "next/dist/shared/lib/image-config";
 import createNextIntlPlugin from "next-intl/plugin";
+
+const withBundleAnalyzer = bundleAnalyzer({
+  enabled: process.env.ANALYZE === "true",
+});
 
 const withNextIntl = createNextIntlPlugin();
 
@@ -75,8 +80,7 @@ const nextConfig: NextConfig = {
 };
 
 const configWithIntl = withNextIntl(nextConfig);
-
-export default process.env.SENTRY_DSN
+const finalConfig = process.env.SENTRY_DSN
   ? withSentryConfig(configWithIntl, {
       org: process.env.SENTRY_ORG,
       project: process.env.SENTRY_PROJECT,
@@ -96,3 +100,5 @@ export default process.env.SENTRY_DSN
       telemetry: false,
     })
   : configWithIntl;
+
+export default withBundleAnalyzer(finalConfig);
