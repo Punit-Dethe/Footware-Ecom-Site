@@ -6,8 +6,8 @@ Rails.application.configure do
   # Code is not reloaded between requests.
   config.enable_reloading = false
 
-  # Eager load code on boot for better performance and memory savings (ignored by Rake tasks).
-  config.eager_load = true
+  # Eager load code on boot (disabled in memory-constrained environments).
+  config.eager_load = ENV["RAILS_EAGER_LOAD"] == "true"
 
   # Full error reports are disabled.
   config.consider_all_requests_local = false
