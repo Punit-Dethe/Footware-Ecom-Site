@@ -158,38 +158,17 @@ export function ProductDetails({ product, basePath }: ProductDetailsProps) {
           </div>
 
           {/* Stock Status */}
-          <div className="mt-4 flex items-center gap-3">
+          <div className="mt-4">
             {inStock ? (
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs sm:text-sm font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/80">
-                <CircleCheckBig className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>{t("inStock")}</span>
-                {(() => {
-                  const stockCount =
-                    (
-                      selectedVariant as unknown as {
-                        stock?: number;
-                        total_on_hand?: number;
-                      }
-                    )?.stock ??
-                    (product as unknown as { total_on_hand?: number })
-                      ?.total_on_hand;
-                  if (stockCount != null && stockCount > 0) {
-                    return (
-                      <span className="text-emerald-800 font-normal border-l border-emerald-300 pl-2">
-                        {stockCount <= 5
-                          ? `Only ${stockCount} pairs left`
-                          : `${stockCount} pairs available`}
-                      </span>
-                    );
-                  }
-                  return null;
-                })()}
-              </div>
+              <span className="inline-flex items-center gap-1.5 text-green-600">
+                <CircleCheckBig className="w-5 h-5" />
+                {t("inStock")}
+              </span>
             ) : (
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs sm:text-sm font-medium bg-rose-50 text-rose-700 border border-rose-200/80">
-                <CircleX className="w-4 h-4 text-rose-600 shrink-0" />
-                <span>{t("outOfStock")}</span>
-              </div>
+              <span className="inline-flex items-center gap-1.5 text-red-600">
+                <CircleX className="w-5 h-5" />
+                {t("outOfStock")}
+              </span>
             )}
           </div>
 

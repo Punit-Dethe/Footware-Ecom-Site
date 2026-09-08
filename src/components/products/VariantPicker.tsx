@@ -170,7 +170,7 @@ export function VariantPicker({
                       title={optionValue?.label || value}
                       className={`
                         w-10 h-10 rounded-lg border transition-all relative overflow-hidden
-                        ${isSelected ? "border-gray-900 ring-2 ring-primary ring-offset-2" : "border-gray-200"}
+                        ${isSelected ? "border-2 border-gray-900" : "border-gray-200"}
                         ${!isAvailable ? "opacity-30 cursor-not-allowed" : "cursor-pointer"}
                         ${!isPurchasable && isAvailable ? "opacity-50" : ""}
                       `}
@@ -217,7 +217,7 @@ export function VariantPicker({
                       disabled={!isAvailable}
                       className={
                         isSelected
-                          ? "ring-2 ring-primary ring-offset-2 border-primary"
+                          ? "border-2 border-gray-900 font-semibold"
                           : ""
                       }
                     >
