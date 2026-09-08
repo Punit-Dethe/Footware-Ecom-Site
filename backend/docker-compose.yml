@@ -1,0 +1,47 @@
+# Official Spree Commerce Docker Compose Configuration
+# Uses official prebuilt Spree image — no local Ruby build needed.
+# Reference: https://spreecommerce.org/docs/developer/cli/quickstart
+
+name: spree-backend
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: trust
+      PGDATA: /var/lib/postgresql/18/docker
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: pg_isready -U postgres
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  web:
+    image: ${SPREE_IMAGE:-ghcr.io/spree/spree:latest}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://postgres@postgres:5432/spree_development
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE:-09d9c28e986d3d9e4e613b52d9a3b68018e698246473062823673329cf0d15e5a26a5c102a0a256a297e289f66ebba0fc7e974e6443c2242b58ef30773e2ff5b}
+      RAILS_FORCE_SSL: "false"
+      RAILS_ASSUME_SSL: "false"
+      RAILS_HOST: localhost:${SPREE_PORT:-4000}
+      PORT: "3000"
+      SOLID_QUEUE_IN_PUMA: "true"
+    ports:
+      - "${SPREE_PORT:-4000}:3000"
+    volumes:
+      - storage_data:/rails/storage
+    healthcheck:
+      test: curl -f http://localhost:3000/up || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 45s
+
+volumes:
+  postgres_data:
+  storage_data:

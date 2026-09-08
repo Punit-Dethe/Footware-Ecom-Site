@@ -1,0 +1,68 @@
+{
+  "name": "Mirza Footwear Performance Budgets",
+  "version": "1.0.0",
+  "metrics": {
+    "LCP": {
+      "target": 1200,
+      "unit": "ms",
+      "p75Max": 1500,
+      "description": "Largest Contentful Paint at p75"
+    },
+    "INP": {
+      "target": 100,
+      "unit": "ms",
+      "p75Max": 150,
+      "description": "Interaction to Next Paint at p75"
+    },
+    "CLS": {
+      "target": 0.03,
+      "unit": "score",
+      "p75Max": 0.05,
+      "description": "Cumulative Layout Shift"
+    },
+    "FCP": {
+      "target": 800,
+      "unit": "ms",
+      "p75Max": 1000,
+      "description": "First Contentful Paint"
+    },
+    "TTFB": {
+      "target": 200,
+      "unit": "ms",
+      "p75Max": 350,
+      "description": "Time to First Byte (cached/CDN)"
+    }
+  },
+  "resourceBudgets": {
+    "homepage": {
+      "maxScriptSizeKb": 120,
+      "maxTotalTransferredKb": 600,
+      "maxRequests": 35
+    },
+    "plp": {
+      "maxScriptSizeKb": 140,
+      "maxTotalTransferredKb": 900,
+      "maxRequests": 45
+    },
+    "pdp": {
+      "maxScriptSizeKb": 150,
+      "maxTotalTransferredKb": 850,
+      "maxRequests": 40
+    },
+    "search": {
+      "maxScriptSizeKb": 140,
+      "maxTotalTransferredKb": 700,
+      "maxRequests": 35
+    },
+    "cart": {
+      "maxScriptSizeKb": 130,
+      "maxTotalTransferredKb": 500,
+      "maxRequests": 30
+    }
+  },
+  "rules": {
+    "maxPrBundleDeltaKb": 20,
+    "requireFreshnessClassification": true,
+    "disallowUncompressedAboveTheFold": true
+  }
+}

@@ -1,0 +1,36 @@
+name: Lighthouse CI Performance Gates
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lhci:
+    name: Lighthouse CI Audits
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 10.33.4
+
+      - name: Install dependencies
+        run: pnpm --prefix storefront install --frozen-lockfile
+
+      - name: Build Storefront
+        run: pnpm --prefix storefront run build
+
+      - name: Run Lighthouse CI
+        run: |
+          npm install -g @lhci/cli@0.14.x
+          lhci autorun --config=perf/lighthouse/lighthouserc.json

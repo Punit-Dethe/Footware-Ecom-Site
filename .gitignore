@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Next.js build output
+.next/
+out/
+dist/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+
+# Environment variables
+.env.local
+.env.*.local
+!.env.example
+!.env.*.example
+
+# OS and IDE files
+.DS_Store
+*.pem
+Thumbs.db
+.vscode/
+.idea/
+
+# Docker volumes / persistence
+postgres_data/
+storage_data/
+meilisearch_data/
