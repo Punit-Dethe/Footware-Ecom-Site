@@ -9,8 +9,63 @@
 
 import http from 'node:http';
 import url from 'node:url';
+import fs from 'node:fs';
+import path from 'node:path';
+import pg from 'pg';
+
+// Automatically load backend .env if present
+try {
+  if (typeof process.loadEnvFile === 'function') {
+    const envPath = path.resolve(process.cwd(), '.env');
+    const backendEnvPath = path.resolve(process.cwd(), 'backend', '.env');
+    if (fs.existsSync(backendEnvPath)) {
+      process.loadEnvFile(backendEnvPath);
+    } else if (fs.existsSync(envPath)) {
+      process.loadEnvFile(envPath);
+    }
+  }
+} catch {
+  // Ignore if env file does not exist
+}
 
 const PORT = parseInt(process.env.SPREE_PORT || '4000', 10);
+const SUPABASE_URL = process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL;
+
+let dbPool = null;
+if (SUPABASE_URL) {
+  try {
+    dbPool = new pg.Pool({
+      connectionString: SUPABASE_URL,
+      ssl: { rejectUnauthorized: false },
+      max: 10,
+      idleTimeoutMillis: 30000,
+    });
+    dbPool.on('error', (err) => {
+      console.warn('[Supabase DB Pool Error]', err.message);
+    });
+  } catch (err) {
+    console.warn('[Supabase DB Init Error]', err.message);
+  }
+}
+
+async function syncCatalogFromDatabase() {
+  if (!dbPool) return;
+  try {
+    const res = await dbPool.query('SELECT data_json, in_stock, total_on_hand FROM spree_products ORDER BY id ASC');
+    if (res.rows.length > 0) {
+      PRODUCTS.length = 0;
+      for (const row of res.rows) {
+        const prod = row.data_json;
+        prod.in_stock = row.in_stock;
+        prod.total_on_hand = row.total_on_hand;
+        PRODUCTS.push(prod);
+      }
+      console.log(`[Supabase DB] Synced ${PRODUCTS.length} live products from Supabase Mumbai.`);
+    }
+  } catch (err) {
+    console.warn('[Supabase DB] Sync fallback to local memory:', err.message);
+  }
+}
 
 const MARKETS = [
   {
@@ -972,6 +1027,38 @@ function handleRequest(req, res, pathname, query, body) {
     ORDERS.set(cart.id, { ...cart });
     ORDERS.set(cart.number, { ...cart });
 
+    if (dbPool) {
+      dbPool.query(
+        `INSERT INTO spree_orders (number, token, state, email, total, currency, order_data, completed_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+         ON CONFLICT (number) DO UPDATE SET state = $3, completed_at = NOW()`,
+        [
+          cart.number,
+          cart.token || 'tok_' + cart.id,
+          cart.state,
+          cart.email || 'customer@mirzafootwear.com',
+          parseFloat(cart.total || '0'),
+          cart.currency || 'USD',
+          JSON.stringify(cart),
+        ]
+      ).then(() => {
+        console.log(`[Supabase DB] Order ${cart.number} saved to Supabase Mumbai.`);
+      }).catch((err) => {
+        console.warn('[Supabase DB] Failed saving order to database:', err.message);
+      });
+
+      for (const item of (cart.items || [])) {
+        const qty = item.quantity || 1;
+        dbPool.query(
+          `UPDATE spree_stock_items si
+           SET count_on_hand = GREATEST(0, count_on_hand - $1)
+           FROM spree_variants v
+           WHERE si.variant_id = v.id AND v.sku = $2`,
+          [qty, item.sku]
+        ).catch(() => {});
+      }
+    }
+
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(cart));
     return;
@@ -1138,7 +1225,12 @@ function handleRequest(req, res, pathname, query, body) {
   res.end(JSON.stringify({ data: [], meta: { count: 0 } }));
 }
 
-server.listen(PORT, () => {
+server.listen(PORT, async () => {
   console.log(`==> Mock Spree Store API running at http://localhost:${PORT}`);
+  if (dbPool) {
+    await syncCatalogFromDatabase();
+  }
   console.log(`==> Serving ${PRODUCTS.length} Mirza Footwear traditional and formal leather products across ${CATEGORIES.length} categories.`);
 });
+
+export { PRODUCTS, CATEGORIES, MARKETS, COUNTRIES };
