@@ -1,7 +1,6 @@
 "use client";
 
 import { ArrowLeft, ChevronDown, ShoppingBag } from "lucide-react";
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -23,16 +22,14 @@ function CheckoutHeader() {
   const t = useTranslations("checkoutLayout");
 
   return (
-    <header className="flex items-center justify-between h-16">
-      <Link href={basePath || "/"} className="flex items-center space-x-2">
-        <Image
-          src="/spree.png"
-          alt={storeName}
-          width={90}
-          height={32}
-          fetchPriority="high"
-          loading="eager"
-        />
+    <header className="flex items-center justify-between h-16 border-b border-gray-100">
+      <Link href={basePath || "/"} className="flex flex-col">
+        <span className="font-serif text-lg font-bold tracking-[0.2em] uppercase text-stone-900 leading-tight">
+          Mirza Footwear
+        </span>
+        <span className="text-[9px] tracking-[0.25em] uppercase text-stone-500 font-medium">
+          White-Glove Checkout
+        </span>
       </Link>
       <Link
         href={basePath || "/"}

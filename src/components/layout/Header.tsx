@@ -1,7 +1,6 @@
 import type { Category } from "@spree/sdk";
 import { User } from "lucide-react";
 import dynamic from "next/dynamic";
-import Image from "next/image";
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
@@ -72,17 +71,16 @@ export async function Header({
       basePath={basePath}
       left={mobileNavigation}
       center={
-        <Link href={basePath || "/"} className="flex items-center min-w-0">
-          <Image
-            src="/spree.png"
-            alt={storeName}
-            width={90}
-            height={32}
-            className="max-w-full object-contain"
-            style={{ width: "auto", height: "auto" }}
-            fetchPriority="high"
-            loading="eager"
-          />
+        <Link
+          href={basePath || "/"}
+          className="group flex flex-col items-center justify-center text-center py-0.5 transition-opacity hover:opacity-85 select-none"
+        >
+          <span className="font-serif text-lg sm:text-2xl font-bold tracking-[0.22em] uppercase text-stone-900 leading-none">
+            Mirza Footwear
+          </span>
+          <span className="hidden sm:block text-[9px] tracking-[0.32em] uppercase text-stone-500 font-medium mt-1">
+            Artisanal Heritage &middot; Est. 2026
+          </span>
         </Link>
       }
       rightStart={
