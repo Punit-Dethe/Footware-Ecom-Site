@@ -1,0 +1,71 @@
+{
+  "timestamp": "2026-09-08T15:37:03.893Z",
+  "results": [
+    {
+      "name": "Homepage",
+      "path": "/us/en",
+      "statusCode": 200,
+      "bytes": 109148,
+      "sizeKb": "106.6",
+      "avgTtfbMs": "3.4",
+      "avgDurationMs": "18.0",
+      "minDurationMs": "15.7",
+      "p75DurationMs": "18.8"
+    },
+    {
+      "name": "Products Listing (PLP)",
+      "path": "/us/en/products",
+      "statusCode": 200,
+      "bytes": 88440,
+      "sizeKb": "86.4",
+      "avgTtfbMs": "3.3",
+      "avgDurationMs": "20.8",
+      "minDurationMs": "15.2",
+      "p75DurationMs": "23.5"
+    },
+    {
+      "name": "Product Detail (PDP)",
+      "path": "/us/en/products/mirza-velocity-carbon-pro",
+      "statusCode": 200,
+      "bytes": 80122,
+      "sizeKb": "78.2",
+      "avgTtfbMs": "3.1",
+      "avgDurationMs": "13.5",
+      "minDurationMs": "10.1",
+      "p75DurationMs": "17.0"
+    },
+    {
+      "name": "Category (Running)",
+      "path": "/us/en/c/running",
+      "statusCode": 200,
+      "bytes": 91618,
+      "sizeKb": "89.5",
+      "avgTtfbMs": "3.6",
+      "avgDurationMs": "20.6",
+      "minDurationMs": "15.7",
+      "p75DurationMs": "23.9"
+    },
+    {
+      "name": "Cart View",
+      "path": "/us/en/cart",
+      "statusCode": 200,
+      "bytes": 71421,
+      "sizeKb": "69.7",
+      "avgTtfbMs": "3.2",
+      "avgDurationMs": "12.3",
+      "minDurationMs": "10.0",
+      "p75DurationMs": "13.4"
+    },
+    {
+      "name": "Search Query",
+      "path": "/us/en/products?q=carbon",
+      "statusCode": 200,
+      "bytes": 88397,
+      "sizeKb": "86.3",
+      "avgTtfbMs": "3.2",
+      "avgDurationMs": "19.5",
+      "minDurationMs": "16.2",
+      "p75DurationMs": "21.4"
+    }
+  ]
+}

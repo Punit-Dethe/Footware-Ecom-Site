@@ -16,9 +16,10 @@ const ITERATIONS = parseInt(process.env.BENCHMARK_ITERATIONS || '5', 10);
 const ROUTES = [
   { name: 'Homepage', path: '/us/en' },
   { name: 'Products Listing (PLP)', path: '/us/en/products' },
-  { name: 'Categories Root', path: '/us/en/categories' },
+  { name: 'Product Detail (PDP)', path: '/us/en/products/mirza-velocity-carbon-pro' },
+  { name: 'Category (Running)', path: '/us/en/c/running' },
   { name: 'Cart View', path: '/us/en/cart' },
-  { name: 'Search Query', path: '/us/en/products?q=shoe' },
+  { name: 'Search Query', path: '/us/en/products?q=carbon' },
 ];
 
 async function measureRoute(name, routePath) {

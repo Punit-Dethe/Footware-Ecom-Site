@@ -1,0 +1,16 @@
+{
+  "name": "mirza-footwear",
+  "version": "1.0.0",
+  "private": true,
+  "description": "High-Performance Ecommerce Storefront for Mirza Footwear",
+  "scripts": {
+    "dev": "powershell -ExecutionPolicy Bypass -File ./start-dev.ps1",
+    "start": "powershell -ExecutionPolicy Bypass -File ./start-prod.ps1",
+    "build": "pnpm --prefix storefront run build",
+    "analyze": "pnpm --prefix storefront run analyze",
+    "benchmark": "node perf/benchmarks/run-benchmark.mjs",
+    "test": "pnpm --prefix storefront run test",
+    "bootstrap:docker": "powershell -ExecutionPolicy Bypass -File ./backend/bootstrap.ps1"
+  },
+  "keywords": ["ecommerce", "footwear", "spree", "nextjs", "performance"]
+}
