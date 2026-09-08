@@ -68,7 +68,8 @@ const nextConfig: NextConfig = {
   },
   images: {
     formats: ["image/avif", "image/webp"],
-    qualities: [25, 50, 75, 85, 100],
+    qualities: [25, 50, 65, 75, 85, 100],
+    minimumCacheTTL: 2678400, // 31 days immutable edge caching for transformed images
     dangerouslyAllowLocalIP: true, // Allow localhost images in development
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],

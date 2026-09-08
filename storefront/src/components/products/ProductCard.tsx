@@ -35,7 +35,8 @@ export const ProductCard = memo(function ProductCard({
   const router = useRouter();
   const imageUrl = product.thumbnail_url || null;
   const productHref = `${basePath}/products/${product.slug}${categoryId ? `?category_id=${categoryId}` : ""}`;
-  const isHighPriority = fetchPriority === "high";
+  const isHighPriority =
+    fetchPriority === "high" || (index !== undefined && index < 4);
 
   const handleIntentPrefetch = useCallback(() => {
     if (!isHighPriority && productHref) {
@@ -83,9 +84,11 @@ export const ProductCard = memo(function ProductCard({
           alt={product.name}
           fill
           className="object-cover group-hover:scale-105 transition-transform duration-300"
-          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 50vw, 300px"
+          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
           iconClassName="w-16 h-16"
-          fetchPriority={fetchPriority}
+          fetchPriority={fetchPriority ?? (isHighPriority ? "high" : "auto")}
+          priority={isHighPriority}
+          quality={65}
         />
         {onSale && (
           <span className="absolute top-2 left-2 bg-red-500 text-white text-xs font-medium px-2 py-1 rounded">

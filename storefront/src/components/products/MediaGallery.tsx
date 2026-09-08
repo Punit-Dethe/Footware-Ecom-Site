@@ -168,7 +168,7 @@ function MediaGalleryInner({
           fetchPriority="high"
           loading="eager"
           priority
-          quality={85}
+          quality={75}
           sizes="(max-width: 768px) 100vw, 50vw"
           placeholder="blur"
           blurDataURL={BLUR_PLACEHOLDER}
