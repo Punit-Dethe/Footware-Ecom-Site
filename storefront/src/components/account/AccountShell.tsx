@@ -7,6 +7,7 @@ import {
   Home,
   LogOut,
   MapPin,
+  ShieldCheck,
   ShoppingBag,
   User,
 } from "lucide-react";
@@ -57,11 +58,18 @@ export function AccountShell({ children }: { children: React.ReactNode }) {
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
             {/* User Info */}
             <div className="p-4 border-b border-gray-200">
-              <p className="font-medium text-gray-900">
-                {user?.first_name
-                  ? `${user.first_name} ${user.last_name || ""}`.trim()
-                  : t("myAccount")}
-              </p>
+              <div className="flex items-center justify-between">
+                <p className="font-medium text-gray-900">
+                  {user?.first_name
+                    ? `${user.first_name} ${user.last_name || ""}`.trim()
+                    : t("myAccount")}
+                </p>
+                {user?.role === "admin" && (
+                  <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-amber-100 text-amber-900">
+                    Admin
+                  </span>
+                )}
+              </div>
               <p className="text-sm text-gray-500 truncate">{user?.email}</p>
             </div>
 
@@ -90,6 +98,18 @@ export function AccountShell({ children }: { children: React.ReactNode }) {
                     </li>
                   );
                 })}
+
+                {user?.role === "admin" && (
+                  <li className="pt-2 mt-2 border-t border-gray-100">
+                    <Link
+                      href={`${basePath}/admin`}
+                      className="flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-semibold bg-amber-50 text-amber-900 border border-amber-200/80 hover:bg-amber-100/80 transition-colors"
+                    >
+                      <ShieldCheck className="w-5 h-5 text-amber-700" />
+                      Admin Console
+                    </Link>
+                  </li>
+                )}
               </ul>
             </nav>
 

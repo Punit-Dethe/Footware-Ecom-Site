@@ -128,13 +128,14 @@ export async function login(
     email: string;
     first_name?: string | null;
     last_name?: string | null;
+    role?: string | null;
   };
   error?: string;
 }> {
   try {
     const result = await getClient().auth.login({ email, password });
     await finalizeAuth(result.token, result.refresh_token);
-    return { success: true, user: result.user };
+    return { success: true, user: result.user as any };
   } catch (error) {
     return {
       success: false,
@@ -164,13 +165,14 @@ export async function register(params: {
     email: string;
     first_name?: string | null;
     last_name?: string | null;
+    role?: string | null;
   };
   error?: string;
 }> {
   try {
     const result = await getClient().customers.create(params);
     await finalizeAuth(result.token, result.refresh_token);
-    return { success: true, user: result.user };
+    return { success: true, user: result.user as any };
   } catch (error) {
     return {
       success: false,

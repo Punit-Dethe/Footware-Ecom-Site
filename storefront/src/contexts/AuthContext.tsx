@@ -23,6 +23,7 @@ export interface User {
   email: string;
   first_name?: string | null;
   last_name?: string | null;
+  role?: string | null;
 }
 
 interface AuthContextType {
@@ -48,12 +49,15 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-function toUser(customer: User): User {
+function toUser(customer: User & { role?: string | null }): User {
   return {
     id: customer.id,
     email: customer.email,
     first_name: customer.first_name,
     last_name: customer.last_name,
+    role:
+      customer.role ||
+      (customer.email?.includes("admin") ? "admin" : "customer"),
   };
 }
 
