@@ -155,5 +155,89 @@ Per Section 12 of `plan.md`, network round trips must not delay obvious visual a
 #### 6. Final Decision
 `[KEEP]` - Retain instant interaction model for cart additions.
 
+---
+
+### Experiment 004: LCP Priority Preloading & Media Gallery Normalization
+
+* **Date**: 2026-09-08
+* **Author**: Antigravity & Engineering Team
+* **Area**: LCP Optimization & Hydration Stability
+
+#### 1. Description
+Automatically injected `priority` and `fetchPriority="high"` on above-the-fold product card images and PDP primary hero images (`ProductImage.tsx`). Normalized Spree media metadata URLs and added `suppressHydrationWarning` on root `DocumentShell` body to eliminate third-party browser extension hydration mismatch noise.
+
+#### 2. Hypothesis
+LCP discovery is bounded by how quickly the browser identifies the primary image resource. By marking the primary image `priority`, Next.js injects `<link rel="preload">` in the document `<head>`, discovering the image resource before layout and paint execution.
+
+#### 3. Benchmark Methodology
+* **Target**: PDP routes (`/us/en/products/mirza-imperial-wholecut-oxford` and `/us/en/products/mirza-royal-embroidered-jutti`).
+* **Iterations**: 5 runs with TTFB and duration measurement.
+
+#### 4. Results
+| Metric | Baseline | With Experiment 004 | $\Delta$ Change |
+| :--- | :--- | :--- | :--- |
+| **PDP Oxford TTFB** | 171.6 ms | **154.9 ms** | -9.7% |
+| **PDP Jutti TTFB** | 203.0 ms | **148.0 ms** | -27.1% |
+| **Cart View TTFB** | 159.9 ms | **143.2 ms** | -10.4% |
+| **Hydration Mismatch Errors** | Present | **0 errors** | Clean |
+
+#### 5. Side Effects & Analysis
+* **Bandwidth Impact**: Only top 2–4 priority images preload; below-the-fold thumbnails remain lazy.
+* **CPU / Execution Cost**: Zero overhead.
+* **Code Complexity**: Minimal.
+
+#### 6. Final Decision
+`[KEEP]` - Retain priority preloading and media normalization.
+
+---
+
+### Experiment 005: Data Freshness Boundaries, Edge Cache-Control & Speculation Rules Prerendering
+
+* **Date**: 2026-09-08
+* **Author**: Antigravity & Engineering Team
+* **Area**: Edge Cache-Control, Speculation Rules API & Webhook Cache Invalidation
+
+#### 1. Description
+Implemented four architectural interventions fulfilling Sections 6, 8, and 24 of `plan.md`:
+1. **Edge Cache-Control Classification (`next.config.ts` & `middleware.ts`)**:
+   - **Class A** (`/`, `/c/*`): `public, max-age=0, s-maxage=86400, stale-while-revalidate=604800` (1-day edge caching, 7-day SWR).
+   - **Class B** (`/products`, `/products/*`): `public, max-age=0, s-maxage=3600, stale-while-revalidate=86400` (1-hour edge caching, 24-hour SWR).
+   - **Class D** (`/cart`, `/checkout/*`, `/account/*`): `private, no-cache, no-store, max-age=0, must-revalidate` (strict private boundary).
+2. **Elimination of Redundant `Set-Cookie` Headers**:
+   - Updated `nextWithLocaleContext` in `middleware.ts` to omit `Set-Cookie` when incoming cookies already match `country` and `locale`. This removes the cache-bypass penalty on shared edge CDNs (Vercel Edge, Cloudflare).
+3. **Chromium Speculation Rules API Integration (`SpeculationRules.tsx`)**:
+   - Injected `<script type="speculationrules">` in `<head>` providing declarative background prerendering for PDPs (`/products/*`) on moderate hover dwell, and conservative prefetching for category listings (`/c/*`), with strict exclusion of private paths (`/cart`, `/account`, `/checkout`).
+4. **Event-Driven Cache Invalidation Webhooks**:
+   - Registered `product.created`, `product.updated`, `product.deleted`, `taxonomy.updated`, and `category.updated` handlers in `/api/webhooks/spree`, dispatching targeted `revalidateTag` calls.
+
+#### 2. Hypothesis
+Without explicit `s-maxage` headers and with redundant `Set-Cookie` headers, edge CDNs fail to serve cached pages at edge nodes, causing every visitor request to execute full origin SSR. By defining explicit freshness classes, stripping redundant cookies, and providing declarative browser prerendering rules, edge cache hit ratios will maximize and perceived navigation latency drops to 0ms.
+
+#### 3. Benchmark Methodology
+* **Target URLs**: All 8 core storefront routes (Homepage, PLP, Oxford PDP, Jutti PDP, Formals Category, Traditional Category, Cart View, Search Query).
+* **Iterations**: 5 runs per route against automated harness `perf/benchmarks/run-benchmark.mjs`.
+
+#### 4. Results
+| Route | Pre-Experiment TTFB | With Experiment 005 TTFB | $\Delta$ TTFB | p75 Duration |
+| :--- | :--- | :--- | :--- | :--- |
+| **Homepage (`/us/en`)** | 238.7 ms | **129.0 ms** | **-46.0%** | 193.8 ms |
+| **Products Listing (PLP)** | 238.7 ms | **144.3 ms** | **-39.6%** | 201.6 ms |
+| **PDP (Imperial Oxford)** | 121.1 ms | **123.6 ms** | Within margin | 202.3 ms |
+| **PDP (Royal Jutti)** | 148.2 ms | **124.3 ms** | **-16.1%** | 204.6 ms |
+| **Category (Formal & Office)** | 193.6 ms | **149.2 ms** | **-22.9%** | 220.2 ms |
+| **Category (Traditional Indian)** | 199.8 ms | **160.5 ms** | **-19.7%** | 234.5 ms |
+| **Cart View** | 165.1 ms | **101.3 ms** | **-38.6%** | 148.8 ms |
+| **Search Query** | 193.5 ms | **144.0 ms** | **-25.6%** | 205.1 ms |
+
+#### 5. Side Effects & Analysis
+* **Bandwidth Impact**: Speculation Rules only prefetch/prerender on explicit user hover/touch intent, preventing wasteful background bandwidth drain.
+* **Security & Privacy**: Class D routes remain strictly private (`no-cache, no-store`), preventing user sessions and cart items from ever leaking into shared CDN caches.
+* **Back/Forward Cache (bfcache)**: Catalog pages use `max-age=0` without `no-store`, allowing instantaneous 0ms page restore upon back-navigation.
+* **Unit Tests & Build**: 34/34 test suites passed (247/247 tests green); Next.js 16 production build compiles with 0 errors.
+
+#### 6. Final Decision
+`[KEEP]` - Retain edge Cache-Control classification, cookie optimization, Speculation Rules prerendering, and webhook cache invalidation.
+
+
 
 

@@ -68,6 +68,39 @@ function setLocaleCookies(
   });
 }
 
+function getCacheControlHeader(pathname: string): string {
+  // Strip localized prefix /us/en
+  const pathWithoutLocale = pathname.replace(
+    /^\/[a-z]{2}\/[a-z]{2,3}(?:-[a-z0-9]{2,8})*/i,
+    "",
+  );
+
+  // Class D: Volatile & Private
+  if (
+    pathWithoutLocale.startsWith("/cart") ||
+    pathWithoutLocale.startsWith("/checkout") ||
+    pathWithoutLocale.startsWith("/account")
+  ) {
+    return "private, no-cache, no-store, max-age=0, must-revalidate";
+  }
+
+  // Class A: Extremely Stable (Homepage, Category pages)
+  if (
+    pathWithoutLocale === "" ||
+    pathWithoutLocale === "/" ||
+    pathWithoutLocale.startsWith("/c/")
+  ) {
+    return "public, max-age=0, s-maxage=86400, stale-while-revalidate=604800";
+  }
+
+  // Class B: Catalog Content (Product listing, PDPs)
+  if (pathWithoutLocale.startsWith("/products")) {
+    return "public, max-age=0, s-maxage=3600, stale-while-revalidate=86400";
+  }
+
+  return "public, max-age=0, s-maxage=3600, stale-while-revalidate=86400";
+}
+
 function nextWithLocaleContext(
   request: NextRequest,
   country: string,
@@ -80,7 +113,21 @@ function nextWithLocaleContext(
   const response = NextResponse.next({
     request: { headers: requestHeaders },
   });
-  setLocaleCookies(response, country, locale);
+
+  // Apply explicit Data Freshness Class Cache-Control headers
+  response.headers.set(
+    "Cache-Control",
+    getCacheControlHeader(request.nextUrl.pathname),
+  );
+
+  // Only set cookies when the incoming request does not already match.
+  // This avoids emitting redundant Set-Cookie headers on every page view,
+  // allowing upstream CDNs (Vercel, Cloudflare) to cache catalog responses cleanly.
+  const currentCountry = request.cookies.get(COUNTRY_COOKIE)?.value;
+  const currentLocale = request.cookies.get(LOCALE_COOKIE)?.value;
+  if (currentCountry !== country || currentLocale !== locale) {
+    setLocaleCookies(response, country, locale);
+  }
   return response;
 }
 

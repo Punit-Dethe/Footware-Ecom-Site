@@ -2,10 +2,12 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { createWebhookHandler } from "@/lib/spree/webhooks";
 import {
+  handleCategoryTaxonomyUpdated,
   handleOrderCanceled,
   handleOrderCompleted,
   handleOrderShipped,
   handlePasswordReset,
+  handleProductCatalogUpdated,
 } from "@/lib/webhooks/handlers";
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
@@ -25,6 +27,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       "order.canceled": handleOrderCanceled,
       "order.shipped": handleOrderShipped,
       "customer.password_reset_requested": handlePasswordReset,
+      "product.created": handleProductCatalogUpdated,
+      "product.updated": handleProductCatalogUpdated,
+      "product.deleted": handleProductCatalogUpdated,
+      "taxonomy.updated": handleCategoryTaxonomyUpdated,
+      "category.updated": handleCategoryTaxonomyUpdated,
     },
   });
 

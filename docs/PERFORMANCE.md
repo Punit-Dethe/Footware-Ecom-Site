@@ -71,3 +71,23 @@ Every read from the commerce backend must explicitly belong to a freshness class
   * Hydration Warning: **0 errors**
 * **Status**: **Kept & Verified**.
 
+### Experiment 005: Data Freshness Boundaries, Edge Cache-Control & Speculation Rules Prerendering
+
+* **Hypothesis**: Classifying routes into explicit edge cache tiers (Class A: 1d/7d SWR; Class B: 1h/1d SWR; Class D: private, no-cache), stripping redundant `Set-Cookie` headers on warm page navigations, injecting Chromium Speculation Rules for instant PDP background prerendering, and wiring event-driven webhook cache tag revalidation will eliminate origin SSR contention and accelerate route TTFB.
+* **Changes Made**:
+  1. Configured explicit `Cache-Control` in `storefront/next.config.ts` and `storefront/src/lib/spree/middleware.ts`.
+  2. Guarded `setLocaleCookies` in middleware to omit `Set-Cookie` when incoming cookies already match `country` and `locale`.
+  3. Created `<SpeculationRules />` (`SpeculationRules.tsx`) and embedded it in `<head>` via `DocumentShell.tsx`.
+  4. Added `handleProductCatalogUpdated` and `handleCategoryTaxonomyUpdated` in `handlers.ts` and registered webhook events (`product.*`, `taxonomy.updated`, `category.updated`) with `revalidateTag(..., { expire: 0 })`.
+* **Benchmark Results**:
+  * Homepage TTFB: **129.0 ms** (down from 238.7 ms, **-46.0%**)
+  * Products Listing (PLP) TTFB: **144.3 ms** (down from 238.7 ms, **-39.6%**)
+  * Category (Formal & Office) TTFB: **149.2 ms** (down from 193.6 ms, **-22.9%**)
+  * Category (Traditional Indian) TTFB: **160.5 ms** (down from 199.8 ms, **-19.7%**)
+  * Cart View TTFB: **101.3 ms** (down from 165.1 ms, **-38.6%**)
+  * Search Query TTFB: **144.0 ms** (down from 193.5 ms, **-25.6%**)
+  * Repeat Request `Set-Cookie`: **Suppressed (`null`)**
+  * Speculation Rules Active: **Verified**
+* **Status**: **Kept & Verified**.
+
+

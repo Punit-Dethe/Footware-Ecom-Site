@@ -1,5 +1,6 @@
 import type { Order } from "@spree/sdk";
 import type { WebhookEvent } from "@spree/sdk/webhooks";
+import { revalidateTag } from "next/cache";
 import { createElement } from "react";
 import { OrderCanceledEmail } from "@/lib/emails/order-canceled";
 import { OrderConfirmationEmail } from "@/lib/emails/order-confirmation";
@@ -219,6 +220,63 @@ export async function handlePasswordReset(
       resetUrl,
     }),
   });
+
+  markProcessed(event.id);
+}
+
+export interface ProductWebhookData {
+  id: string | number;
+  slug?: string;
+  category_ids?: (string | number)[];
+}
+
+export interface TaxonomyWebhookData {
+  id?: string | number;
+  name?: string;
+}
+
+/**
+ * Handle product catalog change webhooks (product.created, product.updated, product.deleted).
+ * Performs granular tag invalidation so Next.js Cache Components and edge nodes re-fetch fresh data.
+ */
+export async function handleProductCatalogUpdated(
+  event: WebhookEvent<ProductWebhookData>,
+) {
+  if (isAlreadyProcessed(event.id)) return;
+  const product = event.data;
+
+  // Invalidate global products list and surface cache
+  revalidateTag("products", { expire: 0 });
+
+  // Invalidate specific product detail cache if slug or id present
+  if (product?.slug) {
+    revalidateTag(`product:${product.slug}`, { expire: 0 });
+  }
+  if (product?.id) {
+    revalidateTag(`product:${product.id}`, { expire: 0 });
+  }
+
+  // Invalidate category products cache if categories are associated
+  if (Array.isArray(product?.category_ids)) {
+    for (const catId of product.category_ids) {
+      revalidateTag(`category-products:${catId}`, { expire: 0 });
+    }
+  }
+
+  markProcessed(event.id);
+}
+
+/**
+ * Handle category and taxonomy change webhooks (taxonomy.updated, category.updated).
+ * Invalidates Class A stable taxonomy trees and category navigation.
+ */
+export async function handleCategoryTaxonomyUpdated(
+  event: WebhookEvent<TaxonomyWebhookData>,
+) {
+  if (isAlreadyProcessed(event.id)) return;
+
+  revalidateTag("categories", { expire: 0 });
+  revalidateTag("category", { expire: 0 });
 
   markProcessed(event.id);
 }
