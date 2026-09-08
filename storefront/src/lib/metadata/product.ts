@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { getCachedProduct, PRODUCT_METADATA_EXPAND } from "@/lib/data/cached";
+import { getCachedProduct, PRODUCT_PAGE_EXPAND } from "@/lib/data/cached";
 import { cachedGetProduct } from "@/lib/data/products";
 import {
   buildLocalizedAlternates,
@@ -22,7 +22,7 @@ export async function generateProductMetadata({
 }: ProductMetadataParams): Promise<Metadata> {
   let product;
   try {
-    product = await getCachedProduct(slug, PRODUCT_METADATA_EXPAND);
+    product = await getCachedProduct(slug, PRODUCT_PAGE_EXPAND);
   } catch {
     return { title: "Product Not Found" };
   }

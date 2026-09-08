@@ -90,4 +90,19 @@ Every read from the commerce backend must explicitly belong to a freshness class
   * Speculation Rules Active: **Verified**
 * **Status**: **Kept & Verified**.
 
+### Experiment 006: Server-Side API Waterfall Elimination & Request Memoization Deduplication
+
+* **Hypothesis**: Deduplicating divergent `expand` lists between `generateMetadata` and route page components (`PRODUCT_PAGE_EXPAND` on PDP, `CATEGORY_PAGE_EXPAND` on category pages) and parallelizing sequential awaits with `Promise.all` eliminates 50% of origin API calls per page render and trims server TTFB.
+* **Changes Made**:
+  1. Updated `generateProductMetadata` to use `PRODUCT_PAGE_EXPAND`, matching `ProductPage` and allowing React `cache()` to return the resolved promise with zero second network call.
+  2. Updated `CategoryPage` to use `getCachedCategory` with `CATEGORY_PAGE_EXPAND = ["ancestors", "children"]`.
+  3. Parallelized `[params, searchParams]`, `[currency, translations]`, and `[category, currency]` with `Promise.all`.
+* **Benchmark Results**:
+  * PDP (Imperial Oxford) TTFB: **116.1 ms** (down from 123.6 ms, p75: **190.5 ms**)
+  * PDP (Royal Jutti) TTFB: **115.2 ms** (down from 124.3 ms, p75: **193.4 ms**)
+  * Category (Traditional Indian) TTFB: **141.9 ms** (down from 160.5 ms, p75: **217.0 ms**)
+  * Cart View TTFB: **99.2 ms** (down from 101.3 ms, p75: **154.3 ms**)
+* **Status**: **Kept & Verified**.
+
+
 

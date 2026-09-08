@@ -47,8 +47,10 @@ export default async function ProductPage({
   params,
   searchParams,
 }: ProductPageProps) {
-  const { country, locale, slug } = await params;
-  const { category_id } = await searchParams;
+  const [{ country, locale, slug }, { category_id }] = await Promise.all([
+    params,
+    searchParams,
+  ]);
   const basePath = `/${country}/${locale}`;
 
   let product;

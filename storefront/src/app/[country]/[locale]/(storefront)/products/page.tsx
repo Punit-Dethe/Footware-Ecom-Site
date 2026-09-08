@@ -25,18 +25,22 @@ export default async function ProductsPage({
   params,
   searchParams,
 }: ProductsPageProps) {
-  const { country, locale } = await params;
-  const rawSearchParams = await searchParams;
+  const [{ country, locale }, rawSearchParams] = await Promise.all([
+    params,
+    searchParams,
+  ]);
   const basePath = `/${country}/${locale}`;
-  const currency = await resolveCurrency(country);
+
+  const [currency, t] = await Promise.all([
+    resolveCurrency(country),
+    getTranslations({
+      locale: locale as Locale,
+      namespace: "products",
+    }),
+  ]);
 
   const listingState = parseListingSearchParams(rawSearchParams);
   const query = listingState.query;
-
-  const t = await getTranslations({
-    locale: locale as Locale,
-    namespace: "products",
-  });
 
   const listId = query ? "search-results" : "all-products";
   const listName = query ? "Search Results" : "All Products";

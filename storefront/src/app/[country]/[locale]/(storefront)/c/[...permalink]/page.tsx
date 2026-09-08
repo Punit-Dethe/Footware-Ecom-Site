@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { ProductListing } from "@/components/products/ProductListing";
 import { JsonLd } from "@/components/seo/JsonLd";
-import { getCategory, getCategoryProducts } from "@/lib/data/categories";
+import { CATEGORY_PAGE_EXPAND, getCachedCategory } from "@/lib/data/cached";
+import { getCategoryProducts } from "@/lib/data/categories";
 import { resolveCurrency } from "@/lib/data/markets";
 import { getProductFilters } from "@/lib/data/products";
 import { generateCategoryMetadata } from "@/lib/metadata/category";
@@ -31,16 +32,20 @@ export default async function CategoryPage({
   params,
   searchParams,
 }: CategoryPageProps) {
-  const { country, locale, permalink } = await params;
-  const rawSearchParams = await searchParams;
+  const [{ country, locale, permalink }, rawSearchParams] = await Promise.all([
+    params,
+    searchParams,
+  ]);
   const fullPermalink = permalink.join("/");
   const basePath = `/${country}/${locale}`;
 
   let category;
+  let currency;
   try {
-    category = await getCategory(fullPermalink, {
-      expand: ["ancestors", "children"],
-    });
+    [category, currency] = await Promise.all([
+      getCachedCategory(fullPermalink, CATEGORY_PAGE_EXPAND),
+      resolveCurrency(country),
+    ]);
   } catch (error) {
     console.error("Failed to fetch category:", error);
     notFound();
@@ -51,7 +56,6 @@ export default async function CategoryPage({
   }
 
   const storeUrl = getStoreUrl();
-  const currency = await resolveCurrency(country);
   const listingState = parseListingSearchParams(rawSearchParams);
 
   // Pre-bind categoryId onto the server action so the client-side

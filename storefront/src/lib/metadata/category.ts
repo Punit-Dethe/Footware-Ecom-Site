@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { getCachedCategory } from "@/lib/data/cached";
+import { CATEGORY_PAGE_EXPAND, getCachedCategory } from "@/lib/data/cached";
 import { cachedGetCategory } from "@/lib/data/categories";
 import {
   buildLocalizedAlternates,
@@ -22,10 +22,7 @@ export async function generateCategoryMetadata({
 
   let category;
   try {
-    category = await getCachedCategory(fullPermalink, [
-      "ancestors",
-      "children",
-    ]);
+    category = await getCachedCategory(fullPermalink, CATEGORY_PAGE_EXPAND);
   } catch {
     return { title: "Category Not Found" };
   }

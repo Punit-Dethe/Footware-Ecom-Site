@@ -13,6 +13,9 @@ export const PRODUCT_PAGE_EXPAND = [
   "categories.ancestors",
 ];
 
+/** Expand list used on the category listing page and category metadata. */
+export const CATEGORY_PAGE_EXPAND = ["ancestors", "children"];
+
 /** Slim expand used by generateProductMetadata (needs only the primary image for og:image). */
 export const PRODUCT_METADATA_EXPAND = ["primary_media"];
 
