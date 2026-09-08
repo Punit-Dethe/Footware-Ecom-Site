@@ -7,12 +7,20 @@ settings:
 importers:
 
   .:
+    dependencies:
+      bcryptjs:
+        specifier: ^3.0.3
+        version: 3.0.3
     devDependencies:
       pg:
         specifier: ^8.23.0
         version: 8.23.0
 
 packages:
+
+  bcryptjs@3.0.3:
+    resolution: {integrity: sha512-GlF5wPWnSa/X5LKM1o0wz0suXIINz1iHRLvTS+sLyi7XPbe5ycmYI3DlZqVGZZtDgl4DmasFg7gOB3JYbphV5g==}
+    hasBin: true
 
   pg-cloudflare@1.4.0:
     resolution: {integrity: sha512-Vo7z/6rrQYxpNRylp4Tlob2elzbh+N/MOQbxFVWCxS7oEx6jF53GTJFxK2WWpKuBRkmiin4Mt+xofFDjx09R0A==}
@@ -73,6 +81,8 @@ packages:
     engines: {node: '>=0.4'}
 
 snapshots:
+
+  bcryptjs@3.0.3: {}
 
   pg-cloudflare@1.4.0:
     optional: true

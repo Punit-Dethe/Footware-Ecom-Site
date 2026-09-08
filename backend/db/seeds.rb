@@ -1,24 +1,39 @@
-# This file should ensure the existence of records required to run the application in every environment (production,
-# development, test). The code here should be idempotent so that it can be executed at any point in every environment.
-# The data can then be loaded with the bin/rails db:seed command (or created alongside the database with db:setup).
-#
-# Example:
-#
-#   ["Action", "Comedy", "Drama", "Horror"].each do |genre_name|
-#     MovieGenre.find_or_create_by!(name: genre_name)
-#   end
+# frozen_string_literal: true
 
 Spree::Core::Engine.load_seed if defined?(Spree::Core)
 
 admin_email = ENV['SPREE_ADMIN_EMAIL'] || 'admin@mirzafootwear.com'
 admin_password = ENV['SPREE_ADMIN_PASSWORD'] || 'MirzaAdmin2026!'
 
-if defined?(Spree::User) && admin_email.present? && admin_password.present?
-  admin = Spree::User.find_or_initialize_by(email: admin_email)
+# Ensure Spree::AdminUser
+if defined?(Spree::AdminUser) && admin_email.present? && admin_password.present?
+  admin = Spree::AdminUser.find_or_initialize_by(email: admin_email)
   admin.password = admin_password
   admin.password_confirmation = admin_password
-  admin_role = Spree::Role.find_or_create_by(name: 'admin')
-  admin.spree_roles << admin_role unless admin.spree_roles.exists?(name: 'admin')
+  admin.first_name = 'Mirza'
+  admin.last_name = 'Admin'
   admin.save!
+
+  admin_role = Spree::Role.find_or_create_by(name: 'admin')
+  default_store = Spree::Store.default || Spree::Store.first
+  if default_store
+    Spree::RoleUser.find_or_create_by!(
+      role: admin_role,
+      user: admin,
+      resource: default_store,
+      store: default_store
+    )
+  end
   puts "[Spree] Admin user #{admin_email} ready."
+end
+
+# Ensure Spree::User for customer store login
+if defined?(Spree::User) && admin_email.present? && admin_password.present?
+  customer = Spree::User.find_or_initialize_by(email: admin_email)
+  customer.password = admin_password
+  customer.password_confirmation = admin_password
+  admin_role = Spree::Role.find_or_create_by(name: 'admin')
+  customer.spree_roles << admin_role unless customer.spree_roles.exists?(name: 'admin')
+  customer.save!
+  puts "[Spree] Customer admin #{admin_email} ready."
 end

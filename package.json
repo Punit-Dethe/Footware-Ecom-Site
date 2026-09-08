@@ -21,5 +21,8 @@
   ],
   "devDependencies": {
     "pg": "^8.23.0"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3"
   }
 }
