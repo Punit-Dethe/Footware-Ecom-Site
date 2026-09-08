@@ -391,12 +391,22 @@ for (const p of PRODUCTS) {
     p.primary_media.variant_ids = p.primary_media.variant_ids || allVariantIds;
     p.primary_media.position = p.primary_media.position || 1;
     p.primary_media.media_type = 'image';
+    p.primary_media.original_url = p.primary_media.url;
+    p.primary_media.large_url = p.primary_media.url;
+    p.primary_media.xlarge_url = p.primary_media.url;
+    p.primary_media.small_url = p.thumbnail_url;
+    p.primary_media.mini_url = p.thumbnail_url;
   }
   if (p.media) {
     for (let i = 0; i < p.media.length; i++) {
       p.media[i].variant_ids = p.media[i].variant_ids || allVariantIds;
       p.media[i].position = i + 1;
       p.media[i].media_type = 'image';
+      p.media[i].original_url = p.media[i].url;
+      p.media[i].large_url = p.media[i].url;
+      p.media[i].xlarge_url = p.media[i].url;
+      p.media[i].small_url = p.thumbnail_url;
+      p.media[i].mini_url = p.thumbnail_url;
     }
   }
 }
