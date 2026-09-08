@@ -383,6 +383,24 @@ const PRODUCTS = [
   },
 ];
 
+// Normalize products to guarantee complete Spree SDK contracts
+for (const p of PRODUCTS) {
+  p.default_variant = p.variants.find(v => v.id === p.default_variant_id) || p.variants[0];
+  const allVariantIds = p.variants.map(v => v.id);
+  if (p.primary_media) {
+    p.primary_media.variant_ids = p.primary_media.variant_ids || allVariantIds;
+    p.primary_media.position = p.primary_media.position || 1;
+    p.primary_media.media_type = 'image';
+  }
+  if (p.media) {
+    for (let i = 0; i < p.media.length; i++) {
+      p.media[i].variant_ids = p.media[i].variant_ids || allVariantIds;
+      p.media[i].position = i + 1;
+      p.media[i].media_type = 'image';
+    }
+  }
+}
+
 // Helper to find a product and variant by ID
 function findVariant(variantId) {
   for (const product of PRODUCTS) {
@@ -583,6 +601,20 @@ function handleRequest(req, res, pathname, query, body) {
   if (pathname === '/api/v3/store/markets') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ data: MARKETS, meta: { count: MARKETS.length } }));
+    return;
+  }
+
+  if (pathname === '/api/v3/store/markets/resolve') {
+    const countryIso = (query.country || 'us').toString().toLowerCase();
+    const market = MARKETS.find(m => m.code.toLowerCase() === countryIso || m.default_country?.iso === countryIso) || MARKETS[0];
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(market));
+    return;
+  }
+
+  if (pathname.match(/^\/api\/v3\/store\/markets\/[^/]+\/countries$/)) {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ data: COUNTRIES, meta: { count: COUNTRIES.length } }));
     return;
   }
 
