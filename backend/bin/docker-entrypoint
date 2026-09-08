@@ -3,7 +3,6 @@
 # If running the rails server then create or migrate existing database
 if [[ "$*" == *"./bin/rails server"* ]]; then
   ./bin/rails db:prepare
-  (sleep 5 && ./bin/rails db:seed) &
 fi
 
 exec "${@}"
