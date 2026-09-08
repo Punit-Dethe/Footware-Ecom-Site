@@ -98,10 +98,11 @@ export function CartProvider({
 
   const addItem = useCallback(
     async (variantId: string, quantity = 1) => {
+      // Instant interaction: acknowledge click immediately on next frame
+      setIsOpen(true);
       await mutateCart(
         () => addToCartAction(variantId, quantity, surface),
         t("failedToAddItem"),
-        () => setIsOpen(true),
       );
     },
     [mutateCart, t, surface],

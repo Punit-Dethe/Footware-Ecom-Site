@@ -2,8 +2,9 @@
 
 import type { Product } from "@spree/sdk";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { memo } from "react";
+import { memo, useCallback } from "react";
 import { HiddenPricePrompt } from "@/components/products/HiddenPricePrompt";
 import { ProductImage } from "@/components/ui/product-image";
 import { trackSelectItem } from "@/lib/analytics/gtm";
@@ -31,7 +32,16 @@ export const ProductCard = memo(function ProductCard({
   currency,
 }: ProductCardProps) {
   const t = useTranslations("products");
+  const router = useRouter();
   const imageUrl = product.thumbnail_url || null;
+  const productHref = `${basePath}/products/${product.slug}${categoryId ? `?category_id=${categoryId}` : ""}`;
+  const isHighPriority = fetchPriority === "high";
+
+  const handleIntentPrefetch = useCallback(() => {
+    if (!isHighPriority && productHref) {
+      router.prefetch(productHref);
+    }
+  }, [isHighPriority, productHref, router]);
 
   // Current display price
   const displayPrice = product.price?.display_amount;
@@ -61,7 +71,11 @@ export const ProductCard = memo(function ProductCard({
   };
 
   return (
-    <div className="group relative">
+    <div
+      className="group relative"
+      onPointerEnter={handleIntentPrefetch}
+      onTouchStart={handleIntentPrefetch}
+    >
       {/* Image */}
       <div className="relative aspect-square bg-gray-100 rounded-md overflow-hidden">
         <ProductImage
@@ -87,7 +101,8 @@ export const ProductCard = memo(function ProductCard({
               without wrapping the content in an <a> — HiddenPricePrompt renders
               its own link, and anchors can't nest. */}
           <Link
-            href={`${basePath}/products/${product.slug}${categoryId ? `?category_id=${categoryId}` : ""}`}
+            href={productHref}
+            prefetch={isHighPriority ? true : undefined}
             className="after:absolute after:inset-0"
             onClick={handleClick}
           >
