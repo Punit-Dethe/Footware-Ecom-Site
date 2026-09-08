@@ -8,7 +8,6 @@ import { CartButton } from "@/components/layout/CartButton";
 import { SearchToggle } from "@/components/layout/SearchToggle";
 import { Button } from "@/components/ui/button";
 import { isWholesaleEnabled } from "@/lib/spree";
-import { getStoreName } from "@/lib/store";
 
 const LazyMobileMenu = dynamic(
   () =>
@@ -31,8 +30,6 @@ const LazyRegionPreferences = dynamic(
     loading: () => <div className="size-11" aria-hidden="true" />,
   },
 );
-
-const storeName = getStoreName();
 
 interface HeaderProps {
   basePath: string;
