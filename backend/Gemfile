@@ -1,0 +1,96 @@
+# frozen_string_literal: true
+
+source 'https://rubygems.org'
+ruby file: '.ruby-version'
+
+# Load .env for SPREE_PATH (dotenv-rails only loads at Rails boot, not during bundle)
+env_file = File.expand_path('.env', __dir__)
+if File.exist?(env_file)
+  File.readlines(env_file).each do |line|
+    line = line.strip
+    next if line.empty? || line.start_with?('#')
+
+    key, value = line.split('=', 2)
+    ENV[key] = value if key && value && !ENV.key?(key)
+  end
+end
+
+# Rails must load before Propshaft (its railtie only registers once Rails is
+# present), and Propshaft before the Spree gems, so that tinymce-rails (loaded
+# by spree_admin) detects it and serves TinyMCE assets in development.
+gem 'rails', '~> 8.1.2'
+gem 'propshaft'
+
+# Spree Commerce
+spree_path = ENV.fetch('SPREE_PATH', nil)
+
+if spree_path
+  path "#{spree_path}/spree" do
+    gem 'spree'
+    gem 'spree_core'
+    gem 'spree_api'
+    gem 'spree_admin'
+    gem 'spree_dashboard'
+    gem 'spree_emails'
+  end
+else
+  spree_version = '>= 5.6.0.rc1'
+  gem 'spree', spree_version
+  gem 'spree_admin', spree_version
+  gem 'spree_emails', spree_version
+  # Serves the React Dashboard at /dashboard (see the Dockerfile's dashboard
+  # stage — SPREE_DASHBOARD_DIST_PATH points at the baked build).
+  gem 'spree_dashboard', spree_version
+end
+
+# Extensions
+gem 'spree_i18n'
+gem 'spree_stripe'
+gem 'spree_adyen'
+gem 'spree_paypal_checkout'
+
+# Rails & Infrastructure
+gem 'aws-sdk-s3', require: false
+gem 'bootsnap', require: false
+gem 'devise'
+gem 'image_processing', '~> 1.2'
+gem 'importmap-rails'
+gem 'lograge'
+gem 'pg', '~> 1.1'
+gem 'puma', '>= 5.0'
+gem 'sentry-rails'
+gem 'sentry-ruby'
+# The Solid stack: jobs, cache, and Action Cable in Postgres. Swap any piece
+# for Redis/Valkey when scale calls for it.
+gem 'solid_cable'
+gem 'solid_cache'
+gem 'solid_queue'
+# Job dashboard at /jobs
+gem 'mission_control-jobs'
+gem 'stimulus-rails'
+gem 'rack-cors'
+gem 'tailwindcss-rails'
+gem 'thruster', require: false
+gem 'turbo-rails'
+
+# Search — client for the optional Meilisearch provider; product search runs
+# on the database unless MEILISEARCH_URL is set
+gem 'meilisearch', '>= 0.28'
+
+# Windows does not include zoneinfo files, so bundle the tzinfo-data gem
+gem 'tzinfo-data', platforms: %i[windows jruby]
+
+group :development, :test do
+  gem 'brakeman', require: false
+  gem 'bundler-audit', require: false
+  gem 'debug', platforms: %i[mri windows], require: 'debug/prelude'
+  gem 'dotenv-rails'
+  gem 'letter_opener'
+  gem 'rubocop-rails-omakase', require: false
+  gem 'simplecov-cobertura'
+  gem 'spree_dev_tools'
+end
+
+group :development do
+  gem 'web-console'
+end

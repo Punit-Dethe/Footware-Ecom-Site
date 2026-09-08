@@ -1,0 +1,54 @@
+# Solid Queue process topology. In the default deployment this runs inside
+# Puma (config/puma.rb, SOLID_QUEUE_IN_PUMA) — worker threads share the web
+# process and its DB pool (see config/database.yml). The same file configures
+# the dedicated supervisor when jobs split out into a `bin/jobs` service.
+#
+# JOB_THREADS sizes the worker pool (default 3, matching Solid Queue —
+# job threads share the process and its GVL with web requests, so more
+# threads trade web latency for job throughput). Raise it on a dedicated
+# `bin/jobs` worker, or scale with JOB_CONCURRENCY (worker process count,
+# the standard Rails knob) there.
+#
+# Queues are polled in order: checkout-critical and operator-facing work
+# first, bulk catalog churn second, Active Storage housekeeping last. The
+# trailing "*" catches queues added later so nothing starves silently.
+default: &default
+  dispatchers:
+    - polling_interval: 1
+      batch_size: 500
+  workers:
+    - queues:
+        - default
+        - spree_imports
+        - spree_payment_webhooks
+        - mailers
+        - spree_events
+        - spree_exports
+        - spree_images
+        - active_storage_transform
+        - spree_products
+        - spree_reports
+        - spree_variants
+        - spree_taxons
+        - spree_stock_location_stock_items
+        - spree_coupon_codes
+        - spree_addresses
+        - spree_gift_cards
+        - spree_webhooks
+        - spree_api_keys
+        - spree_search
+        - active_storage_analysis
+        - active_storage_purge
+        - "*"
+      threads: <%= ENV.fetch("JOB_THREADS", 3) %>
+      processes: <%= ENV.fetch("JOB_CONCURRENCY", 1) %>
+      polling_interval: 0.1
+
+development:
+  <<: *default
+
+test:
+  <<: *default
+
+production:
+  <<: *default
