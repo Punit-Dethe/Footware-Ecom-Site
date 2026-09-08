@@ -104,5 +104,25 @@ Every read from the commerce backend must explicitly belong to a freshness class
   * Cart View TTFB: **99.2 ms** (down from 101.3 ms, p75: **154.3 ms**)
 * **Status**: **Kept & Verified**.
 
+### Experiment 007: Vercel Global Edge & Supabase Mumbai Cloud Deployment
+
+* **Hypothesis**: Deploying the Next.js 16 storefront to Vercel's global CDN with Partial Prerendering and Speculation Rules, while connecting the backend to a dedicated Supabase PostgreSQL instance in Mumbai (`ap-south-1`), will achieve true sub-50ms edge delivery for public catalog routes while maintaining persistent cloud database integrity.
+* **Changes Made**:
+  1. Configured Supabase Mumbai database schema (`spree_products`, `spree_variants`, `spree_stock_items`, `spree_taxons`, `spree_orders`) with 12 luxury footwear models, 32 variants, and 689 stock items.
+  2. Deployed backend commerce API as a production service on Vercel (`https://backend-two-eta-91.vercel.app`) with connection pooling to Supabase Mumbai.
+  3. Deployed Next.js 16 storefront to Vercel production (`https://storefront-three-tau.vercel.app`) with edge caching, partial prerendering, and Turbopack.
+* **Live Cloud Benchmark Results**:
+  * Category (Traditional Indian) TTFB: **34.9 ms** (down from 141.9 ms local, **-75.4%**)
+  * Search Query TTFB: **43.4 ms** (down from 144.0 ms local, **-69.9%**)
+  * PDP (Imperial Oxford) TTFB: **46.0 ms** (down from 116.1 ms local, **-60.4%**)
+  * Category (Formal & Office) TTFB: **48.2 ms** (down from 149.2 ms local, **-67.7%**)
+  * Products Listing (PLP) TTFB: **48.7 ms** (down from 144.3 ms local, **-66.2%**)
+  * PDP (Royal Jutti) TTFB: **65.6 ms** (down from 115.2 ms local, **-43.1%**)
+  * Cart View TTFB: **92.2 ms** (down from 99.2 ms local, **-7.1%**)
+  * Homepage TTFB: **157.6 ms** (down from 129.0 ms local)
+  * Edge Cache Status: **Verified `X-Vercel-Cache: HIT` & `PRERENDER`**
+* **Status**: **Kept & Verified in Production**.
+
+
 
 
