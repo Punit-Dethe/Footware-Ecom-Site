@@ -40,12 +40,24 @@ interface MediaGalleryProps {
  * so the Next.js image optimizer doesn't have to fetch the source file. */
 function getMainImageUrl(media: Media | undefined): string | null {
   if (!media) return null;
-  return media.xlarge_url || media.large_url || media.original_url || null;
+  return (
+    media.xlarge_url ||
+    media.large_url ||
+    media.original_url ||
+    (media as unknown as { url?: string }).url ||
+    null
+  );
 }
 
 function getThumbImageUrl(media: Media | undefined): string | null {
   if (!media) return null;
-  return media.small_url || media.mini_url || media.original_url || null;
+  return (
+    media.small_url ||
+    media.mini_url ||
+    media.original_url ||
+    (media as unknown as { url?: string }).url ||
+    null
+  );
 }
 
 export function MediaGallery(props: MediaGalleryProps) {
