@@ -79,6 +79,20 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "images.unsplash.com" },
     ],
   },
+  async redirects() {
+    return [
+      {
+        source: "/admin",
+        destination: "https://mirza-spree-backend.onrender.com/admin",
+        permanent: false,
+      },
+      {
+        source: "/:country/:locale/admin",
+        destination: "https://mirza-spree-backend.onrender.com/admin",
+        permanent: false,
+      },
+    ];
+  },
   async headers() {
     return [
       // Class A: Extremely Stable (Homepage, Category pages)
