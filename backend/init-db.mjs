@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import pg from "pg";
 import { CATEGORIES, PRODUCTS } from "./mock-spree-server.mjs";
 
@@ -5,6 +6,12 @@ const { Client } = pg;
 const databaseUrl =
   process.env.SUPABASE_DATABASE_URL ||
   "postgresql://postgres.nmddtxibpsbtswxnienm:Punit1803.com@aws-0-ap-south-1.pooler.supabase.com:5432/postgres";
+
+function hashPassword(password) {
+  const salt = crypto.randomBytes(16).toString("hex");
+  const hash = crypto.scryptSync(password, salt, 64).toString("hex");
+  return `${salt}:${hash}`;
+}
 
 const client = new Client({
   connectionString: databaseUrl,
@@ -95,6 +102,34 @@ async function initialize() {
       quantity INTEGER NOT NULL DEFAULT 1,
       price NUMERIC(10, 2) NOT NULL,
       currency VARCHAR(10) DEFAULT 'USD',
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS spree_users (
+      id SERIAL PRIMARY KEY,
+      email VARCHAR(255) UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      first_name VARCHAR(100),
+      last_name VARCHAR(100),
+      phone VARCHAR(50),
+      role VARCHAR(50) DEFAULT 'customer',
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS spree_addresses (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER REFERENCES spree_users(id) ON DELETE CASCADE,
+      first_name VARCHAR(100),
+      last_name VARCHAR(100),
+      address1 TEXT NOT NULL,
+      address2 TEXT,
+      city VARCHAR(100) NOT NULL,
+      state_name VARCHAR(100) NOT NULL,
+      country_iso VARCHAR(10) NOT NULL DEFAULT 'in',
+      zipcode VARCHAR(20) NOT NULL,
+      phone VARCHAR(50),
+      is_default BOOLEAN DEFAULT FALSE,
       created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
     );
   `);
@@ -194,10 +229,43 @@ async function initialize() {
   }
   console.log("Products, variants, and stock seeded successfully!\n");
 
+  // 4. Seed Default Admin & Customer Accounts
+  console.log("Seeding default Administrator & Customer accounts...");
+  const adminPassHash = hashPassword("MirzaAdmin2026!");
+  const patronPassHash = hashPassword("Customer2026!");
+
+  const adminRes = await client.query(
+    `INSERT INTO spree_users (email, password_hash, first_name, last_name, phone, role)
+     VALUES ('admin@mirzafootwear.com', $1, 'Mirza', 'Administrator', '+91 98765 00001', 'admin')
+     ON CONFLICT (email) DO UPDATE SET password_hash = $1, role = 'admin'
+     RETURNING id;`,
+    [adminPassHash]
+  );
+
+  const patronRes = await client.query(
+    `INSERT INTO spree_users (email, password_hash, first_name, last_name, phone, role)
+     VALUES ('patron@mirzafootwear.com', $1, 'Mirza', 'Patron', '+91 98765 43210', 'customer')
+     ON CONFLICT (email) DO UPDATE SET password_hash = $1
+     RETURNING id;`,
+    [patronPassHash]
+  );
+
+  const patronId = patronRes.rows[0]?.id;
+  if (patronId) {
+    await client.query(
+      `INSERT INTO spree_addresses (user_id, first_name, last_name, address1, city, state_name, country_iso, zipcode, phone, is_default)
+       VALUES ($1, 'Mirza', 'Patron', '42 Heritage Colaba Causeway', 'Mumbai', 'Maharashtra', 'in', '400001', '+91 98765 43210', TRUE)
+       ON CONFLICT DO NOTHING;`,
+      [patronId]
+    );
+  }
+  console.log("Users and address seeded successfully!\n");
+
   // Verify counts in Supabase
   const countProd = await client.query("SELECT COUNT(*) FROM spree_products;");
   const countVar = await client.query("SELECT COUNT(*) FROM spree_variants;");
   const countStock = await client.query("SELECT SUM(count_on_hand) as total_stock FROM spree_stock_items;");
+  const countUsers = await client.query("SELECT COUNT(*) FROM spree_users;");
 
   console.log("=======================================================");
   console.log(" Supabase Mumbai Database Summary");
@@ -205,6 +273,7 @@ async function initialize() {
   console.log(`Total Products: ${countProd.rows[0].count}`);
   console.log(`Total Variants: ${countVar.rows[0].count}`);
   console.log(`Total In-Stock Units: ${countStock.rows[0].total_stock}`);
+  console.log(`Total Registered Users: ${countUsers.rows[0].count}`);
   console.log("=======================================================\n");
 
   await client.end();

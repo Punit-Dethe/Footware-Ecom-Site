@@ -11,7 +11,85 @@ import http from 'node:http';
 import url from 'node:url';
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import pg from 'pg';
+
+const JWT_SECRET = process.env.SPREE_JWT_SECRET || 'mirza_luxury_footwear_secret_key_2026';
+
+function hashPassword(password) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+  return `${salt}:${hash}`;
+}
+
+function verifyPassword(password, stored) {
+  if (!password || !stored || !stored.includes(':')) return false;
+  try {
+    const [salt, key] = stored.split(':');
+    const keyBuffer = Buffer.from(key, 'hex');
+    const derived = crypto.scryptSync(password, salt, 64);
+    return crypto.timingSafeEqual(keyBuffer, derived);
+  } catch {
+    return false;
+  }
+}
+
+function createJwt(payload) {
+  const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+  const exp = Math.floor(Date.now() / 1000) + (payload.exp || 86400 * 30);
+  const body = Buffer.from(JSON.stringify({ ...payload, exp })).toString('base64url');
+  const signature = crypto.createHmac('sha256', JWT_SECRET).update(`${header}.${body}`).digest('base64url');
+  return `${header}.${body}.${signature}`;
+}
+
+function verifyJwt(token) {
+  if (!token) return null;
+  const parts = token.split('.');
+  if (parts.length !== 3) return null;
+  const [header, body, signature] = parts;
+  const expectedSig = crypto.createHmac('sha256', JWT_SECRET).update(`${header}.${body}`).digest('base64url');
+  if (signature !== expectedSig) return null;
+  try {
+    const payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
+    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+function getAuthUserFromRequest(req) {
+  const authHeader = req.headers['authorization'] || '';
+  let token = authHeader.replace(/^Bearer\s+/i, '').trim();
+  if (!token && req.headers.cookie) {
+    const match = req.headers.cookie.match(/_spree_jwt=([^;]+)/);
+    if (match) token = match[1];
+  }
+  if (!token) return null;
+  return verifyJwt(token);
+}
+
+const USERS = new Map();
+USERS.set('admin@mirzafootwear.com', {
+  id: '1',
+  email: 'admin@mirzafootwear.com',
+  password_hash: hashPassword('MirzaAdmin2026!'),
+  first_name: 'Mirza',
+  last_name: 'Administrator',
+  phone: '+91 98765 00001',
+  role: 'admin',
+  created_at: new Date().toISOString()
+});
+USERS.set('patron@mirzafootwear.com', {
+  id: '2',
+  email: 'patron@mirzafootwear.com',
+  password_hash: hashPassword('Customer2026!'),
+  first_name: 'Mirza',
+  last_name: 'Patron',
+  phone: '+91 98765 43210',
+  role: 'customer',
+  created_at: new Date().toISOString()
+});
 
 // Automatically load backend .env if present
 try {
@@ -695,7 +773,7 @@ const server = http.createServer((req, res) => {
   });
 });
 
-function handleRequest(req, res, pathname, query, body) {
+async function handleRequest(req, res, pathname, query, body) {
   // 1. Health check
   if (pathname === '/up') {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
@@ -1103,20 +1181,66 @@ function handleRequest(req, res, pathname, query, body) {
     return;
   }
 
-  // 10. Customer Account & Authentication
-  if (pathname === '/api/v3/store/auth/login') {
-    const userEmail = body.email || 'customer@mirzafootwear.com';
+  // 10. Customer Account & Authentication (Database-Backed with Supabase)
+  if (pathname === '/api/v3/store/auth/login' && req.method === 'POST') {
+    const userEmail = (body.email || '').trim().toLowerCase();
+    const password = body.password || '';
+
+    let user = null;
+    if (dbPool) {
+      try {
+        const dbRes = await dbPool.query(
+          'SELECT id, email, password_hash, first_name, last_name, phone, role FROM spree_users WHERE LOWER(email) = LOWER($1)',
+          [userEmail]
+        );
+        if (dbRes.rows.length > 0) user = dbRes.rows[0];
+      } catch (e) {
+        console.warn('[Login DB Error]', e.message);
+      }
+    }
+    if (!user) user = USERS.get(userEmail);
+
+    if (!user || !verifyPassword(password, user.password_hash)) {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: { code: 'unauthorized', message: 'Invalid email or password' } }));
+      return;
+    }
+
+    const token = createJwt({
+      id: String(user.id),
+      email: user.email,
+      role: user.role || 'customer',
+      first_name: user.first_name,
+      last_name: user.last_name,
+    });
+    const refreshToken = createJwt({ id: String(user.id), type: 'refresh' });
+
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
-      token: 'mirza_jwt_token_demo',
-      refresh_token: 'mirza_refresh_token_demo',
+      token,
+      refresh_token: refreshToken,
       user: {
-        id: 'usr_mirza_1',
-        email: userEmail,
-        first_name: 'Mirza',
-        last_name: 'Patron',
+        id: String(user.id),
+        email: user.email,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        role: user.role || 'customer',
       },
     }));
+    return;
+  }
+
+  if (pathname === '/api/v3/store/auth/refresh' && req.method === 'POST') {
+    const authUser = verifyJwt(body.refresh_token);
+    if (!authUser) {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: { code: 'unauthorized', message: 'Invalid refresh token' } }));
+      return;
+    }
+    const token = createJwt({ id: String(authUser.id), email: authUser.email, role: authUser.role });
+    const refreshToken = createJwt({ id: String(authUser.id), type: 'refresh' });
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ token, refresh_token: refreshToken }));
     return;
   }
 
@@ -1126,34 +1250,176 @@ function handleRequest(req, res, pathname, query, body) {
     return;
   }
 
-  if (pathname === '/api/v3/store/customers') {
+  if (pathname === '/api/v3/store/customers' && req.method === 'POST') {
+    const userEmail = (body.email || '').trim().toLowerCase();
+    const password = body.password || '';
+    const firstName = (body.first_name || '').trim();
+    const lastName = (body.last_name || '').trim();
+    const phone = (body.phone || '').trim();
+
+    if (!userEmail || !password) {
+      res.writeHead(422, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: { code: 'unprocessable_entity', message: 'Email and password are required' } }));
+      return;
+    }
+
+    let existing = null;
+    if (dbPool) {
+      try {
+        const dbCheck = await dbPool.query('SELECT id FROM spree_users WHERE LOWER(email) = LOWER($1)', [userEmail]);
+        if (dbCheck.rows.length > 0) existing = dbCheck.rows[0];
+      } catch (e) {
+        console.warn('[Register DB Check Error]', e.message);
+      }
+    }
+    if (!existing) existing = USERS.get(userEmail);
+
+    if (existing) {
+      res.writeHead(422, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: { code: 'unprocessable_entity', message: 'Email has already been taken' } }));
+      return;
+    }
+
+    const passHash = hashPassword(password);
+    let newUser = null;
+    if (dbPool) {
+      try {
+        const insertRes = await dbPool.query(
+          `INSERT INTO spree_users (email, password_hash, first_name, last_name, phone, role)
+           VALUES ($1, $2, $3, $4, $5, 'customer')
+           RETURNING id, email, first_name, last_name, role`,
+          [userEmail, passHash, firstName, lastName, phone]
+        );
+        newUser = insertRes.rows[0];
+      } catch (e) {
+        console.warn('[Register DB Insert Error]', e.message);
+      }
+    }
+    if (!newUser) {
+      newUser = {
+        id: `usr_${Date.now()}`,
+        email: userEmail,
+        password_hash: passHash,
+        first_name: firstName,
+        last_name: lastName,
+        phone,
+        role: 'customer',
+        created_at: new Date().toISOString()
+      };
+      USERS.set(userEmail, newUser);
+    }
+
+    const token = createJwt({
+      id: String(newUser.id),
+      email: newUser.email,
+      role: newUser.role || 'customer',
+      first_name: newUser.first_name,
+      last_name: newUser.last_name,
+    });
+    const refreshToken = createJwt({ id: String(newUser.id), type: 'refresh' });
+
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
-      token: 'mirza_jwt_token_demo',
-      refresh_token: 'mirza_refresh_token_demo',
-      id: 'usr_mirza_1',
-      email: body.email || 'customer@mirzafootwear.com',
-      first_name: body.first_name || 'Mirza',
-      last_name: body.last_name || 'Patron',
+      token,
+      refresh_token: refreshToken,
+      user: {
+        id: String(newUser.id),
+        email: newUser.email,
+        first_name: newUser.first_name,
+        last_name: newUser.last_name,
+        role: newUser.role || 'customer',
+      },
     }));
     return;
   }
 
   if (pathname === '/api/v3/store/customers/me') {
+    const authUser = getAuthUserFromRequest(req);
+    if (!authUser) {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: { code: 'unauthorized', message: 'Authentication required' } }));
+      return;
+    }
+
+    if (req.method === 'PATCH' || req.method === 'PUT') {
+      let updatedUser = null;
+      if (dbPool) {
+        try {
+          const updates = [];
+          const values = [];
+          let idx = 1;
+          if (body.first_name !== undefined) { updates.push(`first_name = $${idx++}`); values.push(body.first_name); }
+          if (body.last_name !== undefined) { updates.push(`last_name = $${idx++}`); values.push(body.last_name); }
+          if (body.phone !== undefined) { updates.push(`phone = $${idx++}`); values.push(body.phone); }
+          if (body.password) { updates.push(`password_hash = $${idx++}`); values.push(hashPassword(body.password)); }
+          updates.push(`updated_at = NOW()`);
+          values.push(authUser.id);
+
+          const dbRes = await dbPool.query(
+            `UPDATE spree_users SET ${updates.join(', ')} WHERE id = $${idx} RETURNING id, email, first_name, last_name, phone, role`,
+            values
+          );
+          if (dbRes.rows.length > 0) updatedUser = dbRes.rows[0];
+        } catch (e) {
+          console.warn('[Update Me DB Error]', e.message);
+        }
+      }
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        id: String(updatedUser?.id || authUser.id),
+        email: updatedUser?.email || authUser.email,
+        first_name: updatedUser?.first_name || body.first_name || authUser.first_name,
+        last_name: updatedUser?.last_name || body.last_name || authUser.last_name,
+        full_name: `${updatedUser?.first_name || body.first_name || ''} ${updatedUser?.last_name || body.last_name || ''}`.trim() || 'Mirza Patron',
+        phone: updatedUser?.phone || body.phone || '',
+        role: updatedUser?.role || authUser.role || 'customer',
+      }));
+      return;
+    }
+
+    // GET /api/v3/store/customers/me
+    let user = null;
+    if (dbPool) {
+      try {
+        const dbRes = await dbPool.query('SELECT id, email, first_name, last_name, phone, role FROM spree_users WHERE id = $1', [authUser.id]);
+        if (dbRes.rows.length > 0) user = dbRes.rows[0];
+      } catch (e) {
+        console.warn('[Me DB Error]', e.message);
+      }
+    }
+    if (!user) user = Array.from(USERS.values()).find(u => String(u.id) === String(authUser.id)) || authUser;
+
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
-      id: 'usr_mirza_1',
-      email: 'customer@mirzafootwear.com',
-      first_name: 'Mirza',
-      last_name: 'Patron',
-      full_name: 'Mirza Patron',
-      phone: '+91 98765 43210',
+      id: String(user.id),
+      email: user.email,
+      first_name: user.first_name || '',
+      last_name: user.last_name || '',
+      full_name: `${user.first_name || ''} ${user.last_name || ''}`.trim() || 'Mirza Patron',
+      phone: user.phone || '',
+      role: user.role || 'customer',
     }));
     return;
   }
 
   if (pathname === '/api/v3/store/customers/me/orders') {
-    const ordersList = Array.from(ORDERS.values()).filter((v, i, a) => a.findIndex(t => t.id === v.id) === i);
+    const authUser = getAuthUserFromRequest(req);
+    let ordersList = [];
+    if (dbPool && authUser?.email) {
+      try {
+        const dbRes = await dbPool.query(
+          'SELECT order_data FROM spree_orders WHERE LOWER(email) = LOWER($1) ORDER BY id DESC',
+          [authUser.email]
+        );
+        ordersList = dbRes.rows.map(r => r.order_data);
+      } catch (e) {
+        console.warn('[Customer Orders DB Error]', e.message);
+      }
+    }
+    if (ordersList.length === 0) {
+      ordersList = Array.from(ORDERS.values()).filter((v, i, a) => a.findIndex(t => t.id === v.id) === i);
+    }
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
       data: ordersList,
@@ -1163,41 +1429,321 @@ function handleRequest(req, res, pathname, query, body) {
   }
 
   if (pathname === '/api/v3/store/customers/me/addresses') {
+    const authUser = getAuthUserFromRequest(req);
     if (req.method === 'POST') {
-      const newAddr = {
-        id: `addr_${Math.random().toString(36).slice(2, 7)}`,
+      let newAddr = {
+        id: `addr_${Date.now()}`,
         first_name: body.first_name || 'Mirza',
         last_name: body.last_name || 'Patron',
-        address1: body.address1 || '42 Heritage Lane',
-        city: body.city || 'Mumbai',
-        state_name: body.state_name || 'Maharashtra',
+        address1: body.address1 || '',
+        address2: body.address2 || '',
+        city: body.city || '',
+        state_name: body.state_name || '',
         country_iso: body.country_iso || 'in',
-        zipcode: body.zipcode || '400001',
-        phone: body.phone || '+91 98765 43210',
+        zipcode: body.zipcode || '',
+        phone: body.phone || '',
         default: true,
       };
+      if (dbPool && authUser?.id) {
+        try {
+          const ins = await dbPool.query(
+            `INSERT INTO spree_addresses (user_id, first_name, last_name, address1, address2, city, state_name, country_iso, zipcode, phone, is_default)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+            [authUser.id, newAddr.first_name, newAddr.last_name, newAddr.address1, newAddr.address2, newAddr.city, newAddr.state_name, newAddr.country_iso, newAddr.zipcode, newAddr.phone, true]
+          );
+          if (ins.rows.length > 0) newAddr = ins.rows[0];
+        } catch (e) {
+          console.warn('[Address DB Insert Error]', e.message);
+        }
+      }
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(newAddr));
       return;
     }
+
+    let addresses = [];
+    if (dbPool && authUser?.id) {
+      try {
+        const dbRes = await dbPool.query('SELECT * FROM spree_addresses WHERE user_id = $1 ORDER BY is_default DESC, id DESC', [authUser.id]);
+        addresses = dbRes.rows;
+      } catch (e) {
+        console.warn('[Addresses DB Error]', e.message);
+      }
+    }
+    if (addresses.length === 0) {
+      addresses = [{
+        id: 'addr_1',
+        first_name: 'Mirza',
+        last_name: 'Patron',
+        address1: '42 Heritage Colaba Causeway',
+        city: 'Mumbai',
+        state_name: 'Maharashtra',
+        country_iso: 'in',
+        zipcode: '400001',
+        phone: '+91 98765 43210',
+        default: true,
+      }];
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ data: addresses, meta: { count: addresses.length } }));
+    return;
+  }
+
+  if (pathname.match(/^\/api\/v3\/store\/customers\/me\/addresses\/[^/]+$/) && req.method === 'DELETE') {
+    const addrId = pathname.split('/').pop();
+    if (dbPool) {
+      try {
+        await dbPool.query('DELETE FROM spree_addresses WHERE id = $1', [addrId]);
+      } catch (e) {
+        console.warn('[Address Delete Error]', e.message);
+      }
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ success: true }));
+    return;
+  }
+
+  // ========================================================
+  // 11. Admin Console Management API Endpoints
+  // ========================================================
+  if (pathname === '/api/v3/admin/stats') {
+    let totalRevenue = 0;
+    let ordersCount = 0;
+    let productsCount = PRODUCTS.length;
+    let usersCount = 0;
+    let recentOrders = [];
+
+    if (dbPool) {
+      try {
+        const revRes = await dbPool.query("SELECT COALESCE(SUM(total), 0) as rev, COUNT(*) as cnt FROM spree_orders WHERE state = 'complete'");
+        totalRevenue = parseFloat(revRes.rows[0]?.rev || 0);
+        ordersCount = parseInt(revRes.rows[0]?.cnt || 0, 10);
+
+        const userRes = await dbPool.query('SELECT COUNT(*) as cnt FROM spree_users');
+        usersCount = parseInt(userRes.rows[0]?.cnt || 0, 10);
+
+        const prodRes = await dbPool.query('SELECT COUNT(*) as cnt FROM spree_products');
+        productsCount = parseInt(prodRes.rows[0]?.cnt || productsCount, 10);
+
+        const recRes = await dbPool.query('SELECT number, email, total, currency, state, completed_at FROM spree_orders ORDER BY id DESC LIMIT 5');
+        recentOrders = recRes.rows;
+      } catch (e) {
+        console.warn('[Admin Stats DB Error]', e.message);
+      }
+    }
+    if (ordersCount === 0) {
+      ordersCount = ORDERS.size;
+      for (const ord of ORDERS.values()) totalRevenue += parseFloat(ord.total || 0);
+      usersCount = USERS.size;
+    }
+
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
-      data: [
-        {
-          id: 'addr_1',
-          first_name: 'Mirza',
-          last_name: 'Patron',
-          address1: '42 Heritage Lane',
-          city: 'Mumbai',
-          state_name: 'Maharashtra',
-          country_iso: 'in',
-          zipcode: '400001',
-          phone: '+91 98765 43210',
-          default: true,
-        },
-      ],
-      meta: { count: 1 },
+      revenue: totalRevenue,
+      orders_count: ordersCount,
+      products_count: productsCount,
+      users_count: usersCount,
+      recent_orders: recentOrders,
     }));
+    return;
+  }
+
+  if (pathname === '/api/v3/admin/orders') {
+    let ordersList = [];
+    if (dbPool) {
+      try {
+        const dbRes = await dbPool.query('SELECT id, number, token, state, email, total, currency, order_data, completed_at, created_at FROM spree_orders ORDER BY id DESC');
+        ordersList = dbRes.rows.map(r => ({
+          id: r.id,
+          number: r.number,
+          email: r.email,
+          total: r.total,
+          currency: r.currency,
+          state: r.state,
+          payment_state: r.order_data?.payment_state || 'paid',
+          shipment_state: r.order_data?.shipment_state || 'ready',
+          items_count: r.order_data?.items?.length || 1,
+          items: r.order_data?.items || [],
+          completed_at: r.completed_at || r.created_at,
+        }));
+      } catch (e) {
+        console.warn('[Admin Orders DB Error]', e.message);
+      }
+    }
+    if (ordersList.length === 0) {
+      ordersList = Array.from(ORDERS.values()).map(o => ({
+        id: o.id,
+        number: o.number,
+        email: o.email || 'patron@mirzafootwear.com',
+        total: o.total,
+        currency: o.currency || 'USD',
+        state: o.state || 'complete',
+        payment_state: o.payment_state || 'paid',
+        shipment_state: o.shipment_state || 'ready',
+        items_count: o.items?.length || 1,
+        items: o.items || [],
+        completed_at: o.completed_at || new Date().toISOString(),
+      }));
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ data: ordersList, meta: { count: ordersList.length } }));
+    return;
+  }
+
+  if (pathname.match(/^\/api\/v3\/admin\/orders\/[^/]+$/) && (req.method === 'PATCH' || req.method === 'PUT')) {
+    const orderNumber = pathname.split('/').pop();
+    const newState = body.state;
+    const newPaymentState = body.payment_state;
+    const newShipmentState = body.shipment_state;
+
+    if (dbPool) {
+      try {
+        if (newState) await dbPool.query('UPDATE spree_orders SET state = $1 WHERE number = $2', [newState, orderNumber]);
+      } catch (e) {
+        console.warn('[Admin Order Update Error]', e.message);
+      }
+    }
+    const memOrder = ORDERS.get(orderNumber);
+    if (memOrder) {
+      if (newState) memOrder.state = newState;
+      if (newPaymentState) memOrder.payment_state = newPaymentState;
+      if (newShipmentState) memOrder.shipment_state = newShipmentState;
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ success: true, number: orderNumber }));
+    return;
+  }
+
+  if (pathname === '/api/v3/admin/inventory') {
+    let inventoryList = [];
+    if (dbPool) {
+      try {
+        const dbRes = await dbPool.query(`
+          SELECT DISTINCT ON (v.id) p.id as product_id, p.name as product_name, p.slug, p.price, p.thumbnail_url,
+                 v.id as variant_id, v.sku, v.size_option, COALESCE(si.count_on_hand, 0) as count_on_hand
+          FROM spree_products p
+          JOIN spree_variants v ON v.product_id = p.id
+          LEFT JOIN spree_stock_items si ON si.variant_id = v.id
+          ORDER BY v.id ASC, p.id ASC
+        `);
+        inventoryList = dbRes.rows;
+      } catch (e) {
+        console.warn('[Admin Inventory DB Error]', e.message);
+      }
+    }
+    if (inventoryList.length === 0) {
+      for (const prod of PRODUCTS) {
+        for (const v of (prod.variants || [])) {
+          inventoryList.push({
+            product_id: prod.id,
+            product_name: prod.name,
+            slug: prod.slug,
+            price: prod.price?.amount || '185.00',
+            thumbnail_url: prod.thumbnail_url,
+            variant_id: v.id,
+            sku: v.sku,
+            size_option: v.option_values?.[0]?.presentation || 'Standard',
+            count_on_hand: v.stock || 15,
+          });
+        }
+      }
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ data: inventoryList, meta: { count: inventoryList.length } }));
+    return;
+  }
+
+  if (pathname.match(/^\/api\/v3\/admin\/inventory\/[^/]+$/) && (req.method === 'PATCH' || req.method === 'PUT')) {
+    const variantId = pathname.split('/').pop();
+    const newCount = Math.max(0, parseInt(body.count_on_hand || '0', 10));
+
+    if (dbPool) {
+      try {
+        await dbPool.query(
+          'UPDATE spree_stock_items SET count_on_hand = $1 WHERE variant_id = $2',
+          [newCount, variantId]
+        );
+        await dbPool.query(`
+          UPDATE spree_products SET total_on_hand = (
+            SELECT COALESCE(SUM(si.count_on_hand), 0)
+            FROM spree_variants v
+            JOIN spree_stock_items si ON si.variant_id = v.id
+            WHERE v.product_id = spree_products.id
+          ), in_stock = (
+            SELECT COALESCE(SUM(si.count_on_hand), 0) > 0
+            FROM spree_variants v
+            JOIN spree_stock_items si ON si.variant_id = v.id
+            WHERE v.product_id = spree_products.id
+          )
+          WHERE id = (SELECT product_id FROM spree_variants WHERE id = $1)
+        `, [variantId]);
+        await syncCatalogFromDatabase();
+      } catch (e) {
+        console.warn('[Admin Stock Update Error]', e.message);
+      }
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ success: true, variant_id: variantId, count_on_hand: newCount }));
+    return;
+  }
+
+  if (pathname === '/api/v3/admin/customers') {
+    let customersList = [];
+    if (dbPool) {
+      try {
+        const dbRes = await dbPool.query(`
+          SELECT u.id, u.email, u.first_name, u.last_name, u.phone, u.role, u.created_at,
+                 COUNT(o.id) as orders_count, COALESCE(SUM(o.total), 0) as lifetime_spend
+          FROM spree_users u
+          LEFT JOIN spree_orders o ON LOWER(o.email) = LOWER(u.email)
+          GROUP BY u.id, u.email, u.first_name, u.last_name, u.phone, u.role, u.created_at
+          ORDER BY u.id ASC
+        `);
+        customersList = dbRes.rows.map(r => ({
+          id: r.id,
+          email: r.email,
+          first_name: r.first_name,
+          last_name: r.last_name,
+          phone: r.phone,
+          role: r.role,
+          orders_count: parseInt(r.orders_count || 0, 10),
+          lifetime_spend: parseFloat(r.lifetime_spend || 0),
+          created_at: r.created_at,
+        }));
+      } catch (e) {
+        console.warn('[Admin Customers DB Error]', e.message);
+      }
+    }
+    if (customersList.length === 0) {
+      customersList = Array.from(USERS.values()).map(u => ({
+        id: u.id,
+        email: u.email,
+        first_name: u.first_name,
+        last_name: u.last_name,
+        phone: u.phone,
+        role: u.role,
+        orders_count: 0,
+        lifetime_spend: 0,
+        created_at: u.created_at,
+      }));
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ data: customersList, meta: { count: customersList.length } }));
+    return;
+  }
+
+  if (pathname.match(/^\/api\/v3\/admin\/customers\/[^/]+\/role$/) && (req.method === 'PATCH' || req.method === 'PUT')) {
+    const userId = pathname.split('/')[5];
+    const newRole = body.role === 'admin' ? 'admin' : 'customer';
+    if (dbPool) {
+      try {
+        await dbPool.query('UPDATE spree_users SET role = $1 WHERE id = $2', [newRole, userId]);
+      } catch (e) {
+        console.warn('[Admin User Role Error]', e.message);
+      }
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ success: true, user_id: userId, role: newRole }));
     return;
   }
 
@@ -1225,7 +1771,8 @@ function handleRequest(req, res, pathname, query, body) {
   res.end(JSON.stringify({ data: [], meta: { count: 0 } }));
 }
 
-if (!process.env.VERCEL) {
+const isDirectRun = process.argv[1] && import.meta.url === url.pathToFileURL(process.argv[1]).href;
+if (!process.env.VERCEL && isDirectRun) {
   server.listen(PORT, async () => {
     console.log(`==> Mock Spree Store API running at http://localhost:${PORT}`);
     if (dbPool) {

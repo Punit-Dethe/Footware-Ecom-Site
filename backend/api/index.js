@@ -36,5 +36,5 @@ export default async function handler(req, res) {
     }
   }
 
-  handleRequest(req, res, pathname, parsedUrl.query, body);
+  await handleRequest(req, res, pathname, parsedUrl.query, body);
 }
