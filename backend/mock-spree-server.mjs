@@ -1225,12 +1225,14 @@ function handleRequest(req, res, pathname, query, body) {
   res.end(JSON.stringify({ data: [], meta: { count: 0 } }));
 }
 
-server.listen(PORT, async () => {
-  console.log(`==> Mock Spree Store API running at http://localhost:${PORT}`);
-  if (dbPool) {
-    await syncCatalogFromDatabase();
-  }
-  console.log(`==> Serving ${PRODUCTS.length} Mirza Footwear traditional and formal leather products across ${CATEGORIES.length} categories.`);
-});
+if (!process.env.VERCEL) {
+  server.listen(PORT, async () => {
+    console.log(`==> Mock Spree Store API running at http://localhost:${PORT}`);
+    if (dbPool) {
+      await syncCatalogFromDatabase();
+    }
+    console.log(`==> Serving ${PRODUCTS.length} Mirza Footwear traditional and formal leather products across ${CATEGORIES.length} categories.`);
+  });
+}
 
-export { PRODUCTS, CATEGORIES, MARKETS, COUNTRIES };
+export { PRODUCTS, CATEGORIES, MARKETS, COUNTRIES, handleRequest, syncCatalogFromDatabase, dbPool };
