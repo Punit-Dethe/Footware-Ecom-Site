@@ -12,5 +12,14 @@
     "test": "pnpm --prefix storefront run test",
     "bootstrap:docker": "powershell -ExecutionPolicy Bypass -File ./backend/bootstrap.ps1"
   },
-  "keywords": ["ecommerce", "footwear", "spree", "nextjs", "performance"]
+  "keywords": [
+    "ecommerce",
+    "footwear",
+    "spree",
+    "nextjs",
+    "performance"
+  ],
+  "devDependencies": {
+    "pg": "^8.23.0"
+  }
 }
