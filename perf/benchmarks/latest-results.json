@@ -1,93 +1,93 @@
 {
-  "timestamp": "2026-09-08T16:28:40.194Z",
+  "timestamp": "2026-09-08T16:44:04.757Z",
   "results": [
     {
       "name": "Homepage",
       "path": "/us/en",
       "statusCode": 200,
-      "bytes": 197796,
-      "sizeKb": "193.2",
-      "avgTtfbMs": "236.7",
-      "avgDurationMs": "326.0",
-      "minDurationMs": "310.5",
-      "p75DurationMs": "333.6"
+      "bytes": 237491,
+      "sizeKb": "231.9",
+      "avgTtfbMs": "278.4",
+      "avgDurationMs": "418.9",
+      "minDurationMs": "293.6",
+      "p75DurationMs": "416.1"
     },
     {
       "name": "Products Listing (PLP)",
       "path": "/us/en/products",
       "statusCode": 200,
-      "bytes": 201668,
-      "sizeKb": "196.9",
-      "avgTtfbMs": "242.8",
-      "avgDurationMs": "329.0",
-      "minDurationMs": "233.1",
-      "p75DurationMs": "371.6"
+      "bytes": 214770,
+      "sizeKb": "209.7",
+      "avgTtfbMs": "278.9",
+      "avgDurationMs": "381.7",
+      "minDurationMs": "362.8",
+      "p75DurationMs": "388.8"
     },
     {
       "name": "PDP (Imperial Oxford)",
       "path": "/us/en/products/mirza-imperial-wholecut-oxford",
       "statusCode": 200,
-      "bytes": 123945,
-      "sizeKb": "121.0",
-      "avgTtfbMs": "154.9",
-      "avgDurationMs": "245.7",
-      "minDurationMs": "218.0",
-      "p75DurationMs": "263.4"
+      "bytes": 130464,
+      "sizeKb": "127.4",
+      "avgTtfbMs": "217.0",
+      "avgDurationMs": "376.3",
+      "minDurationMs": "289.5",
+      "p75DurationMs": "437.3"
     },
     {
       "name": "PDP (Royal Jutti)",
       "path": "/us/en/products/mirza-royal-embroidered-jutti",
       "statusCode": 200,
-      "bytes": 116537,
-      "sizeKb": "113.8",
-      "avgTtfbMs": "148.0",
-      "avgDurationMs": "242.7",
-      "minDurationMs": "189.9",
-      "p75DurationMs": "251.1"
+      "bytes": 123042,
+      "sizeKb": "120.2",
+      "avgTtfbMs": "234.5",
+      "avgDurationMs": "474.1",
+      "minDurationMs": "314.5",
+      "p75DurationMs": "456.8"
     },
     {
       "name": "Category (Formal & Office)",
       "path": "/us/en/c/formal-office",
       "statusCode": 200,
-      "bytes": 192419,
-      "sizeKb": "187.9",
-      "avgTtfbMs": "257.6",
-      "avgDurationMs": "351.2",
-      "minDurationMs": "280.3",
-      "p75DurationMs": "382.1"
+      "bytes": 221277,
+      "sizeKb": "216.1",
+      "avgTtfbMs": "269.1",
+      "avgDurationMs": "387.3",
+      "minDurationMs": "358.2",
+      "p75DurationMs": "398.9"
     },
     {
       "name": "Category (Traditional Indian)",
       "path": "/us/en/c/traditional-indian",
       "statusCode": 200,
-      "bytes": 192638,
-      "sizeKb": "188.1",
-      "avgTtfbMs": "230.8",
-      "avgDurationMs": "332.7",
-      "minDurationMs": "288.0",
-      "p75DurationMs": "343.3"
+      "bytes": 221492,
+      "sizeKb": "216.3",
+      "avgTtfbMs": "258.6",
+      "avgDurationMs": "381.4",
+      "minDurationMs": "362.4",
+      "p75DurationMs": "395.1"
     },
     {
       "name": "Cart View",
       "path": "/us/en/cart",
       "statusCode": 200,
-      "bytes": 88513,
-      "sizeKb": "86.4",
-      "avgTtfbMs": "143.2",
-      "avgDurationMs": "211.1",
-      "minDurationMs": "191.1",
-      "p75DurationMs": "206.5"
+      "bytes": 88169,
+      "sizeKb": "86.1",
+      "avgTtfbMs": "177.0",
+      "avgDurationMs": "263.5",
+      "minDurationMs": "243.1",
+      "p75DurationMs": "267.3"
     },
     {
       "name": "Search Query",
       "path": "/us/en/products?q=oxford",
       "statusCode": 200,
-      "bytes": 185856,
-      "sizeKb": "181.5",
-      "avgTtfbMs": "235.4",
-      "avgDurationMs": "313.1",
-      "minDurationMs": "250.8",
-      "p75DurationMs": "342.2"
+      "bytes": 214704,
+      "sizeKb": "209.7",
+      "avgTtfbMs": "274.1",
+      "avgDurationMs": "398.9",
+      "minDurationMs": "351.6",
+      "p75DurationMs": "386.9"
     }
   ]
 }

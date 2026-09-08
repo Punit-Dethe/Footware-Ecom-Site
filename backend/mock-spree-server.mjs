@@ -383,10 +383,51 @@ const PRODUCTS = [
   },
 ];
 
-// Normalize products to guarantee complete Spree SDK contracts
+// Normalize products to guarantee complete Spree SDK contracts and real stock management
 for (const p of PRODUCTS) {
-  p.default_variant = p.variants.find(v => v.id === p.default_variant_id) || p.variants[0];
+  let productStock = 0;
   const allVariantIds = p.variants.map(v => v.id);
+
+  for (const v of p.variants) {
+    // Inventory and purchasability: assign realistic stock levels (10 to 25 pairs)
+    if (v.stock === undefined) {
+      const seed = (v.sku || v.id).split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+      v.stock = 10 + (seed % 16);
+    }
+    v.total_on_hand = v.stock;
+    v.in_stock = v.stock > 0;
+    v.purchasable = v.stock > 0;
+    v.track_inventory = true;
+    v.backorderable = false;
+    productStock += v.stock;
+
+    // Normalizing option values so VariantPicker and Spree SDK can resolve sizes & colors
+    if (v.option_values && Array.isArray(v.option_values)) {
+      for (const ov of v.option_values) {
+        if (!ov.option_type_id) {
+          ov.option_type_id = ov.option_type_name === 'size' ? 'ot_size' : 'ot_color';
+        }
+        if (!ov.name) {
+          ov.name = ov.presentation || ov.id;
+        }
+        if (!ov.presentation) {
+          ov.presentation = ov.name;
+        }
+        ov.option_type_presentation = ov.option_type_name === 'size' ? 'Size' : 'Color';
+      }
+    }
+  }
+
+  p.total_on_hand = productStock;
+  p.in_stock = productStock > 0;
+  p.purchasable = productStock > 0;
+
+  p.default_variant = p.variants.find(v => v.id === p.default_variant_id) || p.variants[0];
+  if (p.default_variant) {
+    p.default_variant.in_stock = p.default_variant.stock > 0;
+    p.default_variant.purchasable = p.default_variant.stock > 0;
+  }
+
   if (p.primary_media) {
     p.primary_media.variant_ids = p.primary_media.variant_ids || allVariantIds;
     p.primary_media.position = p.primary_media.position || 1;
@@ -905,6 +946,22 @@ function handleRequest(req, res, pathname, query, body) {
   if (pathname.match(/^\/api\/v3\/store\/carts\/[^/]+\/complete$/)) {
     const cartId = pathname.split('/')[5];
     const cart = CARTS.get(cartId) || defaultCart;
+
+    // Deduct stock for all purchased line items
+    for (const item of (cart.items || [])) {
+      const { product, variant } = findVariant(item.variant_id);
+      if (variant && variant.stock != null) {
+        variant.stock = Math.max(0, variant.stock - (item.quantity || 1));
+        variant.total_on_hand = variant.stock;
+        variant.in_stock = variant.stock > 0;
+        variant.purchasable = variant.stock > 0;
+        if (product) {
+          product.total_on_hand = product.variants.reduce((sum, v) => sum + (v.stock || 0), 0);
+          product.in_stock = product.total_on_hand > 0;
+          product.purchasable = product.in_stock;
+        }
+      }
+    }
 
     cart.completed_at = new Date().toISOString();
     cart.current_step = 'complete';
