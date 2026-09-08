@@ -57,6 +57,43 @@ Rails.application.config.after_initialize do
   # Role-based permissions
   Spree.permissions.assign(:default, [Spree::PermissionSets::DefaultCustomer])
   Spree.permissions.assign(:admin, [Spree::PermissionSets::SuperUser])
+
+  # Ensure default store exists
+  if defined?(Spree::Store) && ActiveRecord::Base.connection.table_exists?('spree_stores')
+    begin
+      Spree::Store.find_or_create_by!(code: 'spree') do |store|
+        store.name = 'Mirza Footwear'
+        store.url = ENV.fetch('RENDER_EXTERNAL_HOSTNAME', 'localhost')
+        store.mail_from_address = 'no-reply@mirzafootwear.com'
+        store.customer_support_email = 'support@mirzafootwear.com'
+        store.default_currency = 'USD'
+        store.supported_currencies = 'USD,INR,EUR,GBP'
+        store.default_locale = 'en'
+        store.supported_locales = 'en'
+        store.default = true
+      end
+    rescue => e
+      Rails.logger.warn("[Spree] Store initialization skipped: #{e.message}")
+    end
+  end
+
+  # Ensure admin user exists
+  admin_email = ENV['SPREE_ADMIN_EMAIL'] || 'admin@mirzafootwear.com'
+  admin_password = ENV['SPREE_ADMIN_PASSWORD'] || 'MirzaAdmin2026!'
+  if defined?(Spree::User) && ActiveRecord::Base.connection.table_exists?('spree_users') && admin_email.present? && admin_password.present?
+    begin
+      admin = Spree::User.find_or_initialize_by(email: admin_email)
+      if admin.new_record?
+        admin.password = admin_password
+        admin.password_confirmation = admin_password
+        admin.save!
+        admin_role = Spree::Role.find_or_create_by(name: 'admin')
+        admin.spree_roles << admin_role unless admin.spree_roles.exists?(name: 'admin')
+      end
+    rescue => e
+      Rails.logger.warn("[Spree] Admin initialization skipped: #{e.message}")
+    end
+  end
 end
 
 Spree.user_class = 'Spree::User'
