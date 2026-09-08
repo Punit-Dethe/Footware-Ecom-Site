@@ -66,7 +66,7 @@ export function ProductDetails({ product, basePath }: ProductDetailsProps) {
   const variantImageIndex = useMemo((): number | null => {
     if (!selectedVariant) return null;
     const index = galleryImages.findIndex((m) =>
-      m.variant_ids.includes(selectedVariant.id),
+      m.variant_ids?.includes(selectedVariant.id),
     );
     return index >= 0 ? index : null;
   }, [selectedVariant, galleryImages]);
