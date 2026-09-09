@@ -7,6 +7,7 @@ import { generateNextConfigCacheHeaders } from "./src/lib/cache/cache-policy";
 
 const withBundleAnalyzer = bundleAnalyzer({
   enabled: process.env.ANALYZE === "true",
+  openAnalyzer: false,
 });
 
 const withNextIntl = createNextIntlPlugin();
