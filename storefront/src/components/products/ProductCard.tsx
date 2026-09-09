@@ -8,10 +8,11 @@ import { memo, useCallback } from "react";
 import { HiddenPricePrompt } from "@/components/products/HiddenPricePrompt";
 import { ProductImage } from "@/components/ui/product-image";
 import { trackSelectItem } from "@/lib/analytics/gtm";
-import { getProductMedia } from "@/lib/media/catalog-images";
+import type { ProductMedia } from "@/lib/media/types";
 
 interface ProductCardProps {
   product: Product;
+  media?: ProductMedia;
   basePath?: string;
   categoryId?: string;
   index?: number;
@@ -25,6 +26,7 @@ interface ProductCardProps {
 
 export const ProductCard = memo(function ProductCard({
   product,
+  media: mediaProp,
   basePath = "",
   categoryId,
   index,
@@ -36,7 +38,10 @@ export const ProductCard = memo(function ProductCard({
 }: ProductCardProps) {
   const t = useTranslations("products");
   const router = useRouter();
-  const media = getProductMedia(product.slug, product.thumbnail_url);
+  const media: ProductMedia = mediaProp || (product as any).product_media || {
+    mainUrl: product.thumbnail_url || (product.primary_media as any)?.url || null,
+    dominantColor: "#f5f5f5",
+  };
   const imageUrl = media.mainUrl;
   const productHref = `${basePath}/products/${product.slug}${categoryId ? `?category_id=${categoryId}` : ""}`;
   const isHighPriority = fetchPriority === "high" || Boolean(priority);

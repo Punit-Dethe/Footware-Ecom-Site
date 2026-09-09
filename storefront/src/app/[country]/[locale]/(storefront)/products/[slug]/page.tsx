@@ -11,6 +11,7 @@ import {
   buildProductJsonLd,
 } from "@/lib/seo";
 import { getStoreUrl } from "@/lib/store";
+import { getProductMedia } from "@/lib/media/catalog-images";
 import { ProductDetails } from "./ProductDetails";
 
 interface ProductPageProps {
@@ -114,7 +115,11 @@ export default async function ProductPage({
           />
         )}
       </div>
-      <ProductDetails product={product} basePath={basePath} />
+      <ProductDetails
+        product={product}
+        media={(product as any).product_media || getProductMedia(product.slug, product.thumbnail_url)}
+        basePath={basePath}
+      />
     </>
   );
 }

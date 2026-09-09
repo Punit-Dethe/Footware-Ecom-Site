@@ -1,4 +1,7 @@
 import manifestData from "./manifest.json";
+import type { ProductMedia } from "./types";
+
+export type { ProductMedia };
 
 export interface ResponsiveVariants {
   [width: string]: {
@@ -7,12 +10,8 @@ export interface ResponsiveVariants {
   };
 }
 
-export interface ProductMediaMetadata {
-  mainUrl: string | null;
-  dominantColor: string;
-  lqip: string | null;
+export interface ProductMediaMetadata extends ProductMedia {
   hash: string | null;
-  variants: ResponsiveVariants | null;
 }
 
 const manifest = manifestData as Record<
@@ -47,10 +46,10 @@ export function getProductMedia(
   }
 
   return {
-    mainUrl: fallbackUrl || null,
+    mainUrl: fallbackUrl || "",
     dominantColor: "#f5f5f5",
-    lqip: null,
+    lqip: undefined,
     hash: null,
-    variants: null,
+    variants: undefined,
   };
 }

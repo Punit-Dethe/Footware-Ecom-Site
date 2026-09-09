@@ -1,4 +1,7 @@
 import manifestData from "@/lib/media/manifest.json";
+import type { ProductMedia } from "@/lib/media/types";
+
+export type { ProductMedia };
 
 export interface CatalogMedia {
   id: string;
@@ -89,6 +92,7 @@ export interface CatalogProduct {
   meta_keywords?: string | null;
   primary_media: CatalogMedia;
   media: CatalogMedia[];
+  product_media?: ProductMedia;
   price: {
     amount?: string;
     currency?: string;
@@ -476,6 +480,12 @@ function buildCatalogProduct(
     thumbnail_url: thumbUrl,
     primary_media: primaryMedia,
     media: [primaryMedia],
+    product_media: {
+      mainUrl: primaryUrl,
+      lqip: manifest?.lqip,
+      dominantColor: manifest?.dominantColor || "#f5f5f5",
+      variants: manifest?.variants,
+    },
     price: {
       amount: amountStr,
       currency: "USD",

@@ -15,19 +15,23 @@ import { useCart } from "@/contexts/CartContext";
 import { useHiddenPricing } from "@/contexts/HiddenPricingContext";
 import { useStore } from "@/contexts/StoreContext";
 import { trackAddToCart, trackViewItem } from "@/lib/analytics/gtm";
-import { getProductMedia } from "@/lib/media/catalog-images";
+import type { ProductMedia } from "@/lib/media/types";
 
 interface ProductDetailsProps {
   product: Product;
+  media?: ProductMedia;
   basePath: string;
 }
 
-export function ProductDetails({ product, basePath }: ProductDetailsProps) {
+export function ProductDetails({ product, media: mediaProp, basePath }: ProductDetailsProps) {
   const { addItem } = useCart();
   const { currency } = useStore();
   const t = useTranslations("products");
   const tw = useTranslations("wholesale");
-  const media = getProductMedia(product.slug, product.thumbnail_url);
+  const media: ProductMedia = mediaProp || (product as any).product_media || {
+    mainUrl: product.thumbnail_url || null,
+    dominantColor: "#f5f5f5",
+  };
   // Non-null inside a HiddenPricingProvider (wholesale `prices_hidden`, guest
   // view): prices are null on purpose, and ordering is gated behind sign-in.
   const hiddenPricing = useHiddenPricing();
