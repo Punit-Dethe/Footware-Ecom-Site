@@ -16,22 +16,52 @@ export interface CatalogMedia {
   focal_point_y?: number;
 }
 
+export interface CatalogOptionValue {
+  id: string;
+  option_type_id: string;
+  name: string;
+  label: string;
+  position: number;
+  color_code: string | null;
+  option_type_name: string;
+  option_type_label: string;
+  presentation?: string;
+  image_url: string | null;
+}
+
+export interface CatalogOptionType {
+  id: string;
+  name: string;
+  label: string;
+  position: number;
+  kind: string;
+  presentation?: string;
+}
+
 export interface CatalogVariant {
   id: string;
+  product_id?: string;
   is_master: boolean;
   sku: string;
   in_stock: boolean;
+  purchasable: boolean;
+  track_inventory?: boolean;
   price: {
+    amount?: string;
+    currency?: string;
     display_amount: string;
     amount_in_cents: number;
     compare_at_amount_in_cents?: number;
+    display_compare_at_amount?: string;
+  };
+  original_price?: {
+    amount?: string;
+    currency?: string;
+    display_amount: string;
+    amount_in_cents: number;
   };
   options_text: string;
-  option_values: Array<{
-    id: string;
-    option_type_name: string;
-    presentation: string;
-  }>;
+  option_values: CatalogOptionValue[];
 }
 
 export interface CatalogCategory {
@@ -59,17 +89,25 @@ export interface CatalogProduct {
   primary_media: CatalogMedia;
   media: CatalogMedia[];
   price: {
+    amount?: string;
+    currency?: string;
     display_amount: string;
     amount_in_cents: number;
+    compare_at_amount?: string;
     compare_at_amount_in_cents?: number;
     display_compare_at_amount?: string;
   };
-  original_price: { display_amount: string; amount_in_cents: number };
+  original_price: {
+    amount?: string;
+    currency?: string;
+    display_amount: string;
+    amount_in_cents: number;
+  };
   categories: CatalogCategory[];
   default_variant_id: string;
   default_variant?: CatalogVariant;
   variants: CatalogVariant[];
-  option_types: Array<{ id: string; name: string; presentation: string }>;
+  option_types: CatalogOptionType[];
 }
 
 // 1. Categories
@@ -365,19 +403,45 @@ function buildCatalogProduct(
 
   const cents = Math.round(raw.price * 100);
   const displayAmount = `$${raw.price.toFixed(2)}`;
+  const displayCompareAmount = `$${(raw.price * 1.15).toFixed(2)}`;
+  const amountStr = raw.price.toFixed(2);
+  const compareStr = (raw.price * 1.15).toFixed(2);
 
   const variants: CatalogVariant[] = [7, 8, 9, 10].map((size, sIdx) => ({
     id: `var_${slug.replace(/-/g, "_")}_${size}`,
+    product_id: prodId,
     is_master: sIdx === 1, // size 8 is master
     sku: `${raw.sku}-${size}`,
     in_stock: true,
-    price: { display_amount: displayAmount, amount_in_cents: cents },
+    purchasable: true,
+    track_inventory: true,
+    price: {
+      amount: amountStr,
+      currency: "USD",
+      display_amount: displayAmount,
+      amount_in_cents: cents,
+      compare_at_amount_in_cents: Math.round(cents * 1.15),
+      display_compare_at_amount: displayCompareAmount,
+    },
+    original_price: {
+      amount: amountStr,
+      currency: "USD",
+      display_amount: displayAmount,
+      amount_in_cents: cents,
+    },
     options_text: `Size: UK/India ${size}`,
     option_values: [
       {
         id: `opt_sz_${size}`,
-        option_type_name: "size",
+        option_type_id: "ot_size",
+        name: `${size}`,
+        label: `UK/India ${size}`,
         presentation: `UK/India ${size}`,
+        position: sIdx + 1,
+        color_code: null,
+        option_type_name: "size",
+        option_type_label: "Size",
+        image_url: null,
       },
     ],
   }));
@@ -411,17 +475,34 @@ function buildCatalogProduct(
     primary_media: primaryMedia,
     media: [primaryMedia],
     price: {
+      amount: amountStr,
+      currency: "USD",
       display_amount: displayAmount,
       amount_in_cents: cents,
+      compare_at_amount: compareStr,
       compare_at_amount_in_cents: Math.round(cents * 1.15),
-      display_compare_at_amount: `$${(raw.price * 1.15).toFixed(2)}`,
+      display_compare_at_amount: displayCompareAmount,
     },
-    original_price: { display_amount: displayAmount, amount_in_cents: cents },
+    original_price: {
+      amount: amountStr,
+      currency: "USD",
+      display_amount: displayAmount,
+      amount_in_cents: cents,
+    },
     categories: [category],
     default_variant_id: variants[1].id,
     default_variant: variants[1],
     variants,
-    option_types: [{ id: "ot_size", name: "size", presentation: "Size" }],
+    option_types: [
+      {
+        id: "ot_size",
+        name: "size",
+        label: "Size",
+        presentation: "Size",
+        position: 1,
+        kind: "button",
+      },
+    ],
   };
 }
 

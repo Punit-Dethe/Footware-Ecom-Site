@@ -111,15 +111,12 @@ export async function GET(
     if (!product) {
       return NextResponse.json({ error: "Product not found" }, { status: 404 });
     }
-    return NextResponse.json(
-      { data: product },
-      {
-        headers: {
-          "Cache-Control":
-            "public, max-age=0, s-maxage=3600, stale-while-revalidate=86400",
-        },
+    return NextResponse.json(product, {
+      headers: {
+        "Cache-Control":
+          "public, max-age=0, s-maxage=3600, stale-while-revalidate=86400",
       },
-    );
+    });
   }
 
   // 4. Categories List: GET /api/v3/store/categories
@@ -148,15 +145,12 @@ export async function GET(
         { status: 404 },
       );
     }
-    return NextResponse.json(
-      { data: category },
-      {
-        headers: {
-          "Cache-Control":
-            "public, max-age=0, s-maxage=86400, stale-while-revalidate=604800",
-        },
+    return NextResponse.json(category, {
+      headers: {
+        "Cache-Control":
+          "public, max-age=0, s-maxage=86400, stale-while-revalidate=604800",
       },
-    );
+    });
   }
 
   // 6. Markets List: GET /api/v3/store/markets
@@ -176,7 +170,7 @@ export async function GET(
   if (path === "markets/resolve") {
     const country = searchParams.get("country")?.toLowerCase() || "us";
     const market = MARKETS.find((m) => m.code === country) || MARKETS[0];
-    return NextResponse.json({ data: market });
+    return NextResponse.json(market);
   }
 
   // 8. Countries List: GET /api/v3/store/countries
@@ -191,7 +185,7 @@ export async function GET(
   if (path.startsWith("countries/")) {
     const iso = path.replace(/^countries\//, "").toLowerCase();
     const country = COUNTRIES.find((c) => c.iso === iso) || COUNTRIES[0];
-    return NextResponse.json({ data: country });
+    return NextResponse.json(country);
   }
 
   // 10. Channel Info: GET /api/v3/store/channel
@@ -212,7 +206,7 @@ export async function GET(
   if (path.startsWith("policies/")) {
     const slug = path.replace(/^policies\//, "");
     const policy = POLICIES.find((p) => p.slug === slug) || POLICIES[0];
-    return NextResponse.json({ data: policy });
+    return NextResponse.json(policy);
   }
 
   if (path === "policies") {

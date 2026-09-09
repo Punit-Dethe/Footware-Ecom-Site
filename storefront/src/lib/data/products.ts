@@ -100,7 +100,7 @@ export async function cachedGetProduct(
     `product:${slugOrId}${cacheTagSuffix(surface)}`,
   );
   try {
-    return await getClientForSurface(surface).products.get(
+    const res = await getClientForSurface(surface).products.get(
       slugOrId,
       { expand },
       {
@@ -110,6 +110,16 @@ export async function cachedGetProduct(
           : undefined),
       },
     );
+    const product = ((res as any)?.data || res) as unknown as ReturnType<
+      ReturnType<typeof getClientForSurface>["products"]["get"]
+    >;
+    if (product && ((product as any).slug || (product as any).name)) {
+      return product;
+    }
+    const local = getProductBySlugOrId(slugOrId);
+    return (local || product) as unknown as ReturnType<
+      ReturnType<typeof getClientForSurface>["products"]["get"]
+    >;
   } catch (_error) {
     const local = getProductBySlugOrId(slugOrId);
     if (local) {

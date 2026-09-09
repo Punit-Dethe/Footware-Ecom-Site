@@ -44,7 +44,17 @@ export async function cachedGetCategory(
   cacheLife("tenMinutes");
   cacheTag("category");
   try {
-    return await getClient().categories.get(idOrPermalink, params, options);
+    const res = await getClient().categories.get(idOrPermalink, params, options);
+    const category = ((res as any)?.data || res) as unknown as ReturnType<
+      ReturnType<typeof getClient>["categories"]["get"]
+    >;
+    if (category && ((category as any).permalink || (category as any).name)) {
+      return category;
+    }
+    const local = getCategoryByPermalinkOrId(idOrPermalink);
+    return (local || category) as unknown as ReturnType<
+      ReturnType<typeof getClient>["categories"]["get"]
+    >;
   } catch (_error) {
     const local = getCategoryByPermalinkOrId(idOrPermalink);
     if (local) {
