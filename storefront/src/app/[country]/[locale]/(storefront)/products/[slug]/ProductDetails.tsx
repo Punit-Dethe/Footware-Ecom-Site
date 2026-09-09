@@ -15,6 +15,7 @@ import { useCart } from "@/contexts/CartContext";
 import { useHiddenPricing } from "@/contexts/HiddenPricingContext";
 import { useStore } from "@/contexts/StoreContext";
 import { trackAddToCart, trackViewItem } from "@/lib/analytics/gtm";
+import { getProductMedia } from "@/lib/media/catalog-images";
 
 interface ProductDetailsProps {
   product: Product;
@@ -26,6 +27,7 @@ export function ProductDetails({ product, basePath }: ProductDetailsProps) {
   const { currency } = useStore();
   const t = useTranslations("products");
   const tw = useTranslations("wholesale");
+  const media = getProductMedia(product.slug, product.thumbnail_url);
   // Non-null inside a HiddenPricingProvider (wholesale `prices_hidden`, guest
   // view): prices are null on purpose, and ordering is gated behind sign-in.
   const hiddenPricing = useHiddenPricing();
@@ -60,8 +62,21 @@ export function ProductDetails({ product, basePath }: ProductDetailsProps) {
   }, [product, currency]);
 
   const galleryImages = useMemo((): Media[] => {
-    return product.media || [];
-  }, [product.media]);
+    if (product.media && product.media.length > 0) {
+      return product.media;
+    }
+    if (media.mainUrl) {
+      return [
+        {
+          id: `img_${product.id}`,
+          url: media.mainUrl,
+          alt: product.name,
+          position: 1,
+        } as unknown as Media,
+      ];
+    }
+    return [];
+  }, [product.media, product.id, product.name, media.mainUrl]);
 
   const variantImageIndex = useMemo((): number | null => {
     if (!selectedVariant) return null;

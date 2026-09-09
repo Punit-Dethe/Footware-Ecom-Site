@@ -8,6 +8,7 @@ import { memo, useCallback } from "react";
 import { HiddenPricePrompt } from "@/components/products/HiddenPricePrompt";
 import { ProductImage } from "@/components/ui/product-image";
 import { trackSelectItem } from "@/lib/analytics/gtm";
+import { getProductMedia } from "@/lib/media/catalog-images";
 
 interface ProductCardProps {
   product: Product;
@@ -17,6 +18,7 @@ interface ProductCardProps {
   listId?: string;
   listName?: string;
   fetchPriority?: "high" | "low" | "auto";
+  priority?: boolean;
   /** Optional currency used for analytics; omit to skip the select_item event. */
   currency?: string;
 }
@@ -29,14 +31,16 @@ export const ProductCard = memo(function ProductCard({
   listId,
   listName,
   fetchPriority,
+  priority,
   currency,
 }: ProductCardProps) {
   const t = useTranslations("products");
   const router = useRouter();
-  const imageUrl = product.thumbnail_url || null;
+  const media = getProductMedia(product.slug, product.thumbnail_url);
+  const imageUrl = media.mainUrl;
   const productHref = `${basePath}/products/${product.slug}${categoryId ? `?category_id=${categoryId}` : ""}`;
   const isHighPriority =
-    fetchPriority === "high" || (index !== undefined && index < 4);
+    fetchPriority === "high" || Boolean(priority) || (index !== undefined && index < 2);
 
   const handleIntentPrefetch = useCallback(() => {
     if (!isHighPriority && productHref) {
@@ -78,7 +82,10 @@ export const ProductCard = memo(function ProductCard({
       onTouchStart={handleIntentPrefetch}
     >
       {/* Image */}
-      <div className="relative aspect-square bg-gray-100 rounded-md overflow-hidden">
+      <div
+        className="relative aspect-square rounded-md overflow-hidden"
+        style={{ backgroundColor: media.dominantColor || "#f5f5f5" }}
+      >
         <ProductImage
           src={imageUrl}
           alt={product.name}
@@ -88,6 +95,7 @@ export const ProductCard = memo(function ProductCard({
           iconClassName="w-16 h-16"
           fetchPriority={fetchPriority ?? (isHighPriority ? "high" : "auto")}
           priority={isHighPriority}
+          blurDataURL={media.lqip ?? undefined}
           quality={65}
         />
         {onSale && (

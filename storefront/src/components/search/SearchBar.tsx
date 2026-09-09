@@ -14,6 +14,7 @@ import { ProductImage } from "@/components/ui/product-image";
 import { useStore } from "@/contexts/StoreContext";
 import { trackQuickSearch, trackSelectItem } from "@/lib/analytics/gtm";
 import { getProducts } from "@/lib/data/products";
+import { getProductMedia } from "@/lib/media/catalog-images";
 
 interface SearchBarProps {
   basePath: string;
@@ -216,7 +217,10 @@ export function SearchBar({ basePath, autoFocus, onNavigate }: SearchBarProps) {
                       {/* Thumbnail */}
                       <div className="relative w-10 h-10 bg-gray-100 rounded flex-shrink-0 overflow-hidden">
                         <ProductImage
-                          src={product.thumbnail_url}
+                          src={
+                            getProductMedia(product.slug, product.thumbnail_url)
+                              .mainUrl
+                          }
                           alt={product.name}
                           fill
                           className="object-cover"
