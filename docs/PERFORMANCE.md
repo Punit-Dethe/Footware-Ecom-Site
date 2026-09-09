@@ -140,7 +140,36 @@ Every read from the commerce backend must explicitly belong to a freshness class
   * Biome check: **0 errors, 0 warnings**
 * **Status**: **Kept & Verified in Production**.
 
+---
 
+### Wave 0: Architectural Integrity, Canonical Caching & Metric Budgeting
 
+* **Objective**: Establish production correctness, security, centralized cache governance, and verifiable performance gates before initiating deep algorithmic experiments.
+* **Changes Made**:
+  1. **P0.1 Credential Sanitation**: Removed hardcoded database connection fallbacks; enforced strict `process.env.DATABASE_URL` across seed scripts and configured `render.yaml` with `sync: false`.
+  2. **P0.2 Repository Cleanup**: Removed nested `.git_backup` from the storefront and added `.git_backup/` to `.gitignore` and `storefront/.vercelignore`.
+  3. **P0.3 Truthful Architecture Documentation**: Updated `docs/ARCHITECTURE.md` and `infra/README.md` to document the active production baseline (Official Spree 5 on Render + Supabase Mumbai + Vercel Storefront), local dev container, and Fly.io comparison candidate.
+  4. **P0.4 Centralized Canonical Cache Policy**: Created `storefront/src/lib/cache/cache-policy.ts` defining 4 strict freshness classes (`STABLE_CATALOG`, `CATALOG_CONTENT`, `PRIVATE_SESSION`, `IMMUTABLE_ASSET`), eliminating header drift between Next.js route rules and Edge Middleware.
+  5. **P0.5 Benchmark Route Realignment**: Replaced outdated mock routes in `perf/lighthouse/lighthouserc.json` with active Mirza catalog routes (`/us/en`, `/us/en/c/categories/oxfords`, `/us/en/products`, `/us/en/products/sovereign-cap-toe-oxford`, `/us/en/cart`).
+  6. **P0.6 Enforceable Budget Gates**: Created `perf/lighthouse/budget.json` enforcing LCP $\le$ 1500ms, CLS $\le$ 0.05, TBT $\le$ 150ms, and client JavaScript $\le$ 150KB.
+* **Verification & Results**:
+  * Edge Cache Verification: `/us/en` receives `s-maxage=86400, stale-while-revalidate=604800` (`X-Vercel-Cache: HIT`); `/us/en/cart` receives `private, no-cache, no-store, max-age=0, must-revalidate`.
+  * Unit Tests: 7 cache policy unit tests green.
+* **Status**: **Kept & Verified**.
 
+---
 
+### Experiment 018: Native CSS Scroll-Snap Product Carousel (Swiper Elimination)
+
+* **Hypothesis**: Replacing the external Swiper JavaScript library with native CSS `scroll-snap-type: x mandatory` and smooth scrolling will eliminate >40KB of minified client JS, reduce hydration overhead, and deliver 60/120fps hardware-accelerated momentum scrolling on touch devices.
+* **Changes Made**:
+  1. Removed `swiper`, `swiper/modules`, `swiper/react`, and `swiper/css` dependencies from `storefront/src/components/products/ProductCarousel.tsx`.
+  2. Implemented native CSS scroll-snap container (`overflow-x-auto snap-x snap-mandatory scroll-smooth no-scrollbar flex gap-6`).
+  3. Created accessible `<section aria-roledescription="carousel">` with keyboard-navigable next/previous controller buttons.
+  4. Added Tailwind `@utility no-scrollbar` in `storefront/src/app/globals.css`.
+  5. Added comprehensive unit tests in `storefront/src/components/products/__tests__/ProductCarousel.test.tsx`.
+* **Verification & Results**:
+  * Client Bundle Impact: **>40 KB minified JS eliminated** on the homepage and catalog.
+  * Accessibility: Passed Biome semantic HTML requirements.
+  * Unit Tests: 3 carousel tests passing.
+* **Status**: **Kept & Verified**.

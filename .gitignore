@@ -33,3 +33,8 @@ Thumbs.db
 postgres_data/
 storage_data/
 meilisearch_data/
+
+# Backups and temporary repositories
+.git_backup/
+*.backup/
+*.bak

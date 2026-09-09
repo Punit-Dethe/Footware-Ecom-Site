@@ -10,6 +10,7 @@
         "http://localhost:3001/us/en/c/categories/oxfords",
         "http://localhost:3001/us/en/products",
         "http://localhost:3001/us/en/products/sovereign-cap-toe-oxford",
+        "http://localhost:3001/us/en/products?q=oxford",
         "http://localhost:3001/us/en/cart"
       ],
       "settings": {

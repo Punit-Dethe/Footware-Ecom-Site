@@ -1,0 +1,18 @@
+# Version control & backups
+.git
+.git_backup
+*.backup
+*.bak
+
+# Environment files
+.env*.local
+
+# Tests and backend mocks
+e2e-backend
+__tests__
+*.test.ts
+*.test.tsx
+vitest.config.ts
+
+# Documentation and markdown
+*.md
