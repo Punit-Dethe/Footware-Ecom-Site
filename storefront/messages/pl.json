@@ -117,6 +117,8 @@
     "failedToRemoveItem": "Nie udało się usunąć tego produktu z koszyka. Spróbuj ponownie."
   },
   "products": {
+    "carouselPrev": "Poprzednie produkty",
+    "carouselNext": "Następne produkty",
     "allProducts": "Wszystkie produkty",
     "browseCollection": "Przeglądaj naszą pełną kolekcję",
     "searchResultsFor": "Wyniki wyszukiwania dla \"{query}\"",

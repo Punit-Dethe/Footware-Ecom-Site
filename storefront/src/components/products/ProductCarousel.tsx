@@ -23,6 +23,7 @@ export function ProductCarousel({
   currency,
 }: ProductCarouselProps): ReactElement {
   const t = useTranslations("products");
+  const tHome = useTranslations("home");
   const scrollRef = useRef<HTMLDivElement>(null);
   const [isBeginning, setIsBeginning] = useState(true);
   const [isEnd, setIsEnd] = useState(false);
@@ -75,7 +76,7 @@ export function ProductCarousel({
     <section
       className="relative group/carousel"
       aria-roledescription="carousel"
-      aria-label={t("featuredProducts") || "Featured Products"}
+      aria-label={tHome("featuredProducts")}
     >
       <button
         type="button"

@@ -121,6 +121,8 @@
     "failedToRemoveItem": "Could not remove this item from your cart. Please try again."
   },
   "products": {
+    "carouselPrev": "Previous products",
+    "carouselNext": "Next products",
     "allProducts": "All Products",
     "browseCollection": "Browse our complete collection",
     "searchResultsFor": "Search results for \"{query}\"",
