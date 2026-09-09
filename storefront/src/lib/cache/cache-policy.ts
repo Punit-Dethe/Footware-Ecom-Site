@@ -174,5 +174,15 @@ export function generateNextConfigCacheHeaders() {
         },
       ],
     },
+    // Class E: Immutable Pre-Generated Hashed Product Media
+    {
+      source: "/products/:path*",
+      headers: [
+        {
+          key: "Cache-Control",
+          value: CACHE_POLICIES.IMMUTABLE_ASSET,
+        },
+      ],
+    },
   ];
 }
