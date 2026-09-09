@@ -4,42 +4,41 @@ This directory documents the deployment targets, environment topology, and infra
 
 ---
 
-## 1. Active Research Production Topology
+## 1. Production Topology: Vercel Serverless Architecture
 
-### Storefront: Vercel (Edge & Node.js Runtime)
+### Storefront & BFF: Vercel (Edge & Node.js Serverless)
 * **Production URL**: [https://storefront-three-tau.vercel.app](https://storefront-three-tau.vercel.app)
-* **Target Edge Region**: Mumbai (`bom1`) for low-latency delivery across India.
-* **Cache Architecture**: Edge caching via canonical cache policies (`s-maxage=86400` for stable catalog; `s-maxage=3600` for catalog content; strictly private `no-store` for cart/checkout).
-* **Environment Configuration**:
-  * `SPREE_API_URL`: `https://mirza-spree-backend.onrender.com`
-  * `SPREE_PUBLISHABLE_KEY`: `pk_Rwt3f4NsQKSC8v6HLe27ueYx`
-  * `NEXT_PUBLIC_SPREE_API_HOST`: `https://mirza-spree-backend.onrender.com`
-
-### Commerce Backend: Official Spree 5 on Render (Docker Web Service)
-* **Live Service**: `mirza-spree-backend` ([https://mirza-spree-backend.onrender.com](https://mirza-spree-backend.onrender.com))
-* **Runtime**: Official Spree Commerce 5 running on Ruby on Rails 8.1 with Puma 6 web server.
-* **Admin Dashboard**: Accessible at `/admin` and `/dashboard` (authenticated via Spree Admin Devise).
-* **Memory & Concurrency Tuning**:
-  * Single-worker Puma (`WEB_CONCURRENCY=0`) to ensure low memory footprint (<230MB).
-  * `SOLID_QUEUE_IN_PUMA=true` (or background worker) for async job handling.
-  * Health check probe endpoint: `/up`.
-
-### Persistent Database: Supabase PostgreSQL (`ap-south-1` / Mumbai)
-* **Host**: `aws-0-ap-south-1.pooler.supabase.com:5432`
-* **Schema**: Full standard Spree 5 relational schema (150+ official tables).
-* **Pooler Mode**: Session pooler for persistent backend container connections.
-* **Security**: No database credentials committed to repository; configured strictly via environment variables (`sync: false` in Render blueprint).
+* **Framework**: Next.js 16 (App Router + Turbopack + Cache Components)
+* **Backend Model**: Next.js App Router BFF (Backend-For-Frontend)
+  * Spree-compatible Store API route handlers located at `/api/v3/store/*`.
+  * In-memory zero-latency catalog data repository with 38 catalog products and 2 categories (`Office Wear` and `Traditional`).
+  * 0ms network latency for all server-side rendering and static page generation.
+* **Cache Architecture**:
+  * Edge caching with canonical cache policies (`s-maxage=86400` for stable catalog; `s-maxage=3600` for catalog content; private `no-store` for cart/checkout).
+  * 100% build-time pre-rendered catalog: All 38 product detail pages and 2 category pages pre-rendered via `generateStaticParams()`.
+* **Stateful Services**:
+  * Instant client-side & serverless cart (0ms latency).
+  * Database: Supabase PostgreSQL (`ap-south-1` / Mumbai) for persistent customer/order storage.
 
 ---
 
-## 2. Local Development Topology (Docker Compose)
-* **Spree Backend**: Runs via `ghcr.io/spree/spree:latest` with PostgreSQL 18.
-* **Port**: Exposed on `http://localhost:4000`.
-* **Database**: `postgres://postgres@postgres:5432/spree_development`.
-* **Assets**: Managed via local Active Storage volume mount (`storage_data`).
+## 2. Local Development
+
+Running the application locally requires no Docker or external Rails runtime:
+```bash
+# From repository root:
+pnpm install
+pnpm dev
+```
+Both the Next.js storefront and the Spree-compatible API route handler will be immediately available on `http://localhost:3001`.
 
 ---
 
-## 3. Alternative Comparison Architectures
-* **Fly.io Mumbai (`bom`)**: Evaluated as an alternative persistent container host with co-located Mumbai routing.
-* **Supabase Smart CDN / Direct Pre-Generated Storage**: Target media architecture evaluated under Experiments 009–013 for eliminating runtime on-demand image transformation compute.
+## 3. Production Deployment
+
+The project is configured for continuous deployment on Vercel:
+```bash
+cd storefront
+npx vercel --prod
+```
+All static pages are compiled and verified during the build step, and deployment completes with sub-second edge cache replication.
