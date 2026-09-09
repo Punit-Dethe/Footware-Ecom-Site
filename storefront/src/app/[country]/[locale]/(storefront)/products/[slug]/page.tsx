@@ -74,6 +74,10 @@ export default async function ProductPage({
     notFound();
   }
 
+  if (!product) {
+    notFound();
+  }
+
   const storeUrl = getStoreUrl();
   const canonicalUrl = storeUrl
     ? buildCanonicalUrl(

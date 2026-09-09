@@ -113,7 +113,7 @@ export function MobileFilterDrawer({
         </div>
 
         <div className="flex-1 overflow-y-auto p-5 space-y-7">
-          {filtersData?.filters.map((filter) => {
+          {(filtersData?.filters ?? []).map((filter) => {
             switch (filter.type) {
               case "option":
                 return (

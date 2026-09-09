@@ -93,7 +93,7 @@ export const FilterBar = memo(function FilterBar({
   }, [onFilterChange, activeFilters.sortBy]);
 
   const priceBuckets = useMemo(() => {
-    if (!filtersData) return [];
+    if (!filtersData?.filters) return [];
     const priceFilter = filtersData.filters.find(
       (f) => f.type === "price_range",
     ) as PriceRangeFilter | undefined;
@@ -107,7 +107,7 @@ export const FilterBar = memo(function FilterBar({
   }, [filtersData, t, locale]);
 
   const optionFilters = useMemo(() => {
-    if (!filtersData) return [];
+    if (!filtersData?.filters) return [];
     return filtersData.filters.filter(
       (f) => f.type === "option",
     ) as OptionFilter[];
@@ -141,12 +141,12 @@ export const FilterBar = memo(function FilterBar({
     return null;
   }
 
-  const availabilityFilter = filtersData.filters.find(
+  const availabilityFilter = filtersData.filters?.find(
     (f) => f.type === "availability",
   ) as AvailabilityFilter | undefined;
 
   const hasPriceFilter =
-    filtersData.filters.some((f) => f.type === "price_range") &&
+    Boolean(filtersData.filters?.some((f) => f.type === "price_range")) &&
     priceBuckets.length > 0;
 
   return (
@@ -215,7 +215,7 @@ export const FilterBar = memo(function FilterBar({
             align="right"
           >
             <SortDropdownContent
-              sortOptions={filtersData.sort_options}
+              sortOptions={filtersData.sort_options || []}
               activeSortBy={activeSortBy}
               onSortChange={handleSortChange}
             />

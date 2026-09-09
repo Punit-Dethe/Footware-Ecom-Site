@@ -78,6 +78,7 @@ export interface CatalogProduct {
   id: string;
   name: string;
   slug: string;
+  sku?: string;
   description: string;
   description_html: string;
   purchasable: boolean;
@@ -464,6 +465,7 @@ function buildCatalogProduct(
     id: prodId,
     name: raw.name,
     slug,
+    sku: raw.sku,
     description: raw.desc,
     description_html: `<p>${raw.desc}</p>`,
     purchasable: true,
@@ -647,10 +649,23 @@ export function queryProducts(params: {
 }
 
 export function getProductBySlugOrId(slugOrId: string): CatalogProduct | null {
-  const clean = slugOrId.toLowerCase();
+  const clean = slugOrId.toLowerCase().trim();
   return (
     PRODUCTS.find(
-      (p) => p.slug.toLowerCase() === clean || p.id.toLowerCase() === clean,
+      (p) =>
+        p.slug.toLowerCase() === clean ||
+        p.id.toLowerCase() === clean ||
+        p.sku?.toLowerCase() === clean ||
+        p.name
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-|-$/g, "") === clean ||
+        p.variants?.some(
+          (v) =>
+            v.sku.toLowerCase() === clean ||
+            v.id.toLowerCase() === clean ||
+            v.sku.toLowerCase().endsWith(`-${clean}`),
+        ),
     ) || null
   );
 }
@@ -681,39 +696,78 @@ export function getCatalogFilters(params?: {
     p.categories.some((c) => c.id === "8"),
   ).length;
 
+  const filters = [
+    {
+      id: "categories",
+      label: "Category",
+      name: "Category",
+      type: "category",
+      options: [
+        {
+          id: "7",
+          name: "Office Wear",
+          label: "Office Wear",
+          count: officeCount,
+          active:
+            params?.category_id === "7" ||
+            params?.in_category === "categories/office-wear" ||
+            params?.in_category === "7",
+        },
+        {
+          id: "8",
+          name: "Traditional",
+          label: "Traditional",
+          count: traditionalCount,
+          active:
+            params?.category_id === "8" ||
+            params?.in_category === "categories/traditional" ||
+            params?.in_category === "8",
+        },
+      ],
+    },
+    {
+      id: "size",
+      label: "Size",
+      name: "Size",
+      type: "option",
+      kind: "button",
+      options: [
+        { id: "opt_sz_7", name: "7", label: "UK/India 7", count: PRODUCTS.length },
+        { id: "opt_sz_8", name: "8", label: "UK/India 8", count: PRODUCTS.length },
+        { id: "opt_sz_9", name: "9", label: "UK/India 9", count: PRODUCTS.length },
+        { id: "opt_sz_10", name: "10", label: "UK/India 10", count: PRODUCTS.length },
+      ],
+    },
+    {
+      id: "price",
+      name: "Price Range",
+      type: "price_range",
+      min: 180,
+      max: 340,
+      currency: "USD",
+    },
+    {
+      id: "availability",
+      name: "Availability",
+      type: "availability",
+      options: [
+        { id: "in_stock", name: "In Stock", count: PRODUCTS.length },
+      ],
+    },
+  ];
+
+  const sortOptions = [
+    { id: "default", label: "Recommended" },
+    { id: "price_asc", label: "Price: Low to High" },
+    { id: "price_desc", label: "Price: High to Low" },
+    { id: "newest", label: "Newest" },
+  ];
+
   return {
-    data: [
-      {
-        id: "categories",
-        name: "Category",
-        type: "category",
-        options: [
-          {
-            id: "7",
-            name: "Office Wear",
-            count: officeCount,
-            active:
-              params?.category_id === "7" ||
-              params?.in_category === "categories/office-wear",
-          },
-          {
-            id: "8",
-            name: "Traditional",
-            count: traditionalCount,
-            active:
-              params?.category_id === "8" ||
-              params?.in_category === "categories/traditional",
-          },
-        ],
-      },
-      {
-        id: "price",
-        name: "Price Range",
-        type: "range",
-        min: 180,
-        max: 340,
-      },
-    ],
-    meta: { count: 2 },
+    filters,
+    sort_options: sortOptions,
+    default_sort: "default",
+    data: filters,
+    meta: { count: filters.length },
   };
 }
