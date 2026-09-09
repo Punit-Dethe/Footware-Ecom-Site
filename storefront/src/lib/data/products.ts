@@ -24,6 +24,12 @@ import {
  *   Guest users pass undefined. On the wholesale surface the token is
  *   always present — the channel 401s guests.
  */
+import {
+  getCatalogFilters,
+  getProductBySlugOrId,
+  queryProducts,
+} from "@/lib/catalog/catalog-repository";
+
 export async function cachedListProducts(
   params: ProductListParams | undefined,
   options: { locale?: string; country?: string },
@@ -33,13 +39,32 @@ export async function cachedListProducts(
   "use cache: remote";
   cacheLife("tenMinutes");
   cacheTag(`products${cacheTagSuffix(surface)}`);
-  return getClientForSurface(surface).products.list(params, {
-    ...options,
-    // Wholesale catalog requires the customer JWT — the channel is gated.
-    ...(surface === "wholesale" && userToken
-      ? { token: userToken }
-      : undefined),
-  });
+  try {
+    return await getClientForSurface(surface).products.list(params, {
+      ...options,
+      // Wholesale catalog requires the customer JWT — the channel is gated.
+      ...(surface === "wholesale" && userToken
+        ? { token: userToken }
+        : undefined),
+    });
+  } catch (_error) {
+    const rawFilter = (params as Record<string, unknown> | undefined)?.filter as Record<string, unknown> | undefined;
+    const local = queryProducts({
+      page: params?.page,
+      limit: params?.limit,
+      q: typeof rawFilter?.name === "string" ? rawFilter.name : undefined,
+      in_category:
+        typeof rawFilter?.category_id === "string"
+          ? (rawFilter.category_id as string)
+          : typeof params?.in_category === "string"
+          ? params.in_category
+          : undefined,
+      sort: typeof params?.sort === "string" ? params.sort : undefined,
+    });
+    return local as unknown as ReturnType<
+      ReturnType<typeof getClientForSurface>["products"]["list"]
+    >;
+  }
 }
 
 export async function getProducts(
@@ -74,16 +99,26 @@ export async function cachedGetProduct(
     `products${cacheTagSuffix(surface)}`,
     `product:${slugOrId}${cacheTagSuffix(surface)}`,
   );
-  return getClientForSurface(surface).products.get(
-    slugOrId,
-    { expand },
-    {
-      ...options,
-      ...(surface === "wholesale" && userToken
-        ? { token: userToken }
-        : undefined),
-    },
-  );
+  try {
+    return await getClientForSurface(surface).products.get(
+      slugOrId,
+      { expand },
+      {
+        ...options,
+        ...(surface === "wholesale" && userToken
+          ? { token: userToken }
+          : undefined),
+      },
+    );
+  } catch (_error) {
+    const local = getProductBySlugOrId(slugOrId);
+    if (local) {
+      return local as unknown as ReturnType<
+        ReturnType<typeof getClientForSurface>["products"]["get"]
+      >;
+    }
+    throw _error;
+  }
 }
 
 export async function getProduct(
@@ -111,12 +146,18 @@ async function cachedGetProductFilters(
   "use cache: remote";
   cacheLife("tenMinutes");
   cacheTag(`product-filters${cacheTagSuffix(surface)}`);
-  return getClientForSurface(surface).products.filters(params, {
-    ...options,
-    ...(surface === "wholesale" && userToken
-      ? { token: userToken }
-      : undefined),
-  });
+  try {
+    return await getClientForSurface(surface).products.filters(params, {
+      ...options,
+      ...(surface === "wholesale" && userToken
+        ? { token: userToken }
+        : undefined),
+    });
+  } catch (_error) {
+    return getCatalogFilters() as unknown as ReturnType<
+      ReturnType<typeof getClientForSurface>["products"]["filters"]
+    >;
+  }
 }
 
 export async function getProductFilters(

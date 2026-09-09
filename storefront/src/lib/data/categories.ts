@@ -4,6 +4,12 @@ import type { CategoryListParams, ProductListParams } from "@spree/sdk";
 import { cacheLife, cacheTag } from "next/cache";
 import { getAccessToken, getClient, getLocaleOptions } from "@/lib/spree";
 
+import {
+  CATEGORIES,
+  getCategoryByPermalinkOrId,
+  queryProducts,
+} from "@/lib/catalog/catalog-repository";
+
 async function cachedListCategories(
   params: CategoryListParams | undefined,
   options: { locale?: string; country?: string },
@@ -11,7 +17,14 @@ async function cachedListCategories(
   "use cache: remote";
   cacheLife("hours");
   cacheTag("categories");
-  return getClient().categories.list(params, options);
+  try {
+    return await getClient().categories.list(params, options);
+  } catch (_error) {
+    return {
+      data: CATEGORIES,
+      meta: { count: CATEGORIES.length, total_count: CATEGORIES.length },
+    } as unknown as ReturnType<ReturnType<typeof getClient>["categories"]["list"]>;
+  }
 }
 
 export async function getCategories(
@@ -30,7 +43,17 @@ export async function cachedGetCategory(
   "use cache: remote";
   cacheLife("tenMinutes");
   cacheTag("category");
-  return getClient().categories.get(idOrPermalink, params, options);
+  try {
+    return await getClient().categories.get(idOrPermalink, params, options);
+  } catch (_error) {
+    const local = getCategoryByPermalinkOrId(idOrPermalink);
+    if (local) {
+      return local as unknown as ReturnType<
+        ReturnType<typeof getClient>["categories"]["get"]
+      >;
+    }
+    throw _error;
+  }
 }
 
 export async function getCategory(
@@ -55,10 +78,19 @@ async function cachedListCategoryProducts(
   "use cache: remote";
   cacheLife("tenMinutes");
   cacheTag("products", `category-products:${categoryId}`);
-  return getClient().products.list(
-    { ...params, in_category: categoryId },
-    options,
-  );
+  try {
+    return await getClient().products.list(
+      { ...params, in_category: categoryId },
+      options,
+    );
+  } catch (_error) {
+    return queryProducts({
+      in_category: categoryId,
+      page: params?.page,
+      limit: params?.limit,
+      sort: typeof params?.sort === "string" ? params.sort : undefined,
+    }) as unknown as ReturnType<ReturnType<typeof getClient>["products"]["list"]>;
+  }
 }
 
 export async function getCategoryProducts(

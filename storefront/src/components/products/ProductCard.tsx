@@ -39,8 +39,7 @@ export const ProductCard = memo(function ProductCard({
   const media = getProductMedia(product.slug, product.thumbnail_url);
   const imageUrl = media.mainUrl;
   const productHref = `${basePath}/products/${product.slug}${categoryId ? `?category_id=${categoryId}` : ""}`;
-  const isHighPriority =
-    fetchPriority === "high" || Boolean(priority) || (index !== undefined && index < 2);
+  const isHighPriority = fetchPriority === "high" || Boolean(priority);
 
   const handleIntentPrefetch = useCallback(() => {
     if (!isHighPriority && productHref) {

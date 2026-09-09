@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { NextIntlClientProvider } from "next-intl";
-import { Suspense } from "react";
 import "../../globals.css";
 import { CartDrawer } from "@/components/cart/CartDrawer";
 import { DocumentShell } from "@/components/layout/DocumentShell";
@@ -82,12 +81,10 @@ export async function generateMetadata({
  * behind one boundary so Cache Components never prerender an unvalidated
  * Market context or treat that request data as a blocking route error.
  */
-export default function CountryLocaleLayout(props: CountryLocaleLayoutProps) {
-  return (
-    <Suspense fallback={null}>
-      <CountryLocaleLayoutContent {...props} />
-    </Suspense>
-  );
+export default async function CountryLocaleLayout(
+  props: CountryLocaleLayoutProps,
+) {
+  return <CountryLocaleLayoutContent {...props} />;
 }
 
 export async function CountryLocaleLayoutContent({

@@ -59,9 +59,7 @@ describe("ProductCarousel", () => {
     expect(
       screen.getByText("The Sovereign Cap-Toe Oxford"),
     ).toBeInTheDocument();
-    expect(
-      screen.getByText("The Heritage Wingtip Derby"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("The Heritage Wingtip Derby")).toBeInTheDocument();
 
     const prevBtn = screen.getByRole("button", { name: "Previous products" });
     const nextBtn = screen.getByRole("button", { name: "Next products" });

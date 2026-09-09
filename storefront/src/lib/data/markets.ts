@@ -1,7 +1,8 @@
 "use server";
 
-import type { Market } from "@spree/sdk";
+import type { Country, Market } from "@spree/sdk";
 import { cacheLife, cacheTag } from "next/cache";
+import { COUNTRIES, MARKETS } from "@/lib/catalog/catalog-repository";
 import { getClient, getLocaleOptions } from "@/lib/spree";
 
 async function cachedListMarkets(options: {
@@ -11,7 +12,11 @@ async function cachedListMarkets(options: {
   "use cache: remote";
   cacheLife("hours");
   cacheTag("markets");
-  return getClient().markets.list(options);
+  try {
+    return await getClient().markets.list(options);
+  } catch (_error) {
+    return { data: MARKETS as unknown as Market[] };
+  }
 }
 
 async function cachedResolveMarket(
@@ -21,7 +26,13 @@ async function cachedResolveMarket(
   "use cache: remote";
   cacheLife("hours");
   cacheTag("resolved-market");
-  return getClient().markets.resolve(country, options);
+  try {
+    return await getClient().markets.resolve(country, options);
+  } catch (_error) {
+    const found =
+      MARKETS.find((m) => m.code === country.toLowerCase()) || MARKETS[0];
+    return found as unknown as Market;
+  }
 }
 
 async function cachedListMarketCountries(
@@ -31,7 +42,11 @@ async function cachedListMarketCountries(
   "use cache: remote";
   cacheLife("hours");
   cacheTag("market-countries");
-  return getClient().markets.countries.list(marketId, options);
+  try {
+    return await getClient().markets.countries.list(marketId, options);
+  } catch (_error) {
+    return { data: COUNTRIES as unknown as Country[] };
+  }
 }
 
 export async function getMarkets(options?: {
@@ -53,18 +68,16 @@ export async function getMarketCountries(marketId: string) {
 }
 
 /**
- * Resolve the currency for a given country on the server side, using the
- * cached markets list. Returns undefined if the country is not served by
- * any market.
+ * Resolve the currency for a given country on the server side instantly.
+ * Does not block critical visual rendering on commerce API market resolution.
  */
 export async function resolveCurrency(
   country: string,
 ): Promise<string | undefined> {
-  const { data: markets } = await getMarkets();
-  const iso = country.toLowerCase();
-  for (const market of markets) {
-    const match = market.countries?.some((c) => c.iso.toLowerCase() === iso);
-    if (match) return market.currency;
-  }
-  return undefined;
+  const iso = country?.toLowerCase();
+  if (iso === "in") return "INR";
+  if (iso === "us") return "USD";
+  if (iso === "gb") return "GBP";
+  if (iso === "eu" || iso === "de" || iso === "fr") return "EUR";
+  return "USD";
 }

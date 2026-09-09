@@ -47,9 +47,7 @@ describe("cache-policy", () => {
         CACHE_POLICIES.CATALOG_CONTENT,
       );
       expect(
-        resolveRouteCachePolicy(
-          "/us/en/products/sovereign-cap-toe-oxford",
-        ),
+        resolveRouteCachePolicy("/us/en/products/sovereign-cap-toe-oxford"),
       ).toBe(CACHE_POLICIES.CATALOG_CONTENT);
       expect(resolveRouteCachePolicy("/products")).toBe(
         CACHE_POLICIES.CATALOG_CONTENT,
@@ -83,7 +81,9 @@ describe("cache-policy", () => {
       const headers = generateNextConfigCacheHeaders();
       expect(headers.length).toBeGreaterThan(5);
 
-      const cartHeader = headers.find((h) => h.source === "/:country/:locale/cart");
+      const cartHeader = headers.find(
+        (h) => h.source === "/:country/:locale/cart",
+      );
       expect(cartHeader?.headers[0].value).toBe(CACHE_POLICIES.PRIVATE_SESSION);
 
       const categoryHeader = headers.find(

@@ -24,6 +24,20 @@ interface ProductPageProps {
   }>;
 }
 
+import { PRODUCTS } from "@/lib/catalog/catalog-repository";
+import { getDefaultCountry, getDefaultLocale } from "@/lib/store";
+
+export function generateStaticParams() {
+  const country = getDefaultCountry();
+  const locale = getDefaultLocale();
+
+  return PRODUCTS.map((p) => ({
+    country,
+    locale,
+    slug: p.slug,
+  }));
+}
+
 export async function generateMetadata({
   params,
 }: ProductPageProps): Promise<Metadata> {

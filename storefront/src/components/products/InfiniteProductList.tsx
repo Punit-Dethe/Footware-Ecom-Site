@@ -108,17 +108,28 @@ export function InfiniteProductList({
     });
   }, [fetchPage, listParams]);
 
+  // Wave 3: Proactively prefetch Page 2 in the background once Page 1 mounts
+  useEffect(() => {
+    if (currentPage === 1 && knownPages > 1) {
+      const timer = setTimeout(() => {
+        loadNextPage();
+      }, 250);
+      return () => clearTimeout(timer);
+    }
+  }, [currentPage, knownPages, loadNextPage]);
+
   useEffect(() => {
     const sentinel = sentinelRef.current;
     if (!sentinel) return;
 
+    // Wave 3: Aggressive prefetching 1000px (~1 full viewport) before reaching end
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting) {
           loadNextPage();
         }
       },
-      { threshold: 0.1, rootMargin: "200px" },
+      { threshold: 0.01, rootMargin: "1000px" },
     );
 
     observer.observe(sentinel);
@@ -137,7 +148,7 @@ export function InfiniteProductList({
             index={index}
             listId={listId}
             listName={listName}
-            fetchPriority={index < 3 ? "high" : undefined}
+            fetchPriority={index === 0 ? "high" : undefined}
             currency={currency}
           />
         ))}

@@ -3,7 +3,7 @@
 import { Loader2 } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { use, useEffect, useRef } from "react";
+import { Suspense, use, useEffect, useRef } from "react";
 import { confirmPaymentAndCompleteCart } from "@/lib/data/payment";
 import { extractBasePath } from "@/lib/utils/path";
 
@@ -15,16 +15,21 @@ interface ConfirmPaymentPageProps {
   }>;
 }
 
-/**
- * Intermediate page that offsite payment gateways redirect to.
- *
- * When a customer returns from an offsite gateway (e.g. Stripe 3D Secure,
- * Adyen Klarna/iDEAL), the payment webhook may not have arrived yet. This page:
- * 1. Tries to complete the payment session (tells Spree to check with the provider)
- * 2. If successful, completes the order and redirects to order-placed
- * 3. If failed, redirects back to checkout with an error
- */
-export default function ConfirmPaymentPage({
+export default function ConfirmPaymentPage(props: ConfirmPaymentPageProps) {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex flex-col items-center justify-center py-20 gap-4">
+          <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+        </div>
+      }
+    >
+      <ConfirmPaymentContent {...props} />
+    </Suspense>
+  );
+}
+
+function ConfirmPaymentContent({
   params,
 }: ConfirmPaymentPageProps) {
   const { id: cartId } = use(params);

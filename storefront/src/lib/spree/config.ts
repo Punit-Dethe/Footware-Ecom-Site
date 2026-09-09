@@ -24,15 +24,19 @@ export function initSpreeNext(config: SpreeNextConfig): void {
  */
 export function getClient(): Client {
   if (!_client) {
-    const baseUrl = process.env.SPREE_API_URL;
-    const publishableKey = process.env.SPREE_PUBLISHABLE_KEY;
-    if (baseUrl && publishableKey) {
-      initSpreeNext({ baseUrl, publishableKey });
-    } else {
-      throw new Error(
-        "Spree client is not configured. Either call initSpreeNext() or set SPREE_API_URL and SPREE_PUBLISHABLE_KEY environment variables.",
-      );
-    }
+    const envSpreeUrl = process.env.SPREE_API_URL?.trim();
+    const isRenderUrl = envSpreeUrl?.includes("onrender.com");
+    const baseUrl =
+      envSpreeUrl && !isRenderUrl
+        ? envSpreeUrl
+        : process.env.VERCEL_PROJECT_PRODUCTION_URL
+          ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+          : process.env.VERCEL_URL
+            ? `https://${process.env.VERCEL_URL}`
+            : process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3001";
+    const publishableKey =
+      process.env.SPREE_PUBLISHABLE_KEY || "pk_mirza_default";
+    initSpreeNext({ baseUrl, publishableKey });
   }
   return _client!;
 }

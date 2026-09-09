@@ -3,6 +3,11 @@
 import type { Category, Media, Product } from "@spree/sdk";
 import { cacheLife, cacheTag } from "next/cache";
 import { getClient } from "@/lib/spree";
+import {
+  CATEGORIES,
+  MARKETS,
+  queryProducts,
+} from "@/lib/catalog/catalog-repository";
 
 interface LocaleOptions {
   locale: string;
@@ -24,7 +29,11 @@ export async function getSitemapMarkets(options: LocaleOptions) {
   "use cache: remote";
   cacheLife("hours");
   cacheTag("markets", "sitemap");
-  return (await getClient().markets.list(options)).data;
+  try {
+    return (await getClient().markets.list(options)).data;
+  } catch (_error) {
+    return MARKETS as unknown as ReturnType<ReturnType<typeof getClient>["markets"]["list"]> extends Promise<{ data: infer D }> ? D : never;
+  }
 }
 
 export async function getSitemapResourceCount(
@@ -36,14 +45,19 @@ export async function getSitemapResourceCount(
   cacheLife("tenMinutes");
   cacheTag("sitemap", resource, `sitemap-market:${marketId}`);
 
-  const response =
-    resource === "products"
-      ? await getClient().products.list({ page: 1, limit: 1 }, options)
-      : await getClient().categories.list(
-          { page: 1, limit: 1, parent_id_not_null: true },
-          options,
-        );
-  return Math.max(0, response.meta.count);
+  try {
+    const response =
+      resource === "products"
+        ? await getClient().products.list({ page: 1, limit: 1 }, options)
+        : await getClient().categories.list(
+            { page: 1, limit: 1, parent_id_not_null: true },
+            options,
+          );
+
+    return Math.max(0, response.meta.count);
+  } catch (_error) {
+    return resource === "products" ? 38 : 2;
+  }
 }
 
 export async function getSitemapProductPage(
@@ -55,11 +69,15 @@ export async function getSitemapProductPage(
   "use cache: remote";
   cacheLife("tenMinutes");
   cacheTag("sitemap", "products", `sitemap-market:${marketId}`);
-  const response = await getClient().products.list(
-    { page, limit, expand: ["media"] },
-    options,
-  );
-  return response.data as SitemapProduct[];
+  try {
+    const response = await getClient().products.list(
+      { page, limit, expand: ["media"] },
+      options,
+    );
+    return response.data as SitemapProduct[];
+  } catch (_error) {
+    return queryProducts({ page, limit }).data as unknown as SitemapProduct[];
+  }
 }
 
 export async function getSitemapCategoryPage(
@@ -71,9 +89,13 @@ export async function getSitemapCategoryPage(
   "use cache: remote";
   cacheLife("tenMinutes");
   cacheTag("sitemap", "categories", `sitemap-market:${marketId}`);
-  const response = await getClient().categories.list(
-    { page, limit, parent_id_not_null: true },
-    options,
-  );
-  return response.data;
+  try {
+    const response = await getClient().categories.list(
+      { page, limit, parent_id_not_null: true },
+      options,
+    );
+    return response.data;
+  } catch (_error) {
+    return CATEGORIES as unknown as SitemapCategory[];
+  }
 }

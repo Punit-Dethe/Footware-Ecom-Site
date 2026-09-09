@@ -25,15 +25,13 @@ export const CACHE_POLICIES = {
    * Class D: Volatile & Private (Cart, Checkout, User Account)
    * Zero browser or CDN cache; strictly private and must revalidate.
    */
-  PRIVATE_SESSION:
-    "private, no-cache, no-store, max-age=0, must-revalidate",
+  PRIVATE_SESSION: "private, no-cache, no-store, max-age=0, must-revalidate",
 
   /**
    * Class E: Immutable Static Assets (Content-addressed JS, CSS, Fonts)
    * Max age 1 year; immutable.
    */
-  IMMUTABLE_ASSET:
-    "public, max-age=31536000, immutable",
+  IMMUTABLE_ASSET: "public, max-age=31536000, immutable",
 } as const;
 
 export type CachePolicyClass = keyof typeof CACHE_POLICIES;
@@ -64,11 +62,7 @@ export function resolveRouteCachePolicy(pathname: string): string {
   }
 
   // Class A: Extremely Stable (Homepage, Category pages)
-  if (
-    cleanPath === "" ||
-    cleanPath === "/" ||
-    cleanPath.startsWith("/c/")
-  ) {
+  if (cleanPath === "" || cleanPath === "/" || cleanPath.startsWith("/c/")) {
     return CACHE_POLICIES.STABLE_CATALOG;
   }
 

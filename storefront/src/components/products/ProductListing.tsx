@@ -12,6 +12,7 @@ import { ListingAnalytics } from "@/components/products/ListingAnalytics";
 import { ListingFilterBar } from "@/components/products/ListingFilterBar";
 import { ProductListingSkeleton } from "@/components/products/ProductListingSkeleton";
 import { PRODUCT_CARD_FIELDS } from "@/lib/data/cached";
+import type { ActiveFilters } from "@/types/filters";
 import {
   type ListingSearchParams,
   listingKey,
@@ -123,18 +124,9 @@ async function ProductListingInner({
     ...baseParams,
   });
 
-  // Products fetch intentionally un-caught: a failure here is a real
-  // error (backend down, bad params) and should bubble to the route
-  // error boundary rather than masquerade as a legitimate empty
-  // results page. Filters fetch is cosmetic (facet counts) so we fall
-  // back to a bare filter bar on failure.
-  const [productsResponse, filtersResponse] = await Promise.all([
-    fetchProducts({ ...listParams, page: 1 }),
-    fetchFilters(filterFetchParams).catch((error) => {
-      console.error("ProductListing: filters fetch failed", error);
-      return null;
-    }),
-  ]);
+  // Products fetch is highest priority: render products immediately without
+  // waiting for facet counts or filter calculations.
+  const productsResponse = await fetchProducts({ ...listParams, page: 1 });
 
   const products = productsResponse.data;
   const totalCount = productsResponse.meta.count;
@@ -144,11 +136,18 @@ async function ProductListingInner({
 
   return (
     <>
-      <ListingFilterBar
-        filtersData={filtersResponse}
-        activeFilters={state.filters}
-        totalCount={totalCount}
-      />
+      <Suspense
+        fallback={
+          <div className="h-12 w-full bg-gray-50/60 rounded-md animate-pulse mb-6 flex items-center px-4" />
+        }
+      >
+        <FilterBarAsync
+          fetchFilters={fetchFilters}
+          filterFetchParams={filterFetchParams}
+          activeFilters={state.filters}
+          totalCount={totalCount}
+        />
+      </Suspense>
 
       {hasResults ? (
         <>
@@ -196,5 +195,34 @@ async function ProductListingInner({
         </div>
       )}
     </>
+  );
+}
+
+async function FilterBarAsync({
+  fetchFilters,
+  filterFetchParams,
+  activeFilters,
+  totalCount,
+}: {
+  fetchFilters: (
+    params: Record<string, unknown>,
+  ) => Promise<ProductFiltersResponse>;
+  filterFetchParams: Record<string, unknown>;
+  activeFilters: ActiveFilters;
+  totalCount: number;
+}) {
+  const filtersResponse = await fetchFilters(filterFetchParams).catch(
+    (error) => {
+      console.error("ProductListing: filters fetch failed", error);
+      return null;
+    },
+  );
+
+  return (
+    <ListingFilterBar
+      filtersData={filtersResponse}
+      activeFilters={activeFilters}
+      totalCount={totalCount}
+    />
   );
 }
