@@ -6,6 +6,7 @@ import {
   negotiateLocale,
 } from "@/i18n/normalize";
 import { REQUEST_PATHNAME_HEADER, REQUEST_SEARCH_HEADER } from "@/i18n/routing";
+import { resolveRouteCachePolicy } from "@/lib/cache/cache-policy";
 import { buildAccountLoginHref } from "@/lib/utils/account-redirect";
 
 const COUNTRY_COOKIE = "spree_country";
@@ -68,39 +69,6 @@ function setLocaleCookies(
   });
 }
 
-function getCacheControlHeader(pathname: string): string {
-  // Strip localized prefix /us/en
-  const pathWithoutLocale = pathname.replace(
-    /^\/[a-z]{2}\/[a-z]{2,3}(?:-[a-z0-9]{2,8})*/i,
-    "",
-  );
-
-  // Class D: Volatile & Private
-  if (
-    pathWithoutLocale.startsWith("/cart") ||
-    pathWithoutLocale.startsWith("/checkout") ||
-    pathWithoutLocale.startsWith("/account")
-  ) {
-    return "private, no-cache, no-store, max-age=0, must-revalidate";
-  }
-
-  // Class A: Extremely Stable (Homepage, Category pages)
-  if (
-    pathWithoutLocale === "" ||
-    pathWithoutLocale === "/" ||
-    pathWithoutLocale.startsWith("/c/")
-  ) {
-    return "public, max-age=0, s-maxage=86400, stale-while-revalidate=604800";
-  }
-
-  // Class B: Catalog Content (Product listing, PDPs)
-  if (pathWithoutLocale.startsWith("/products")) {
-    return "public, max-age=0, s-maxage=3600, stale-while-revalidate=86400";
-  }
-
-  return "public, max-age=0, s-maxage=3600, stale-while-revalidate=86400";
-}
-
 function nextWithLocaleContext(
   request: NextRequest,
   country: string,
@@ -114,10 +82,10 @@ function nextWithLocaleContext(
     request: { headers: requestHeaders },
   });
 
-  // Apply explicit Data Freshness Class Cache-Control headers
+  // Apply explicit canonical Data Freshness Class Cache-Control headers
   response.headers.set(
     "Cache-Control",
-    getCacheControlHeader(request.nextUrl.pathname),
+    resolveRouteCachePolicy(request.nextUrl.pathname),
   );
 
   // Only set cookies when the incoming request does not already match.

@@ -3,6 +3,7 @@ import { withSentryConfig } from "@sentry/nextjs";
 import type { NextConfig } from "next";
 import type { RemotePattern } from "next/dist/shared/lib/image-config";
 import createNextIntlPlugin from "next-intl/plugin";
+import { generateNextConfigCacheHeaders } from "./src/lib/cache/cache-policy";
 
 const withBundleAnalyzer = bundleAnalyzer({
   enabled: process.env.ANALYZE === "true",
@@ -94,78 +95,7 @@ const nextConfig: NextConfig = {
     ];
   },
   async headers() {
-    return [
-      // Class A: Extremely Stable (Homepage, Category pages)
-      {
-        source: "/:country/:locale",
-        headers: [
-          {
-            key: "Cache-Control",
-            value:
-              "public, max-age=0, s-maxage=86400, stale-while-revalidate=604800",
-          },
-        ],
-      },
-      {
-        source: "/:country/:locale/c/:path*",
-        headers: [
-          {
-            key: "Cache-Control",
-            value:
-              "public, max-age=0, s-maxage=86400, stale-while-revalidate=604800",
-          },
-        ],
-      },
-      // Class B: Catalog Content (Product listing, PDPs)
-      {
-        source: "/:country/:locale/products",
-        headers: [
-          {
-            key: "Cache-Control",
-            value:
-              "public, max-age=0, s-maxage=3600, stale-while-revalidate=86400",
-          },
-        ],
-      },
-      {
-        source: "/:country/:locale/products/:path*",
-        headers: [
-          {
-            key: "Cache-Control",
-            value:
-              "public, max-age=0, s-maxage=3600, stale-while-revalidate=86400",
-          },
-        ],
-      },
-      // Class D: Volatile & Private (Cart, Checkout, Account)
-      {
-        source: "/:country/:locale/cart",
-        headers: [
-          {
-            key: "Cache-Control",
-            value: "private, no-cache, no-store, max-age=0, must-revalidate",
-          },
-        ],
-      },
-      {
-        source: "/:country/:locale/checkout/:path*",
-        headers: [
-          {
-            key: "Cache-Control",
-            value: "private, no-cache, no-store, max-age=0, must-revalidate",
-          },
-        ],
-      },
-      {
-        source: "/:country/:locale/account/:path*",
-        headers: [
-          {
-            key: "Cache-Control",
-            value: "private, no-cache, no-store, max-age=0, must-revalidate",
-          },
-        ],
-      },
-    ];
+    return generateNextConfigCacheHeaders();
   },
 };
 

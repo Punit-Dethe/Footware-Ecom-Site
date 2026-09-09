@@ -1,7 +1,13 @@
 import pg from 'pg';
 
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) {
+  console.error("Error: DATABASE_URL environment variable is required to run seed_catalog.mjs");
+  process.exit(1);
+}
+
 const pool = new pg.Pool({
-  connectionString: 'postgresql://postgres.nmddtxibpsbtswxnienm:Punit1803.com@aws-0-ap-south-1.pooler.supabase.com:5432/postgres',
+  connectionString,
   ssl: { rejectUnauthorized: false }
 });
 

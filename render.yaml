@@ -10,7 +10,7 @@ services:
     healthCheckPath: /up
     envVars:
       - key: DATABASE_URL
-        value: postgresql://postgres.nmddtxibpsbtswxnienm:Punit1803.com@aws-0-ap-south-1.pooler.supabase.com:5432/postgres
+        sync: false
       - key: SECRET_KEY_BASE
         generateValue: true
       - key: RAILS_ENV
