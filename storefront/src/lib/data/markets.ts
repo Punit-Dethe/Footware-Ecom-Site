@@ -5,48 +5,36 @@ import { cacheLife, cacheTag } from "next/cache";
 import { COUNTRIES, MARKETS } from "@/lib/catalog/catalog-repository";
 import { getClient, getLocaleOptions } from "@/lib/spree";
 
-async function cachedListMarkets(options: {
+async function cachedListMarkets(_options?: {
   locale?: string;
   country?: string;
 }) {
   "use cache: remote";
   cacheLife("hours");
   cacheTag("markets");
-  try {
-    return await getClient().markets.list(options);
-  } catch (_error) {
-    return { data: MARKETS as unknown as Market[] };
-  }
+  return { data: MARKETS as unknown as Market[] };
 }
 
 async function cachedResolveMarket(
   country: string,
-  options: { locale?: string; country?: string },
+  _options?: { locale?: string; country?: string },
 ) {
   "use cache: remote";
   cacheLife("hours");
   cacheTag("resolved-market");
-  try {
-    return await getClient().markets.resolve(country, options);
-  } catch (_error) {
-    const found =
-      MARKETS.find((m) => m.code === country.toLowerCase()) || MARKETS[0];
-    return found as unknown as Market;
-  }
+  const found =
+    MARKETS.find((m) => m.code === country.toLowerCase()) || MARKETS[0];
+  return found as unknown as Market;
 }
 
 async function cachedListMarketCountries(
-  marketId: string,
-  options: { locale?: string; country?: string },
+  _marketId: string,
+  _options?: { locale?: string; country?: string },
 ) {
   "use cache: remote";
   cacheLife("hours");
   cacheTag("market-countries");
-  try {
-    return await getClient().markets.countries.list(marketId, options);
-  } catch (_error) {
-    return { data: COUNTRIES as unknown as Country[] };
-  }
+  return { data: COUNTRIES as unknown as Country[] };
 }
 
 export async function getMarkets(options?: {

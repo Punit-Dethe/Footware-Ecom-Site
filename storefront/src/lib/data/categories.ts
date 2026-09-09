@@ -11,20 +11,16 @@ import {
 } from "@/lib/catalog/catalog-repository";
 
 async function cachedListCategories(
-  params: CategoryListParams | undefined,
-  options: { locale?: string; country?: string },
+  _params: CategoryListParams | undefined,
+  _options: { locale?: string; country?: string },
 ) {
   "use cache: remote";
   cacheLife("hours");
   cacheTag("categories");
-  try {
-    return await getClient().categories.list(params, options);
-  } catch (_error) {
-    return {
-      data: CATEGORIES,
-      meta: { count: CATEGORIES.length, total_count: CATEGORIES.length },
-    } as unknown as ReturnType<ReturnType<typeof getClient>["categories"]["list"]>;
-  }
+  return {
+    data: CATEGORIES,
+    meta: { count: CATEGORIES.length, total_count: CATEGORIES.length },
+  } as unknown as ReturnType<ReturnType<typeof getClient>["categories"]["list"]>;
 }
 
 export async function getCategories(
@@ -37,33 +33,19 @@ export async function getCategories(
 
 export async function cachedGetCategory(
   idOrPermalink: string,
-  params: { expand?: string[] } | undefined,
-  options: { locale?: string; country?: string },
+  _params: { expand?: string[] } | undefined,
+  _options: { locale?: string; country?: string },
 ) {
   "use cache: remote";
   cacheLife("tenMinutes");
   cacheTag("category");
-  try {
-    const res = await getClient().categories.get(idOrPermalink, params, options);
-    const category = ((res as any)?.data || res) as unknown as ReturnType<
+  const local = getCategoryByPermalinkOrId(idOrPermalink);
+  if (local) {
+    return local as unknown as ReturnType<
       ReturnType<typeof getClient>["categories"]["get"]
     >;
-    if (category && ((category as any).permalink || (category as any).name)) {
-      return category;
-    }
-    const local = getCategoryByPermalinkOrId(idOrPermalink);
-    return (local || category) as unknown as ReturnType<
-      ReturnType<typeof getClient>["categories"]["get"]
-    >;
-  } catch (_error) {
-    const local = getCategoryByPermalinkOrId(idOrPermalink);
-    if (local) {
-      return local as unknown as ReturnType<
-        ReturnType<typeof getClient>["categories"]["get"]
-      >;
-    }
-    throw _error;
   }
+  throw new Error(`Category not found: ${idOrPermalink}`);
 }
 
 export async function getCategory(
@@ -82,25 +64,27 @@ export async function getCategory(
 async function cachedListCategoryProducts(
   categoryId: string,
   params: ProductListParams | undefined,
-  options: { locale?: string; country?: string },
+  _options: { locale?: string; country?: string },
   _userToken?: string,
 ) {
   "use cache: remote";
   cacheLife("tenMinutes");
   cacheTag("products", `category-products:${categoryId}`);
-  try {
-    return await getClient().products.list(
-      { ...params, in_category: categoryId },
-      options,
-    );
-  } catch (_error) {
-    return queryProducts({
-      in_category: categoryId,
-      page: params?.page,
-      limit: params?.limit,
-      sort: typeof params?.sort === "string" ? params.sort : undefined,
-    }) as unknown as ReturnType<ReturnType<typeof getClient>["products"]["list"]>;
-  }
+
+  const raw = (params || {}) as Record<string, any>;
+  const page = Number(raw.page) || 1;
+  const limit = Number(raw.limit) || 12;
+  const sort = typeof raw.sort === "string" ? raw.sort : undefined;
+
+  const result = queryProducts({
+    in_category: categoryId,
+    page,
+    limit,
+    sort,
+  });
+  return result as unknown as ReturnType<
+    ReturnType<typeof getClient>["products"]["list"]
+  >;
 }
 
 export async function getCategoryProducts(

@@ -32,39 +32,55 @@ import {
 
 export async function cachedListProducts(
   params: ProductListParams | undefined,
-  options: { locale?: string; country?: string },
+  _options: { locale?: string; country?: string },
   surface: Surface,
-  userToken?: string,
+  _userToken?: string,
 ) {
   "use cache: remote";
   cacheLife("tenMinutes");
   cacheTag(`products${cacheTagSuffix(surface)}`);
-  try {
-    return await getClientForSurface(surface).products.list(params, {
-      ...options,
-      // Wholesale catalog requires the customer JWT — the channel is gated.
-      ...(surface === "wholesale" && userToken
-        ? { token: userToken }
-        : undefined),
-    });
-  } catch (_error) {
-    const rawFilter = (params as Record<string, unknown> | undefined)?.filter as Record<string, unknown> | undefined;
-    const local = queryProducts({
-      page: params?.page,
-      limit: params?.limit,
-      q: typeof rawFilter?.name === "string" ? rawFilter.name : undefined,
-      in_category:
-        typeof rawFilter?.category_id === "string"
-          ? (rawFilter.category_id as string)
-          : typeof params?.in_category === "string"
-          ? params.in_category
-          : undefined,
-      sort: typeof params?.sort === "string" ? params.sort : undefined,
-    });
-    return local as unknown as ReturnType<
-      ReturnType<typeof getClientForSurface>["products"]["list"]
-    >;
-  }
+
+  const raw = (params || {}) as Record<string, any>;
+  const rawFilter = (raw.filter || {}) as Record<string, any>;
+
+  const page = Number(raw.page) || 1;
+  const limit = Number(raw.limit) || 12;
+  const q =
+    typeof raw.q === "string"
+      ? raw.q
+      : typeof raw.search === "string"
+      ? raw.search
+      : typeof rawFilter.name === "string"
+      ? rawFilter.name
+      : typeof raw["filter[name]"] === "string"
+      ? raw["filter[name]"]
+      : typeof raw["q[search]"] === "string"
+      ? raw["q[search]"]
+      : typeof raw["q[name_cont]"] === "string"
+      ? raw["q[name_cont]"]
+      : undefined;
+
+  const in_category =
+    typeof raw.in_category === "string"
+      ? raw.in_category
+      : typeof raw.category_id === "string"
+      ? raw.category_id
+      : typeof rawFilter.category_id === "string"
+      ? rawFilter.category_id
+      : typeof raw["filter[category_id]"] === "string"
+      ? raw["filter[category_id]"]
+      : typeof raw["q[in_category]"] === "string"
+      ? raw["q[in_category]"]
+      : typeof raw["q[category_id_eq]"] === "string"
+      ? raw["q[category_id_eq]"]
+      : undefined;
+
+  const sort = typeof raw.sort === "string" ? raw.sort : undefined;
+
+  const result = queryProducts({ page, limit, q, in_category, sort });
+  return result as unknown as ReturnType<
+    ReturnType<typeof getClientForSurface>["products"]["list"]
+  >;
 }
 
 export async function getProducts(
@@ -88,10 +104,10 @@ export async function getProducts(
  */
 export async function cachedGetProduct(
   slugOrId: string,
-  expand: string[],
-  options: { locale?: string; country?: string },
+  _expand: string[],
+  _options: { locale?: string; country?: string },
   surface: Surface,
-  userToken?: string,
+  _userToken?: string,
 ) {
   "use cache: remote";
   cacheLife("tenMinutes");
@@ -99,36 +115,13 @@ export async function cachedGetProduct(
     `products${cacheTagSuffix(surface)}`,
     `product:${slugOrId}${cacheTagSuffix(surface)}`,
   );
-  try {
-    const res = await getClientForSurface(surface).products.get(
-      slugOrId,
-      { expand },
-      {
-        ...options,
-        ...(surface === "wholesale" && userToken
-          ? { token: userToken }
-          : undefined),
-      },
-    );
-    const product = ((res as any)?.data || res) as unknown as ReturnType<
+  const local = getProductBySlugOrId(slugOrId);
+  if (local) {
+    return local as unknown as ReturnType<
       ReturnType<typeof getClientForSurface>["products"]["get"]
     >;
-    if (product && ((product as any).slug || (product as any).name)) {
-      return product;
-    }
-    const local = getProductBySlugOrId(slugOrId);
-    return (local || product) as unknown as ReturnType<
-      ReturnType<typeof getClientForSurface>["products"]["get"]
-    >;
-  } catch (_error) {
-    const local = getProductBySlugOrId(slugOrId);
-    if (local) {
-      return local as unknown as ReturnType<
-        ReturnType<typeof getClientForSurface>["products"]["get"]
-      >;
-    }
-    throw _error;
   }
+  throw new Error(`Product not found: ${slugOrId}`);
 }
 
 export async function getProduct(
@@ -149,25 +142,28 @@ export async function getProduct(
 
 async function cachedGetProductFilters(
   params: Record<string, unknown> | undefined,
-  options: { locale?: string; country?: string },
+  _options: { locale?: string; country?: string },
   surface: Surface,
-  userToken?: string,
+  _userToken?: string,
 ) {
   "use cache: remote";
   cacheLife("tenMinutes");
   cacheTag(`product-filters${cacheTagSuffix(surface)}`);
-  try {
-    return await getClientForSurface(surface).products.filters(params, {
-      ...options,
-      ...(surface === "wholesale" && userToken
-        ? { token: userToken }
-        : undefined),
-    });
-  } catch (_error) {
-    return getCatalogFilters() as unknown as ReturnType<
-      ReturnType<typeof getClientForSurface>["products"]["filters"]
-    >;
-  }
+
+  const in_category =
+    typeof params?.in_category === "string"
+      ? params.in_category
+      : typeof params?.category_id === "string"
+      ? params.category_id
+      : typeof params?.["filter[category_id]"] === "string"
+      ? (params["filter[category_id]"] as string)
+      : typeof params?.["q[in_category]"] === "string"
+      ? (params["q[in_category]"] as string)
+      : undefined;
+
+  return getCatalogFilters({ in_category }) as unknown as ReturnType<
+    ReturnType<typeof getClientForSurface>["products"]["filters"]
+  >;
 }
 
 export async function getProductFilters(
