@@ -43,7 +43,7 @@ For user-visible latency, prefer a change when it produces a repeatable visible 
 - **Corrected baseline:** B0 `330b723` after separately fixing the ProductCarousel translation contract. S3A: `a501781`.
 - **Hypothesis:** `<Suspense fallback={null}>{children}</Suspense>` in `DocumentShell` was holding the entire visible shell behind one dynamic subtree.
 - **Production result:** **strong visible win**.
-  - Homepage header/hero: ~536 ms -> ~288 ms (~248 ms earlier); hero image ~767 -> ~309 ms (~458 ms earlier). The previously reported homepage `blank-after-TTFB` derived number had inconsistent timing origins, so do not use that derived value as evidence.
+  - Homepage header/hero: ~536 ms -> ~288 ms (~248 ms earlier); hero image ~767 -> ~309 ms (~458 ms earlier).
   - PLP header/skeleton: ~511 -> ~260 ms (~251 ms earlier); first real card ~703 -> ~676 ms (~28 ms earlier).
   - Category shell: ~690 -> ~283 ms (~407 ms earlier); blank-after-TTFB ~463 -> ~54 ms; first card ~866 -> ~689 ms (~178 ms earlier).
   - PDP shell: ~571 -> ~271 ms (~300 ms earlier); blank-after-TTFB ~320 -> ~38 ms; title/main image ~67/~64 ms earlier.
@@ -51,7 +51,22 @@ For user-visible latency, prefer a change when it produces a repeatable visible 
 - **Complexity:** 1 blanket root blocker removed; 8 targeted boundaries added (7 required for current PPR behavior, 1 optional PDP boundary). 12 files, +171/-36.
 - **Decision:** **KEEP STRONG**.
 - **Why:** the added targeted boundaries are justified by ~248–408 ms earlier visible shell delivery while preserving PPR/cacheability and CLS=0.
-- **Open caveat:** homepage featured carousel did not reliably mount in the S3A production measurement and showed a stream abort. Fix this independently before judging carousel-loading performance.
+
+### R004 — Fix featured-products PPR/RSC stream abort
+- **Baseline:** S3A `a501781`; C3 `de8d19e`.
+- **Root cause:** public homepage `FeaturedProducts` unnecessarily called `getAccessToken()`, causing `cookies()` to mark the Suspense subtree dynamic during PPR. A swallowed dynamic exception then allowed `use cache: remote` work to persist an incomplete Resume Data Cache stream; runtime replay failed with `Error: Connection closed.` and aborted the featured-products boundary.
+- **Change:** remove homepage auth-cookie lookup from public featured catalog reads; stop swallowing Next PPR dynamic exceptions in the cookie helper.
+- **Production result:** featured products render reliably in 100% of measured runs; first real featured card ~360–496 ms, CLS 0, no console/hydration/stream abort errors; PPR and edge `HIT` caching remain active.
+- **Decision:** **KEEP CORRECTNESS**.
+- **Why:** fixes a real streaming correctness bug without giving back the S3A shell-performance gains.
+
+### R005 — Static import of native ProductCarousel
+- **Baseline:** C3 `de8d19e`; S4 `5cdf3ad`.
+- **Hypothesis:** after replacing heavy Swiper with a tiny native CSS scroll-snap carousel, `next/dynamic` no longer earns its request waterfall/skeleton complexity.
+- **Before:** featured card ~496.1 ms; skeleton ~29.8 ms; separate carousel chunk 8,527 B stat/parsed, ~3.2 KB Brotli, ~76.2 ms request duration.
+- **After:** featured card ~360.9 ms (~135.2 ms earlier); skeleton ~15.6 ms; homepage parsed JS unchanged exactly (931,137 B); transfer 282,025 -> 281,927 B (-98 B); LCP 342 -> 372 ms (inside run noise).
+- **Decision:** **KEEP STRONG**.
+- **Why:** removes a real chunk waterfall and halves skeleton duration with effectively zero bundle cost. The dynamic import was legacy optimization residue from the old Swiper implementation.
 
 ## Current optimization audit
 
@@ -86,7 +101,7 @@ For user-visible latency, prefer a change when it produces a repeatable visible 
 | O27 | One-year immutable cache for `/products/*` static assets | KEEP | Correct for content-hashed files. |
 | O28 | Per-image LQIP + dominant colour | KEEP | R001 proved per-product metadata can be delivered without shipping the global manifest in JS. |
 | O29 | Full media manifest imported by client ProductCard/PDP code | RESOLVED: KEEP STRONG | R001 removed it: ~53.8 KB parsed JS and ~9 KB compressed affected chunk eliminated without RSC/HTML relocation. |
-| O30 | `next/image` on already pre-generated local WebP/AVIF | TEST HIGH | Confirmed live catalog images go through `/_next/image`. Direct prepared-asset delivery remains a planned A/B. |
+| O30 | `next/image` on already pre-generated local WebP/AVIF | TEST NEXT | Confirmed live catalog images go through `/_next/image`. Direct prepared-asset delivery is the next controlled A/B. |
 | O31 | 31-day Next transformed-image TTL | TEST | Relevant only if O30 keeps runtime transformation. |
 | O32 | Broad Next image qualities/device sizes | SIMPLIFY IF O30 REMOVED | Redundant if finished hashed assets are delivered directly. |
 | O33 | ProductImage as Client Component solely for error fallback | LATER TEST | Lower priority than image delivery itself. |
@@ -95,8 +110,8 @@ For user-visible latency, prefer a change when it produces a repeatable visible 
 | O36 | Homepage hero from Unsplash through Next optimizer | SIMPLIFY LATER | Major remaining remote image origin; test only after catalog image path. |
 | O37 | Native CSS scroll-snap carousel replacing Swiper | KEEP | Simpler runtime; no active Swiper client chunk found. |
 | O38 | `swiper` package + old `.swiper-*` CSS still present | REMOVE CANDIDATE | Runtime bundle analysis found 0 KB Swiper. Cleanup, not a claimed speed win. |
-| O39 | Native carousel still dynamically imported | TEST NEXT AFTER C3 | Old optimization existed for heavy Swiper. Once carousel correctness is restored, compare dynamic vs static import. |
-| O40 | Featured products outer Suspense + dynamic carousel fallback | TEST NEXT AFTER C3 | Current homepage carousel stream/mount issue must be fixed first, then measure skeleton duration. |
+| O39 | Native carousel dynamically imported | RESOLVED: KEEP STATIC | R005 removed the legacy dynamic import: featured card ~135 ms earlier, skeleton halved, 0 parsed-JS increase. |
+| O40 | Featured products outer Suspense + dynamic carousel fallback | PARTLY RESOLVED | Dynamic-import fallback cost is removed by R005. Outer data Suspense remains and should only be changed in a separate experiment if it becomes measurable. |
 | O41 | Mobile `content-visibility:auto` for featured section | KEEP / VERIFY | Low complexity; remove only if it causes visible/layout issues. |
 | O42 | React Compiler + manual `memo(ProductCard)` | TEST LOW PRIORITY | Not worth touching until larger bottlenecks are exhausted. |
 | O43 | Whole PDP `ProductDetails` client boundary | LATER TEST | Real hydration cost exists but is not yet proven dominant. |
@@ -118,14 +133,12 @@ For user-visible latency, prefer a change when it produces a repeatable visible 
 
 Do **not** add unrelated optimization techniques. Current order:
 
-1. **C3 — Homepage featured-products correctness:** isolate/fix the S3A carousel stream/mount abort without restoring the root blocker.
-2. **S4 — Carousel loading:** dynamic import + skeleton vs static import of the now-small native carousel.
-3. **S5 — Image delivery:** current `next/image` transformation of pre-generated assets vs direct generated `<picture>/<img srcset>` delivery.
-4. **S6 — Listing strategy:** 12-item infinite scroll vs all 38 products (later synthetic 70) + lazy images.
-5. **S3B — Storefront navigation `connection()`:** remove only the public category-layout dynamic marker if a controlled comparison justifies it; keep private account/checkout calls.
-6. **S7 — Navigation speculation:** Next automatic vs intent prefetch vs Speculation Rules; keep one scheduler.
-7. **S8 — Cart:** first remove redundant refresh/navigation refetch; only then consider a minimal client cart.
-8. **Later — cache-wrapper simplification, image-width pruning, stale feature/dependency cleanup.**
+1. **S5 — Image delivery:** current `next/image` transformation of pre-generated assets vs direct generated `<picture>/<img srcset>` delivery.
+2. **S6 — Listing strategy:** 12-item infinite scroll vs all 38 products (later synthetic 70) + lazy images.
+3. **S3B — Storefront navigation `connection()`:** remove only the public category-layout dynamic marker if a controlled comparison justifies it; keep private account/checkout calls.
+4. **S7 — Navigation speculation:** Next automatic vs intent prefetch vs Speculation Rules; keep one scheduler.
+5. **S8 — Cart:** first remove redundant refresh/navigation refetch; only then consider a minimal client cart.
+6. **Later — cache-wrapper simplification, image-width pruning, stale feature/dependency cleanup.**
 
 ## Measurement notes / known facts
 
@@ -134,7 +147,8 @@ Do **not** add unrelated optimization techniques. Current order:
 - Swiper is absent from runtime client chunks; dependency/CSS removal is cleanup only.
 - Vercel S1 self-calls were public HTTPS edge requests, not internal localhost calls. Warm edge caches made them cheap enough that R002 did not improve measured latency.
 - S3A production routes remained edge `HIT` + Partial Prerendered after replacing the blanket root boundary with targeted ones.
-- Homepage S3A featured-card measurement is currently invalid (`null`) because of a separate carousel stream/mount abort; fix C3 before S4.
+- C3 fixed the homepage Resume Data Cache stream abort by removing unnecessary public-route cookie access and preserving Next dynamic exception propagation.
+- R005 proved the native carousel should remain statically imported: ~135 ms earlier featured cards with no parsed-JS increase.
 
 ## Result entry template
 
