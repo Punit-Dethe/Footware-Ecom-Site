@@ -78,6 +78,18 @@ For user-visible latency, prefer a change when it produces a repeatable visible 
 - **Decision:** **REVERT / KEEP NEXT IMAGE**. Workspace returned to S4 baseline.
 - **Why:** Vercel/Next image optimization is doing useful responsive compression and substantially reduces transferred bytes on card-heavy surfaces. The theoretical double-transform concern did not survive measurement.
 
+### R007 — Render all 38 products vs 12-item infinite scroll
+- **Baseline:** S4 `5cdf3ad`; S6 candidate `6a4743f`.
+- **Hypothesis:** with only 38 products, rendering the whole catalog immediately might be simpler and faster than 12-item pagination, a 250 ms auto page-2 action, IntersectionObserver, append state, and later page actions.
+- **Desktop:** first card 957.5 -> 942.8 ms (neutral/slightly better), first row 1330.6 -> 1238.8 ms (~92 ms earlier), LCP 994 -> 1004 ms (~1% regression), CLS 0. All #13/#25/#38 records were immediately available instead of arriving at ~2458/~3221/~4043 ms.
+- **Payload:** HTML +276,855 B (+270.4 KB uncompressed), RSC +170,857 B (+166.9 KB); client JS fell only ~1.1 KB transfer / ~1.9 KB parsed. First-viewport image bytes grew 77,741 -> 112,046 B.
+- **Mobile:** first card 991.5 -> 1214.6 ms (+223.1 ms), LCP 1030 -> 1264 ms (+234 ms), image bytes 41,012 -> 53,357 B. This is a meaningful regression under the project decision rule.
+- **Baseline correctness issue:** the old observer flow stalled at 24 cards during realistic continuous mobile scroll and required a manual pause to reach later products. S6 all-at-once reliably exposed all 38.
+- **Complexity:** S6 removed the infinite-list client island, timer, observer, transitions/state, spinner, dedupe logic, and follow-up pagination actions; one file, +9/-27.
+- **70-product benchmark-only probe:** 649,346 B HTML / 343,985 B RSC, 70 cards, 1,738 DOM nodes, one long task, ~16.6 MB peak heap; useful as scale context only, not a production decision.
+- **Decision:** **REJECT CURRENT ALL-38 IMPLEMENTATION; REPLACE OLD PAGINATION DESIGN**.
+- **Why:** desktop tolerates all 38 well, but the ~223–234 ms mobile first-card/LCP regression is too large to accept. The old infinite-scroll mechanism is also not acceptable because it can stall before the end. Next test should preserve the fast small initial payload while replacing multi-page observer pagination with one reliable deferred bulk load.
+
 ## Current optimization audit
 
 | ID | Optimization / mechanism | Status | Current audit note |
@@ -97,9 +109,9 @@ For user-visible latency, prefer a change when it produces a repeatable visible 
 | O13 | Whole document children behind `Suspense fallback={null}` | RESOLVED: KEEP STRONG | R003 removed it. Category blank-after-TTFB ~463 -> 54 ms; PDP ~320 -> 38 ms; shell visible ~248–408 ms earlier. |
 | O14 | Currency resolved from direct country map | KEEP | No commerce call on visual critical path. |
 | O15 | Products and filters split into separate Suspense paths | KEEP | Products do not wait for facet computation. |
-| O16 | First page limited to 12 products | TEST NEXT | For 38 products (future ~70), compare infinite scroll vs all lightweight records + lazy images. |
-| O17 | Automatic page-2 fetch 250 ms after PLP mount | TEST WITH O16 | May hide scrolling pause but can compete with initial work. |
-| O18 | 1000 px IntersectionObserver prefetch for later pages | TEST WITH O16 | Only useful if infinite scroll survives O16. |
+| O16 | First page limited to 12 products | REPLACE DESIGN / S6B NEXT | R007 showed all-38 hurts mobile by ~230 ms, while the old 12-item observer pagination can stall. Preserve small initial payload but replace multi-page observer flow with one reliable deferred bulk load. |
+| O17 | Automatic page-2 fetch 250 ms after PLP mount | REMOVE IN S6B | R007 confirms the pagination machinery is not earning its complexity; replace with one bulk remainder fetch after critical rendering. |
+| O18 | 1000 px IntersectionObserver prefetch for later pages | REMOVE IN S6B | Mobile baseline stalled at 24 cards under continuous scroll. Do not retain observer-gated correctness for a 38-product catalog. |
 | O19 | One high-priority product card image | KEEP / VERIFY | Verify actual LCP candidate per viewport. |
 | O20 | Manual product `router.prefetch()` on hover/touch | TEST | Overlaps Next default prefetch and Speculation Rules. |
 | O21 | Next `<Link>` automatic product prefetch | TEST | Current implementation is not truly intent-only. |
@@ -143,7 +155,7 @@ For user-visible latency, prefer a change when it produces a repeatable visible 
 
 Do **not** add unrelated optimization techniques. Current order:
 
-1. **S6 — Listing strategy:** 12-item infinite scroll + automatic page-2/observer machinery vs all 38 lightweight product records with native lazy images; repeat with synthetic ~70 only if the test harness can do so without changing image assets.
+1. **S6B — Listing strategy:** keep 12 initial products for fast mobile paint, then load the remaining matching products once in one deferred bulk request; no page-2 timer, no IntersectionObserver, no page-by-page state machine.
 2. **S3B — Storefront navigation `connection()`:** remove only the public category-layout dynamic marker if a controlled comparison justifies it; keep private account/checkout calls.
 3. **S7 — Navigation speculation:** Next automatic vs intent prefetch vs Speculation Rules; keep one scheduler.
 4. **S8 — Cart:** first remove redundant refresh/navigation refetch; only then consider a minimal client cart.
@@ -151,6 +163,7 @@ Do **not** add unrelated optimization techniques. Current order:
 
 ## Measurement notes / known facts
 
+- R007 showed why neither extreme is acceptable: all 38 immediately is simple and reliable on desktop but costs ~230 ms mobile LCP/first-card; old observer pagination preserves initial payload but can stall at 24 products. The target is one deferred remainder load.
 - R006 disproved the assumption that direct prepared catalog assets would be faster: Vercel Next Image cut first-viewport image bytes roughly in half and improved PLP/home image completion. Keep `/_next/image` for catalog surfaces.
 - R006 PDP route timings moved earlier in the direct variant, but title moved by the same ~150 ms and mobile direct image duration regressed sharply; treat the PDP result as timing confound, not a reason for a hybrid implementation yet.
 - Full media manifest was ~66 KB raw source; R001 proved it should stay server-side/per-product.
