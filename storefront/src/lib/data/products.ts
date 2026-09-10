@@ -45,6 +45,7 @@ export async function cachedListProducts(
 
   const page = Number(raw.page) || 1;
   const limit = Number(raw.limit) || 12;
+  const offset = raw.offset != null ? Number(raw.offset) : undefined;
   const q =
     typeof raw.q === "string"
       ? raw.q
@@ -77,7 +78,7 @@ export async function cachedListProducts(
 
   const sort = typeof raw.sort === "string" ? raw.sort : undefined;
 
-  const result = queryProducts({ page, limit, q, in_category, sort });
+  const result = queryProducts({ page, limit, offset, q, in_category, sort });
   return result as unknown as ReturnType<
     ReturnType<typeof getClientForSurface>["products"]["list"]
   >;

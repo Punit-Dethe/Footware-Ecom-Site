@@ -597,6 +597,7 @@ export const POLICIES = [
 export function queryProducts(params: {
   page?: number;
   limit?: number;
+  offset?: number;
   q?: string;
   category_id?: string;
   in_category?: string;
@@ -644,7 +645,10 @@ export function queryProducts(params: {
 
   const totalCount = list.length;
   const totalPages = Math.ceil(totalCount / limit) || 1;
-  const startIndex = (page - 1) * limit;
+  const startIndex =
+    params.offset != null
+      ? Math.max(0, Number(params.offset))
+      : (page - 1) * limit;
   const paginatedData = list.slice(startIndex, startIndex + limit);
 
   return {

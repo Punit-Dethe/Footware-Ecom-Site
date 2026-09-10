@@ -129,7 +129,8 @@ async function ProductListingInner({
   const productsResponse = await fetchProducts({ ...listParams, page: 1 });
 
   const products = productsResponse.data;
-  const totalCount = productsResponse.meta.count;
+  const totalCount =
+    (productsResponse.meta as any).total_count ?? productsResponse.meta.count;
   const totalPages = productsResponse.meta.pages;
 
   const hasResults = products.length > 0;
@@ -161,10 +162,9 @@ async function ProductListingInner({
             // fallback shown.
             key={listingKey(state)}
             initialProducts={products}
-            initialPage={1}
-            totalPages={totalPages}
+            totalCount={totalCount}
             listParams={listParams}
-            fetchPage={fetchProducts}
+            fetchRemainder={fetchProducts}
             basePath={basePath}
             categoryId={categoryId}
             listId={listId}

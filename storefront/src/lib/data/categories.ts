@@ -74,12 +74,23 @@ async function cachedListCategoryProducts(
   const raw = (params || {}) as Record<string, any>;
   const page = Number(raw.page) || 1;
   const limit = Number(raw.limit) || 12;
+  const offset = raw.offset != null ? Number(raw.offset) : undefined;
+  const q =
+    typeof raw.q === "string"
+      ? raw.q
+      : typeof raw["filter[name]"] === "string"
+      ? raw["filter[name]"]
+      : typeof raw["q[name_cont]"] === "string"
+      ? raw["q[name_cont]"]
+      : undefined;
   const sort = typeof raw.sort === "string" ? raw.sort : undefined;
 
   const result = queryProducts({
     in_category: categoryId,
     page,
     limit,
+    offset,
+    q,
     sort,
   });
   return result as unknown as ReturnType<
