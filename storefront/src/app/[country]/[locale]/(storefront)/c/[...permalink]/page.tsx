@@ -42,7 +42,30 @@ export async function generateMetadata({
   return generateCategoryMetadata({ country, locale, permalink });
 }
 
-export default async function CategoryPage({
+import { Suspense } from "react";
+
+function CategoryPageSkeleton() {
+  return (
+    <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-pulse">
+      <div className="h-48 w-full bg-stone-100 rounded-2xl mb-8" />
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6">
+        {[...Array(8)].map((_, i) => (
+          <div key={i} className="aspect-square bg-stone-100 rounded-xl" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export default function CategoryPage(props: CategoryPageProps) {
+  return (
+    <Suspense fallback={<CategoryPageSkeleton />}>
+      <CategoryPageContent {...props} />
+    </Suspense>
+  );
+}
+
+async function CategoryPageContent({
   params,
   searchParams,
 }: CategoryPageProps) {

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
+import { Suspense } from "react";
 import { cachedGetPolicy, getPolicy } from "@/lib/data/policies";
 import {
   buildLocalizedAlternates,
@@ -75,9 +76,22 @@ export async function generateMetadata({
   };
 }
 
-export default async function PolicyPage({
+function PolicySkeleton() {
+  return (
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 animate-pulse">
+      <div className="h-8 bg-gray-200 rounded w-1/3 mb-8" />
+      <div className="space-y-4">
+        <div className="h-4 bg-gray-200 rounded w-full" />
+        <div className="h-4 bg-gray-200 rounded w-5/6" />
+        <div className="h-4 bg-gray-200 rounded w-4/6" />
+      </div>
+    </div>
+  );
+}
+
+async function PolicyContent({
   params,
-}: PolicyPageProps): Promise<React.JSX.Element> {
+}: PolicyPageProps) {
   const { country, slug, locale } = await params;
   const [policy, t] = await Promise.all([
     getPolicy(slug, { country, locale }),
@@ -104,6 +118,14 @@ export default async function PolicyPage({
         <p className="text-gray-500">{t("noContent")}</p>
       )}
     </div>
+  );
+}
+
+export default function PolicyPage(props: PolicyPageProps): React.JSX.Element {
+  return (
+    <Suspense fallback={<PolicySkeleton />}>
+      <PolicyContent {...props} />
+    </Suspense>
   );
 }
 

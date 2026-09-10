@@ -2,7 +2,6 @@ import { GoogleTagManager } from "@next/third-parties/google";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Geist } from "next/font/google";
-import { Suspense } from "react";
 import { SpeculationRules } from "@/components/performance/SpeculationRules";
 import { localeDirection } from "@/i18n/locales";
 
@@ -47,7 +46,7 @@ export function DocumentShell({ children, locale }: DocumentShellProps) {
         className={`${geist.variable} antialiased min-h-screen flex flex-col`}
         suppressHydrationWarning
       >
-        <Suspense fallback={null}>{children}</Suspense>
+        {children}
         <Analytics />
         <SpeedInsights />
       </body>

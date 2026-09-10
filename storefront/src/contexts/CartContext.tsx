@@ -5,12 +5,13 @@ import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {
   createContext,
-  type ReactNode,
   useCallback,
   useContext,
   useEffect,
   useMemo,
   useState,
+  Suspense,
+  type ReactNode,
 } from "react";
 import { toast } from "sonner";
 import {
@@ -50,7 +51,6 @@ export function CartProvider({
   const [updating, setUpdating] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const router = useRouter();
-  const pathname = usePathname();
   const t = useTranslations("cart");
 
   const openCart = useCallback(() => setIsOpen(true), []);
@@ -128,21 +128,6 @@ export function CartProvider({
     [mutateCart, t, surface],
   );
 
-  // Re-fetch cart on navigation (e.g., after checkout completes, the stale
-  // cart token will be cleared by getCart and the cart state will update).
-  // On the order-placed page, skip refreshCart to avoid a race condition:
-  // getCart() auto-clears the cart token cookie on error (completed order
-  // is no longer a cart), which removes the only auth token guest users
-  // have before getCheckoutOrder() can use it.
-  useEffect(() => {
-    if (pathname.includes("/order-placed/")) {
-      setCart(null);
-      setLoading(false);
-      return;
-    }
-    refreshCart();
-  }, [refreshCart, pathname]);
-
   const itemCount = useMemo<number>(
     () =>
       cart?.items?.reduce(
@@ -181,7 +166,41 @@ export function CartProvider({
     ],
   );
 
-  return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
+  return (
+    <CartContext.Provider value={value}>
+      <Suspense fallback={null}>
+        <CartNavigationTracker
+          refreshCart={refreshCart}
+          setCart={setCart}
+          setLoading={setLoading}
+        />
+      </Suspense>
+      {children}
+    </CartContext.Provider>
+  );
+}
+
+function CartNavigationTracker({
+  refreshCart,
+  setCart,
+  setLoading,
+}: {
+  refreshCart: () => void;
+  setCart: (cart: Cart | null) => void;
+  setLoading: (loading: boolean) => void;
+}) {
+  const pathname = usePathname();
+
+  useEffect(() => {
+    if (pathname.includes("/order-placed/")) {
+      setCart(null);
+      setLoading(false);
+      return;
+    }
+    refreshCart();
+  }, [refreshCart, pathname, setCart, setLoading]);
+
+  return null;
 }
 
 export function useCart() {

@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { NextIntlClientProvider } from "next-intl";
+import { setRequestLocale } from "next-intl/server";
+import { Suspense } from "react";
 import "../../globals.css";
 import { CartDrawer } from "@/components/cart/CartDrawer";
 import { DocumentShell } from "@/components/layout/DocumentShell";
@@ -95,6 +97,9 @@ export async function CountryLocaleLayoutContent({
 
   const requestedLocale = resolveSupportedLocale(locale);
   if (!requestedLocale) notFound();
+  try {
+    setRequestLocale(requestedLocale);
+  } catch {}
 
   // Fetch Market configuration through a known-valid storefront context. The
   // requested country/locale pair has not been validated yet; forwarding it to
@@ -199,7 +204,9 @@ function CountryLocaleProviders({
           <CartProvider>
             <JsonLd data={buildOrganizationJsonLd()} />
             {children}
-            <CartDrawer />
+            <Suspense fallback={null}>
+              <CartDrawer />
+            </Suspense>
             <Toaster />
           </CartProvider>
         </AuthProvider>

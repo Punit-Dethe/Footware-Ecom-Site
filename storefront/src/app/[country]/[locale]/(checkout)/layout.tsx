@@ -4,7 +4,7 @@ import { ArrowLeft, ChevronDown, ShoppingBag } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import {
   CheckoutProvider,
   CheckoutSummary,
@@ -52,7 +52,7 @@ function CheckoutFooter() {
   return (
     <footer className="py-4 text-xs text-gray-500 border-t border-gray-200 mt-auto flex flex-wrap items-center gap-x-3 gap-y-1">
       <p>
-        {t("allRightsReserved", { year: new Date().getFullYear(), storeName })}
+        {t("allRightsReserved", { year: 2026, storeName })}
       </p>
       {POLICY_LINKS.map((policy) => (
         <Link
@@ -151,7 +151,9 @@ function CheckoutLayoutContent({ children }: CheckoutLayoutProps) {
 export default function CheckoutLayout({ children }: CheckoutLayoutProps) {
   return (
     <CheckoutProvider>
-      <CheckoutLayoutContent>{children}</CheckoutLayoutContent>
+      <Suspense fallback={null}>
+        <CheckoutLayoutContent>{children}</CheckoutLayoutContent>
+      </Suspense>
     </CheckoutProvider>
   );
 }

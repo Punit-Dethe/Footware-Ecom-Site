@@ -5,7 +5,7 @@ import { CircleCheckBig, Package } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { use, useEffect, useRef, useState } from "react";
+import { Suspense, use, useEffect, useRef, useState } from "react";
 import { AddressBlock } from "@/components/order/AddressBlock";
 import { OrderTotals } from "@/components/order/OrderTotals";
 import { PaymentInfo } from "@/components/order/PaymentInfo";
@@ -25,7 +25,15 @@ interface OrderPlacedPageProps {
   }>;
 }
 
-export default function OrderPlacedPage({ params }: OrderPlacedPageProps) {
+export default function OrderPlacedPage(props: OrderPlacedPageProps) {
+  return (
+    <Suspense fallback={null}>
+      <OrderPlacedContent {...props} />
+    </Suspense>
+  );
+}
+
+function OrderPlacedContent({ params }: OrderPlacedPageProps) {
   const { id: cartId } = use(params);
   const pathname = usePathname();
   const basePath = extractBasePath(pathname);

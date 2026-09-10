@@ -21,7 +21,25 @@ export async function generateMetadata({
   return generateProductsMetadata({ country, locale });
 }
 
-export default async function ProductsPage({
+import { Suspense } from "react";
+import { ProductListingSkeleton } from "@/components/products/ProductListingSkeleton";
+
+export default function ProductsPage(props: ProductsPageProps) {
+  return (
+    <Suspense
+      fallback={
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-pulse">
+          <div className="h-10 w-64 bg-stone-100 rounded mb-8" />
+          <ProductListingSkeleton />
+        </div>
+      }
+    >
+      <ProductsPageContent {...props} />
+    </Suspense>
+  );
+}
+
+async function ProductsPageContent({
   params,
   searchParams,
 }: ProductsPageProps) {
