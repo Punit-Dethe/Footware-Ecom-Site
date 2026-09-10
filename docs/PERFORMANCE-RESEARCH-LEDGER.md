@@ -68,6 +68,16 @@ For user-visible latency, prefer a change when it produces a repeatable visible 
 - **Decision:** **KEEP STRONG**.
 - **Why:** removes a real chunk waterfall and halves skeleton duration with effectively zero bundle cost. The dynamic import was legacy optimization residue from the old Swiper implementation.
 
+### R006 — Direct prepared product images vs Next Image
+- **Baseline:** S4 `5cdf3ad`; S5 candidate `29b25c0` (reverted after test).
+- **Hypothesis:** bypassing `/_next/image` and serving the already-generated AVIF/WebP `srcset` directly would remove redundant runtime transformation.
+- **Baseline behavior:** Next Image selected tightly sized/low-byte variants (e.g. PLP desktop ~3.7 KB body at 384w, mobile ~2.2 KB at 256w; PDP desktop ~10.5 KB at 640w, mobile ~4.8 KB at 384w).
+- **Direct behavior:** browser selected prepared AVIFs that were materially larger (PLP 320w ~6.4 KB body on both desktop/mobile; PDP 640w ~20.5 KB desktop and 480w ~12.6 KB mobile).
+- **Production result:** first-viewport image bytes 77,741 -> 149,250 B (+92%). PLP first image complete +96 ms, first row +143 ms, homepage featured image +150 ms. CLS stayed 0 and quality was unchanged.
+- **PDP anomaly:** title and main image both appeared ~150–160 ms earlier in the direct variant, but the title should not depend on image delivery; desktop request duration only improved ~13 ms while mobile direct image duration regressed to ~250 ms. Treat this route-level improvement as confounded, not proof that direct PDP delivery wins.
+- **Decision:** **REVERT / KEEP NEXT IMAGE**. Workspace returned to S4 baseline.
+- **Why:** Vercel/Next image optimization is doing useful responsive compression and substantially reduces transferred bytes on card-heavy surfaces. The theoretical double-transform concern did not survive measurement.
+
 ## Current optimization audit
 
 | ID | Optimization / mechanism | Status | Current audit note |
@@ -87,27 +97,27 @@ For user-visible latency, prefer a change when it produces a repeatable visible 
 | O13 | Whole document children behind `Suspense fallback={null}` | RESOLVED: KEEP STRONG | R003 removed it. Category blank-after-TTFB ~463 -> 54 ms; PDP ~320 -> 38 ms; shell visible ~248–408 ms earlier. |
 | O14 | Currency resolved from direct country map | KEEP | No commerce call on visual critical path. |
 | O15 | Products and filters split into separate Suspense paths | KEEP | Products do not wait for facet computation. |
-| O16 | First page limited to 12 products | TEST | For 38 products (future ~70), compare infinite scroll vs all lightweight records + lazy images. |
-| O17 | Automatic page-2 fetch 250 ms after PLP mount | TEST | May hide scrolling pause but can compete with initial work. |
-| O18 | 1000 px IntersectionObserver prefetch for later pages | TEST | Only useful if infinite scroll survives O16. |
+| O16 | First page limited to 12 products | TEST NEXT | For 38 products (future ~70), compare infinite scroll vs all lightweight records + lazy images. |
+| O17 | Automatic page-2 fetch 250 ms after PLP mount | TEST WITH O16 | May hide scrolling pause but can compete with initial work. |
+| O18 | 1000 px IntersectionObserver prefetch for later pages | TEST WITH O16 | Only useful if infinite scroll survives O16. |
 | O19 | One high-priority product card image | KEEP / VERIFY | Verify actual LCP candidate per viewport. |
 | O20 | Manual product `router.prefetch()` on hover/touch | TEST | Overlaps Next default prefetch and Speculation Rules. |
 | O21 | Next `<Link>` automatic product prefetch | TEST | Current implementation is not truly intent-only. |
 | O22 | Chromium PDP Speculation Rules prerender | TEST | A/B after route/image behavior stabilizes. |
 | O23 | Category/product Speculation Rules prefetch rule | REMOVE / FIX | Current AND rule is effectively impossible and contributes no benefit. |
-| O24 | Sharp build-time image ingestion | KEEP | Strong fit: resize/AVIF/WebP/hash/LQIP/dominant color once before requests. |
-| O25 | Seven widths x AVIF + WebP | TEST | Cards currently receive all seven widths/two formats; measure actual source usage before pruning. |
-| O26 | Content-hashed product asset paths | KEEP | Enables immutable caching and clean invalidation. |
-| O27 | One-year immutable cache for `/products/*` static assets | KEEP | Correct for content-hashed files. |
+| O24 | Sharp build-time image ingestion | KEEP | Strong fit as source preparation, but runtime Next Image should keep owning final responsive compression after R006. |
+| O25 | Seven widths x AVIF + WebP | TEST LATER | R006 shows generated variants are larger than final Next transforms at several target widths; prune only after measuring which source variants Next actually benefits from. |
+| O26 | Content-hashed product asset paths | KEEP | Enables immutable source caching and clean invalidation. |
+| O27 | One-year immutable cache for `/products/*` static assets | KEEP | Correct for content-hashed source files used by Next Image. |
 | O28 | Per-image LQIP + dominant colour | KEEP | R001 proved per-product metadata can be delivered without shipping the global manifest in JS. |
 | O29 | Full media manifest imported by client ProductCard/PDP code | RESOLVED: KEEP STRONG | R001 removed it: ~53.8 KB parsed JS and ~9 KB compressed affected chunk eliminated without RSC/HTML relocation. |
-| O30 | `next/image` on already pre-generated local WebP/AVIF | TEST NEXT | Confirmed live catalog images go through `/_next/image`. Direct prepared-asset delivery is the next controlled A/B. |
-| O31 | 31-day Next transformed-image TTL | TEST | Relevant only if O30 keeps runtime transformation. |
-| O32 | Broad Next image qualities/device sizes | SIMPLIFY IF O30 REMOVED | Redundant if finished hashed assets are delivered directly. |
-| O33 | ProductImage as Client Component solely for error fallback | LATER TEST | Lower priority than image delivery itself. |
-| O34 | PDP main image eager/high priority | KEEP / VERIFY | Likely correct LCP policy; re-evaluate with direct image delivery. |
+| O30 | `next/image` on pre-generated local WebP/AVIF | RESOLVED: KEEP NEXT IMAGE | R006 direct-delivery A/B nearly doubled first-viewport image bytes and delayed PLP/home image completion. Runtime transformation is doing useful responsive compression. |
+| O31 | 31-day Next transformed-image TTL | KEEP | Relevant and useful because R006 keeps Next Image runtime transformation. |
+| O32 | Broad Next image qualities/device sizes | TEST LOW PRIORITY | Still relevant while Next owns final transforms; simplify only with evidence about actual requested widths/qualities. |
+| O33 | ProductImage as Client Component solely for error fallback | LATER TEST | Lower priority than listing/navigation/cart simplification. |
+| O34 | PDP main image eager/high priority | KEEP / VERIFY | S5 PDP route timing was confounded; do not change priority policy based on that result. |
 | O35 | PDP lightbox dynamic import | KEEP | Rare interaction; sensible deferral. |
-| O36 | Homepage hero from Unsplash through Next optimizer | SIMPLIFY LATER | Major remaining remote image origin; test only after catalog image path. |
+| O36 | Homepage hero from Unsplash through Next optimizer | SIMPLIFY LATER | Major remaining remote image origin; separate experiment only. |
 | O37 | Native CSS scroll-snap carousel replacing Swiper | KEEP | Simpler runtime; no active Swiper client chunk found. |
 | O38 | `swiper` package + old `.swiper-*` CSS still present | REMOVE CANDIDATE | Runtime bundle analysis found 0 KB Swiper. Cleanup, not a claimed speed win. |
 | O39 | Native carousel dynamically imported | RESOLVED: KEEP STATIC | R005 removed the legacy dynamic import: featured card ~135 ms earlier, skeleton halved, 0 parsed-JS increase. |
@@ -133,16 +143,16 @@ For user-visible latency, prefer a change when it produces a repeatable visible 
 
 Do **not** add unrelated optimization techniques. Current order:
 
-1. **S5 — Image delivery:** current `next/image` transformation of pre-generated assets vs direct generated `<picture>/<img srcset>` delivery.
-2. **S6 — Listing strategy:** 12-item infinite scroll vs all 38 products (later synthetic 70) + lazy images.
-3. **S3B — Storefront navigation `connection()`:** remove only the public category-layout dynamic marker if a controlled comparison justifies it; keep private account/checkout calls.
-4. **S7 — Navigation speculation:** Next automatic vs intent prefetch vs Speculation Rules; keep one scheduler.
-5. **S8 — Cart:** first remove redundant refresh/navigation refetch; only then consider a minimal client cart.
-6. **Later — cache-wrapper simplification, image-width pruning, stale feature/dependency cleanup.**
+1. **S6 — Listing strategy:** 12-item infinite scroll + automatic page-2/observer machinery vs all 38 lightweight product records with native lazy images; repeat with synthetic ~70 only if the test harness can do so without changing image assets.
+2. **S3B — Storefront navigation `connection()`:** remove only the public category-layout dynamic marker if a controlled comparison justifies it; keep private account/checkout calls.
+3. **S7 — Navigation speculation:** Next automatic vs intent prefetch vs Speculation Rules; keep one scheduler.
+4. **S8 — Cart:** first remove redundant refresh/navigation refetch; only then consider a minimal client cart.
+5. **Later — cache-wrapper simplification, image-width pruning, stale feature/dependency cleanup.**
 
 ## Measurement notes / known facts
 
-- Product images on live `/products` currently use `/_next/image?url=/products/...`, so prepared static WebPs are being transformed again by Next.
+- R006 disproved the assumption that direct prepared catalog assets would be faster: Vercel Next Image cut first-viewport image bytes roughly in half and improved PLP/home image completion. Keep `/_next/image` for catalog surfaces.
+- R006 PDP route timings moved earlier in the direct variant, but title moved by the same ~150 ms and mobile direct image duration regressed sharply; treat the PDP result as timing confound, not a reason for a hybrid implementation yet.
 - Full media manifest was ~66 KB raw source; R001 proved it should stay server-side/per-product.
 - Swiper is absent from runtime client chunks; dependency/CSS removal is cleanup only.
 - Vercel S1 self-calls were public HTTPS edge requests, not internal localhost calls. Warm edge caches made them cheap enough that R002 did not improve measured latency.
