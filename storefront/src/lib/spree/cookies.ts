@@ -112,12 +112,8 @@ export async function clearAllCartCookies(): Promise<void> {
 // --- Access Token (JWT) ---
 
 export async function getAccessToken(): Promise<string | undefined> {
-  try {
-    const cookieStore = await cookies();
-    return cookieStore.get(getAccessTokenCookieName())?.value;
-  } catch {
-    return undefined;
-  }
+  const cookieStore = await cookies();
+  return cookieStore.get(getAccessTokenCookieName())?.value;
 }
 
 export async function setAccessToken(token: string): Promise<void> {
