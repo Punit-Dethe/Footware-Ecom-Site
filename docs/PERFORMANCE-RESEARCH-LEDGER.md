@@ -90,6 +90,18 @@ For user-visible latency, prefer a change when it produces a repeatable visible 
 - **Decision:** **REJECT CURRENT ALL-38 IMPLEMENTATION; REPLACE OLD PAGINATION DESIGN**.
 - **Why:** desktop tolerates all 38 well, but the ~223–234 ms mobile first-card/LCP regression is too large to accept. The old infinite-scroll mechanism is also not acceptable because it can stall before the end. Next test should preserve the fast small initial payload while replacing multi-page observer pagination with one reliable deferred bulk load.
 
+### R008 — 12 initial products + one deferred bulk remainder load
+- **Baseline:** S4 `5cdf3ad`; S6B `c8ae438`.
+- **Hypothesis:** retain the fast 12-product initial payload, then replace observer/page-by-page pagination with one delayed request for all remaining matching products.
+- **Architecture:** 12 products initially; one request at a fixed 1200 ms after mount using `offset:12, limit:100`; no IntersectionObserver, page counter, scroll sentinel, loading-more spinner, multi-page actions, or client dedupe state machine.
+- **Initial desktop:** HTML 217,168 -> 217,094 B; RSC 128,460 -> 128,450 B; client JS -1,145 B parsed; first card 916 -> 914 ms; first row 1256 -> 1193 ms; LCP 956 -> 950 ms; CLS 0.
+- **Initial mobile:** first card 958 -> 995 ms (+37 ms), LCP 992 -> 1024 ms (+32 ms), image bytes unchanged at 41,012 B, CLS unchanged. Both regressions are inside the project <50 ms acceptance window.
+- **Remainder:** one ~161.9 KB transfer; append completes around 3.17 s desktop / 3.22 s mobile. Product #38 becomes available ~662–714 ms earlier than S4, although #13 arrives later because the request deliberately waits until after critical rendering.
+- **Reliability:** S4 stalled at 24/38 on 9/12 continuous-mobile-scroll runs (75%); S6B reached 38/38 on 12/12 runs with no observer-trigger dependency.
+- **Complexity:** 5 files, +71/-140 (net -69); one pagination-related action instead of up to three; ~1.1 KB less parsed client JS.
+- **Decision:** **KEEP STRONG**.
+- **Why:** preserves initial desktop performance and keeps mobile first-card/LCP within the acceptance window while fixing the pagination correctness/reliability failure and materially simplifying the runtime. Do not tune the 1200 ms delay unless later evidence shows a user-visible need.
+
 ## Current optimization audit
 
 | ID | Optimization / mechanism | Status | Current audit note |
@@ -105,13 +117,13 @@ For user-visible latency, prefer a change when it produces a repeatable visible 
 | O09 | `use cache: remote` around catalog reads | TEST | Keep unchanged until a dedicated cache-wrapper A/B; R002 intentionally did not conflate this variable. |
 | O10 | User token included in public catalog/category cache keys | SIMPLIFY | Public catalog is not personalized; token segmentation may reduce reuse. Later test. |
 | O11 | Root market/category reads via remote-style path | PARTLY RESOLVED | R002 moved server public reads to local repository/constants. Remaining layout/PPR behavior is separate from self-HTTP. |
-| O12 | `connection()` + dynamic navigation category subtree | TEST / S3B LATER | Exactly one storefront `connection()` is a realistic removal candidate; the other six audited calls are private/transactional and should remain dynamic. |
+| O12 | `connection()` + dynamic navigation category subtree | TEST NEXT / S3B | Exactly one storefront `connection()` is a realistic removal candidate; the other six audited calls are private/transactional and should remain dynamic. |
 | O13 | Whole document children behind `Suspense fallback={null}` | RESOLVED: KEEP STRONG | R003 removed it. Category blank-after-TTFB ~463 -> 54 ms; PDP ~320 -> 38 ms; shell visible ~248–408 ms earlier. |
 | O14 | Currency resolved from direct country map | KEEP | No commerce call on visual critical path. |
 | O15 | Products and filters split into separate Suspense paths | KEEP | Products do not wait for facet computation. |
-| O16 | First page limited to 12 products | REPLACE DESIGN / S6B NEXT | R007 showed all-38 hurts mobile by ~230 ms, while the old 12-item observer pagination can stall. Preserve small initial payload but replace multi-page observer flow with one reliable deferred bulk load. |
-| O17 | Automatic page-2 fetch 250 ms after PLP mount | REMOVE IN S6B | R007 confirms the pagination machinery is not earning its complexity; replace with one bulk remainder fetch after critical rendering. |
-| O18 | 1000 px IntersectionObserver prefetch for later pages | REMOVE IN S6B | Mobile baseline stalled at 24 cards under continuous scroll. Do not retain observer-gated correctness for a 38-product catalog. |
+| O16 | First page limited to 12 products | RESOLVED: KEEP 12 INITIAL | R008 keeps 12 for critical rendering, then fetches the remainder once. This avoids the ~230 ms mobile regression from all-38 initial render. |
+| O17 | Automatic page-2 fetch 250 ms after PLP mount | RESOLVED: REMOVED | R008 replaced it with one 1200 ms deferred remainder request after critical rendering. |
+| O18 | 1000 px IntersectionObserver prefetch for later pages | RESOLVED: REMOVED | R008 removed observer-gated correctness; continuous mobile scroll now reaches 38/38 reliably. |
 | O19 | One high-priority product card image | KEEP / VERIFY | Verify actual LCP candidate per viewport. |
 | O20 | Manual product `router.prefetch()` on hover/touch | TEST | Overlaps Next default prefetch and Speculation Rules. |
 | O21 | Next `<Link>` automatic product prefetch | TEST | Current implementation is not truly intent-only. |
@@ -155,15 +167,15 @@ For user-visible latency, prefer a change when it produces a repeatable visible 
 
 Do **not** add unrelated optimization techniques. Current order:
 
-1. **S6B — Listing strategy:** keep 12 initial products for fast mobile paint, then load the remaining matching products once in one deferred bulk request; no page-2 timer, no IntersectionObserver, no page-by-page state machine.
-2. **S3B — Storefront navigation `connection()`:** remove only the public category-layout dynamic marker if a controlled comparison justifies it; keep private account/checkout calls.
-3. **S7 — Navigation speculation:** Next automatic vs intent prefetch vs Speculation Rules; keep one scheduler.
-4. **S8 — Cart:** first remove redundant refresh/navigation refetch; only then consider a minimal client cart.
-5. **Later — cache-wrapper simplification, image-width pruning, stale feature/dependency cleanup.**
+1. **S3B — Storefront navigation `connection()`:** remove only the public category-layout dynamic marker if a controlled comparison justifies it; keep private account/checkout calls.
+2. **S7 — Navigation speculation:** Next automatic vs intent prefetch vs Speculation Rules; keep one scheduler.
+3. **S8 — Cart:** first remove redundant refresh/navigation refetch; only then consider a minimal client cart.
+4. **Later — cache-wrapper simplification, image-width pruning, stale feature/dependency cleanup.**
 
 ## Measurement notes / known facts
 
-- R007 showed why neither extreme is acceptable: all 38 immediately is simple and reliable on desktop but costs ~230 ms mobile LCP/first-card; old observer pagination preserves initial payload but can stall at 24 products. The target is one deferred remainder load.
+- R008 resolved the listing-strategy tradeoff: keep 12 products in the critical initial payload, then fetch the remainder once after critical rendering. This preserves mobile startup while removing observer/page-by-page failure modes.
+- R007 showed why neither extreme was acceptable: all 38 immediately is simple and reliable on desktop but costs ~230 ms mobile LCP/first-card; old observer pagination preserves initial payload but can stall at 24 products.
 - R006 disproved the assumption that direct prepared catalog assets would be faster: Vercel Next Image cut first-viewport image bytes roughly in half and improved PLP/home image completion. Keep `/_next/image` for catalog surfaces.
 - R006 PDP route timings moved earlier in the direct variant, but title moved by the same ~150 ms and mobile direct image duration regressed sharply; treat the PDP result as timing confound, not a reason for a hybrid implementation yet.
 - Full media manifest was ~66 KB raw source; R001 proved it should stay server-side/per-product.
