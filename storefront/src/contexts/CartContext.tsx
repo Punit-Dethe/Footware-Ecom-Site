@@ -189,14 +189,18 @@ function CartNavigationTracker({
 }) {
   const pathname = usePathname();
 
+  // Hydrate cart once on provider mount
+  useEffect(() => {
+    refreshCart();
+  }, [refreshCart]);
+
+  // Clear cart state when navigating to order confirmation
   useEffect(() => {
     if (pathname.includes("/order-placed/")) {
       setCart(null);
       setLoading(false);
-      return;
     }
-    refreshCart();
-  }, [refreshCart, pathname, setCart, setLoading]);
+  }, [pathname, setCart, setLoading]);
 
   return null;
 }
