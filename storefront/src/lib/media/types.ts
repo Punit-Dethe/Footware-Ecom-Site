@@ -8,5 +8,6 @@ export type ProductMedia = {
     640?: { avif?: string; webp?: string };
     960?: { avif?: string; webp?: string };
     1280?: { avif?: string; webp?: string };
+    1600?: { avif?: string; webp?: string };
   };
 };
