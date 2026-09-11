@@ -1,7 +1,7 @@
 "use client";
 
 import type { Cart, LineItem } from "@spree/sdk";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {
   createContext,
@@ -50,7 +50,6 @@ export function CartProvider({
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
-  const router = useRouter();
   const t = useTranslations("cart");
 
   const openCart = useCallback(() => setIsOpen(true), []);
@@ -83,7 +82,6 @@ export function CartProvider({
         if (result.success) {
           setCart(result.cart ?? null);
           onSuccess?.();
-          router.refresh();
         } else {
           toast.error(result.error || fallbackMessage);
         }
@@ -93,7 +91,7 @@ export function CartProvider({
         setUpdating(false);
       }
     },
-    [router],
+    [],
   );
 
   const addItem = useCallback(
