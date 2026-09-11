@@ -9,11 +9,15 @@ import {
 import { isVariantInStock } from "../../types/domain";
 import {
   checkDatabaseConnection,
+  getDatabaseCaCertificate,
   getDatabaseUrl,
   getDbPool,
   getSslConfig,
   isDatabaseConfigured,
 } from "../index";
+
+const samplePem = `-----BEGIN CERTIFICATE-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAzTEST==\n-----END CERTIFICATE-----`;
+const sampleBase64 = Buffer.from(samplePem, "utf8").toString("base64");
 
 describe("Database Module & Configuration", () => {
   const originalEnv = { ...process.env };
@@ -23,6 +27,7 @@ describe("Database Module & Configuration", () => {
     delete process.env.DATABASE_URL;
     delete process.env.NEXT_PUBLIC_SUPABASE_URL;
     delete process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+    delete process.env.SUPABASE_DB_CA_CERT_BASE64;
   });
 
   afterEach(() => {
@@ -58,28 +63,88 @@ describe("Database Module & Configuration", () => {
     it("enforces max: 1 connection per serverless function instance", () => {
       process.env.DATABASE_URL = "postgres://user:pass@localhost:5432/testdb";
       const pool = getDbPool();
-      // pg.Pool options can be inspected via options
       expect(pool.options.max).toBe(1);
     });
 
-    it("permits unencrypted connection only for localhost offline development", () => {
+    it("permits unencrypted connection for localhost offline development without CA", () => {
       expect(getSslConfig("postgres://user:pass@localhost:5432/testdb")).toBe(false);
       expect(getSslConfig("postgres://user:pass@127.0.0.1:5432/testdb")).toBe(false);
+      expect(getSslConfig("postgres://user:pass@::1:5432/testdb")).toBe(false);
     });
 
-    it("strictly requires SSL for cloud database connections", () => {
+    it("requires CA for cloud database connections and fails clearly when missing", () => {
+      delete process.env.SUPABASE_DB_CA_CERT_BASE64;
+      expect(() =>
+        getSslConfig(
+          "postgres://postgres.xxx:yyy@aws-0-ap-south-1.pooler.supabase.co:6543/postgres",
+        ),
+      ).toThrowError(/requires SUPABASE_DB_CA_CERT_BASE64/);
+    });
+
+    it("accepts valid base64 PEM and includes CA in pg SSL object with rejectUnauthorized: true", () => {
+      process.env.SUPABASE_DB_CA_CERT_BASE64 = sampleBase64;
+      const ca = getDatabaseCaCertificate();
+      expect(ca).toBe(samplePem);
+
       const ssl = getSslConfig(
         "postgres://postgres.xxx:yyy@aws-0-ap-south-1.pooler.supabase.co:6543/postgres",
       );
-      expect(ssl).toEqual({ rejectUnauthorized: true });
+      expect(ssl).toEqual({
+        rejectUnauthorized: true,
+        ca: samplePem,
+      });
     });
 
-    it("refuses unencrypted cloud connections when sslmode=disable is passed", () => {
+    it("rejects invalid base64 or invalid PEM in SUPABASE_DB_CA_CERT_BASE64", () => {
+      process.env.SUPABASE_DB_CA_CERT_BASE64 = "not-a-valid-pem-certificate";
+      expect(() => getDatabaseCaCertificate()).toThrowError(
+        /Decoded content does not contain a valid PEM certificate/,
+      );
+    });
+
+    it("rejects cloud DATABASE_URL containing sslmode=disable", () => {
+      process.env.SUPABASE_DB_CA_CERT_BASE64 = sampleBase64;
       expect(() =>
         getSslConfig(
           "postgres://postgres.xxx:yyy@aws-0-ap-south-1.pooler.supabase.co:6543/postgres?sslmode=disable",
         ),
-      ).toThrowError(/Insecure connection refused/);
+      ).toThrowError(/Insecure or conflicting SSL parameter 'sslmode' detected/);
+    });
+
+    it("rejects cloud DATABASE_URL containing sslmode=require", () => {
+      process.env.SUPABASE_DB_CA_CERT_BASE64 = sampleBase64;
+      expect(() =>
+        getSslConfig(
+          "postgres://postgres.xxx:yyy@aws-0-ap-south-1.pooler.supabase.co:6543/postgres?sslmode=require",
+        ),
+      ).toThrowError(/Insecure or conflicting SSL parameter 'sslmode' detected/);
+    });
+
+    it("rejects cloud DATABASE_URL containing sslrootcert", () => {
+      process.env.SUPABASE_DB_CA_CERT_BASE64 = sampleBase64;
+      expect(() =>
+        getSslConfig(
+          "postgres://postgres.xxx:yyy@aws-0-ap-south-1.pooler.supabase.co:6543/postgres?sslrootcert=/path/to/cert",
+        ),
+      ).toThrowError(/Insecure or conflicting SSL parameter 'sslrootcert' detected/);
+    });
+
+    it("rejects cloud DATABASE_URL containing sslcert", () => {
+      process.env.SUPABASE_DB_CA_CERT_BASE64 = sampleBase64;
+      expect(() =>
+        getSslConfig(
+          "postgres://postgres.xxx:yyy@aws-0-ap-south-1.pooler.supabase.co:6543/postgres?sslcert=/path/to/cert",
+        ),
+      ).toThrowError(/Insecure or conflicting SSL parameter 'sslcert' detected/);
+    });
+
+    it("rejects cloud DATABASE_URL containing sslkey", () => {
+      process.env.SUPABASE_DB_CA_CERT_BASE64 = sampleBase64;
+      expect(() =>
+        getSslConfig(
+          "postgres://postgres.xxx:yyy@aws-0-ap-south-1.pooler.supabase.co:6543/postgres?sslkey=/path/to/key",
+        ),
+      ).toThrowError(/Insecure or conflicting SSL parameter 'sslkey' detected/);
     });
   });
 
@@ -246,6 +311,38 @@ describe("Database Module & Configuration", () => {
       expect(sql).not.toMatch(/CREATE TABLE (?:public\.)?sessions\b/i);
       expect(sql).not.toMatch(/CREATE TABLE (?:public\.)?password_reset/i);
       expect(sql).not.toMatch(/CREATE TABLE (?:public\.)?inventory\b/i);
+    });
+  });
+
+  describe("DB Verification Scripts & Security Regressions", () => {
+    it("ensures legacy storefront/scripts/verify-db-connection.mjs does not exist", () => {
+      const legacyPath = path.resolve(
+        process.cwd(),
+        "scripts/verify-db-connection.mjs",
+      );
+      expect(fs.existsSync(legacyPath)).toBe(false);
+    });
+
+    it("ensures canonical root scripts/verify-db-connection.mjs does NOT contain rejectUnauthorized: false", () => {
+      const rootVerifierPath = path.resolve(
+        process.cwd(),
+        "../scripts/verify-db-connection.mjs",
+      );
+      expect(fs.existsSync(rootVerifierPath)).toBe(true);
+      const content = fs.readFileSync(rootVerifierPath, "utf-8");
+      expect(content).not.toMatch(/rejectUnauthorized:\s*false/);
+      expect(content).toMatch(/rejectUnauthorized:\s*true/);
+    });
+
+    it("ensures application DB code strictly enforces rejectUnauthorized: true and CA injection", () => {
+      const dbIndexPath = path.resolve(
+        process.cwd(),
+        "src/lib/db/index.ts",
+      );
+      const content = fs.readFileSync(dbIndexPath, "utf-8");
+      expect(content).not.toMatch(/rejectUnauthorized:\s*false/);
+      expect(content).toMatch(/rejectUnauthorized:\s*true/);
+      expect(content).toMatch(/ca,\s*\n\s*};/);
     });
   });
 });
