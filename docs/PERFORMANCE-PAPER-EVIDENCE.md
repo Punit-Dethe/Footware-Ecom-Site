@@ -18,7 +18,7 @@
 | ID | Experiment / hypothesis | Main measured result | Decision | Research takeaway |
 |---|---|---|---|---|
 | R001 | Remove the full product-media manifest from client JS and serialize only per-product media | ~53.3 KB parsed client JS removed per major route; ~9 KB compressed shared-chunk impact removed; no equivalent RSC/HTML relocation | KEEP STRONG | Large global metadata objects can quietly become client-bundle tax even when each visible card needs only a few hundred bytes of that metadata. |
-| R002 | Bypass same-app public HTTPS/BFF calls for server-side catalog reads | 1-4 recursive HTTP calls per render removed; latency neutral because Vercel caching hid most warm cost; RSC/HTML shrank ~1.3-2.2% | KEEP SIMPLIFICATION | Removing architectural indirection can improve reliability/complexity without producing a headline latency win when edge caches already mask the cost. |
+| R002 | Bypass same-app public HTTPS/BFF calls for server-side catalog reads | Recursive HTTP work removed on audited render paths; latency neutral because Vercel caching hid most warm cost; RSC/HTML shrank ~1.3-2.2% | KEEP SIMPLIFICATION | Removing architectural indirection can improve reliability/complexity without producing a headline latency win when edge caches already mask the cost. |
 | R003 | Replace root `<Suspense fallback={null}>` with granular PPR boundaries | Visible shell ~248-408 ms earlier depending on route; category blank-after-TTFB ~463 -> ~54 ms; PDP ~320 -> ~38 ms | KEEP STRONG | A single blanket Suspense boundary can erase the benefit of otherwise fast streaming/PPR by hiding the whole shell behind one slow subtree. |
 | R004 | Fix homepage featured-products Resume Data Cache / RSC stream abort | Featured products render reliably in 100% of measured runs; PPR and edge caching preserved | KEEP CORRECTNESS | Performance work exposed a correctness interaction: public-route cookie access and swallowed Next dynamic exceptions can corrupt PPR resume behavior. |
 | R005 | Stop dynamically importing a now-lightweight native carousel | First real featured card ~135 ms earlier; skeleton duration roughly halved; parsed JS unchanged | KEEP STRONG | Dynamic import can become an anti-optimization after a heavy dependency is replaced by tiny native code. Re-audit historical optimizations after architecture changes. |
@@ -28,6 +28,7 @@
 | R009 | Remove public storefront `connection()` around static category taxonomy | Nav readiness improves ~346-608 ms; category subtree moves into PPR Chunk 0; request-time category executions drop to 0 | KEEP PERFORMANCE | Explicitly marking static public data as request-dynamic can force unnecessary stream chunks and delay navigation chrome by hundreds of milliseconds. |
 | R010 | Remove Chromium Speculation Rules while keeping Next Link + manual intent prefetch | Hover work 19 req / 39.6 KB -> 7 req / 20.1 KB; mobile useful PDP +36 ms but inside threshold; desktop immediate and Firefox results neutral/better | KEEP | Layering multiple navigation accelerators can duplicate work. Cross-browser Next prefetch + lightweight intent warming retained most benefit without full-document prerender duplication. |
 | R011 | Remove redundant cart `router.refresh()` and pathname-driven cart polling | Mutation bytes: Add -19.5%, Update -31.4%, Remove -32.4%; 5-route navigation cart refetches 5 -> 0; full correctness matrix passed | KEEP BOTH | Mutation responses already contained the authoritative cart. Extra RSC refreshes and route-change polling created large cascades without improving UI correctness. |
+| R012 | Start the exact responsive PDP hero image on ProductCard intent instead of waiting for PDP render | Hero request begins ~469-1161 ms earlier; desktop 250 ms hover hero -469 ms; mobile tap hero -550 ms; title-to-hero lag collapses to ~2 ms; 60/60 preload reuse, 0 duplicate requests, 0 byte increase | KEEP STRONG | Resource-discovery latency can dominate even when the image itself is optimized. Starting the exact eventual image request in parallel with navigation removes a serial waterfall without bypassing Next Image. |
 
 ## Detailed negative and counter-intuitive results
 
@@ -43,7 +44,7 @@ Rendering all 38 products removed the pagination state machine and made every it
 
 ### Same-app HTTP removal produced no meaningful warm latency win
 
-Direct in-process catalog access removed public Vercel HTTPS recursion and simplified the architecture, but application-executed and warm-cache route latency remained essentially neutral. The infrastructure/cache layer had already hidden most of the recursive-call overhead. The change is still kept because it reduces failure surface and serialization overhead.
+Direct in-process catalog access simplified the architecture, but application-executed and warm-cache route latency remained essentially neutral. The infrastructure/cache layer had already hidden most of the recursive-call overhead. The change is still kept because it reduces failure surface and serialization overhead. P1 later exposed that the current public PDP helper still contains request/cache-oriented SDK machinery and therefore deserves a dedicated cold-route experiment rather than assuming the earlier result generalized forever.
 
 ### Speculation Rules were not the universal winner
 
@@ -53,11 +54,11 @@ The original product-card path stacked Next viewport/eager prefetch, manual inte
 
 **Baseline:** S7B `fb72be58d8d40074f1e257e453d3bf2722dfe6d4`.
 
-**Executor-reported S8A:** `ebf8549461b384021a0dafbc9c723f89b879f438`.
+**S8A:** `ebf8549461b384021a0dafbc9c723f89b879f438` — remotely verified.
 
-**Executor-reported S8B:** `6749369f65aafeaa2662057cf017c66cb17c76ba`.
+**S8B:** `6749369baec9349e2d21b337d54ff478646a969a` — remotely verified.
 
-At the time this evidence file was written, the connected GitHub remote could not resolve the S8B SHA, so the S8 SHAs are recorded as executor-reported pending remote synchronization.
+The earlier evidence draft carried an executor-reported S8B SHA that was not yet reachable remotely. After synchronization, both accepted S8 commits were verified in the repository and the corrected S8B SHA above is the reproducible reference.
 
 ### Baseline mutation graph
 
@@ -96,6 +97,55 @@ Across a five-route navigation sequence:
 
 **Decision:** KEEP.
 
+## PDP image discovery experiment (R012 / P1) — detailed paper evidence
+
+**Baseline:** accepted S8B `6749369baec9349e2d21b337d54ff478646a969a`.
+
+**P1:** `7173c5d440d977a1dc0ec771c1fccd8a8b7a0aab` — remotely verified.
+
+### Baseline serial waterfall
+
+On cold PDP navigation, the browser started the navigation RSC almost immediately (~18-22 ms after click), but the main image was not discovered until the PDP data/title arrived:
+
+- Desktop RSC response/title: roughly 0.6-1.1 s after click in observed cold traces.
+- Desktop hero request start: ~592-1098 ms after RSC request start.
+- Desktop hero visible: ~1.4-2.1 s after click in the sampled cold traces, often ~790-991 ms after title.
+- Mobile hero request start: ~476-479 ms after RSC start.
+- Mobile hero visible: ~987-1131 ms after click, ~187-637 ms after title.
+- Warm revisit: title and hero both collapse to roughly 20-27 ms, showing that the major first-visit cost is cold route/resource availability rather than expensive DOM rendering.
+
+### P1 implementation
+
+The ProductCard's existing `pointerenter`/`touchstart` intent event was extended to preload exactly one PDP hero image while preserving the existing route prefetch. `getImageProps` generated the same responsive Next Image candidate set used by the PDP (`sizes="(max-width: 768px) 100vw, 50vw"`, quality 75) from the product's `zoom-1600.webp` source.
+
+Measured selected transformed candidates were:
+
+- Desktop: `/_next/image?...zoom-1600.webp&w=640&q=75`.
+- Mobile: `/_next/image?...zoom-1600.webp&w=1200&q=75`.
+
+A document-level dedupe set prevents repeated preload elements for the same hero source.
+
+### P1 result
+
+- Hero request starts ~469-1161 ms earlier depending on scenario.
+- Desktop 250 ms hover: hero visible 1141.1 -> 672.3 ms (-468.8 ms); title-to-hero delay 464.2 -> 2.1 ms.
+- Desktop 500 ms hover: hero can complete before the click; title and image then arrive together.
+- Mobile normal tap: hero visible 1034.1 -> 483.8 ms (-550.3 ms); title-to-hero delay 558.8 -> 2.0 ms.
+- Preload reuse: 60/60 measured runs.
+- Duplicate hero requests: 0/60.
+- Desktop hero bytes: 18,893 -> 18,893 B.
+- Mobile hero bytes: 48,514 -> 48,514 B.
+- Client bundle cost: ~+180 B transfer / +480 B parsed.
+- HTML/RSC delta: 0.
+
+**Decision:** KEEP STRONG.
+
+### P1 caveats / confounds
+
+Desktop route/title timing was not perfectly stable. In the immediate-click sample, title moved 858.7 -> 1384.6 ms; in the 500 ms-hover sample, 676.6 -> 829.4 ms. The latter occurred even though the hero had already completed before click, so concurrent image bandwidth cannot fully explain the difference. Cold route/cache state is therefore a material confound and must be controlled in the next PDP-data experiment.
+
+The mobile cache-status distribution also differed between A and B in one set (A included optimizer MISSes while B was all HIT). The strongest P1 claim therefore does not rely on cache-header comparisons; it relies on direct request-start ordering, exact URL/candidate reuse, zero duplicate bytes, and the disappearance of the post-title serial image gap.
+
 ## Confirmed architectural lessons
 
 1. **Critical-path bytes matter more than total eventual bytes.** S6B succeeds by keeping 12 products in the initial payload even though it still transfers the remainder later.
@@ -106,18 +156,20 @@ Across a five-route navigation sequence:
 6. **Mutation responses should be treated as state updates.** Re-fetching or refreshing after receiving complete authoritative state often creates redundant RSC/network work.
 7. **Small-catalog architecture should be optimized for its actual scale.** Elaborate observer/page machinery was less reliable and more complex than one deferred remainder fetch.
 8. **Edge caching can hide server architectural inefficiency.** A simplification can be worth keeping even when end-user latency does not move because it removes recursion/failure modes.
-9. **Negative results are research results.** Several intuitive optimizations failed and materially changed the final design.
+9. **Resource discovery can matter more than resource transfer.** P1 did not shrink the hero image at all; it made the existing exact image request start hundreds of milliseconds earlier and thereby removed a serial waterfall.
+10. **Negative and anomalous results are research results.** Route-timing variance and cache-state differences are preserved explicitly instead of being removed from the narrative.
 
 ## Remaining engineering findings / cleanup backlog
 
 These are preserved for completeness but are not part of the completed broad audit phase unless future evidence elevates them:
 
-- `use cache: remote` wrappers over now-local static catalog reads: simplify/test later.
-- Public catalog cache keys segmented by user token: likely unnecessary; simplify later.
-- One high-priority product-card image: verify actual LCP candidate when doing new delivery work.
+- Public DTC PDP product resolution still flows through generic request/cache-oriented helpers (`getLocaleOptions`, access-token lookup, `use cache: remote`, SDK client) before local/static fallback; P2 is now the highest-priority experiment.
+- Public catalog cache keys segmented by user token may be unnecessary for DTC and may inhibit static preparation/reuse.
+- One high-priority product-card image: verify actual PLP LCP candidate only after the PDP critical path is solved.
 - Seven generated image widths x AVIF/WebP: prune only after observing source/transform usage.
 - `ProductImage` client boundary used mainly for error fallback: later test.
-- PDP `ProductDetails` broad client boundary: potential hydration target in improvement phase.
+- PDP `ProductDetails` broad client boundary: potential hydration target only if post-P2 traces show hydration dominates.
+- Real generated PDP LQIP/dominant colour is available but the PDP still uses a generic placeholder; this is perceptual polish after P2, not the current latency bottleneck.
 - Homepage remote Unsplash hero: candidate for local/source-delivery redesign.
 - Swiper dependency / obsolete `.swiper-*` CSS: cleanup only; no runtime Swiper chunk was observed.
 - Unused/inert `SpeculationRules.tsx`: cleanup only after R010 removed its injection.
@@ -129,15 +181,17 @@ These are preserved for completeness but are not part of the completed broad aud
 
 **Broad audit phase: COMPLETE through R011 / S8.**
 
-The next phase should no longer ask, "Which old optimization should be removed?" as the default question. It should ask, "What new architecture or delivery technique can measurably improve native-feeling navigation, interaction latency, PDP transitions, critical-path delivery, and perceived responsiveness?"
+**Proactive improvement phase: STARTED with R012 / P1.**
 
-Future work should still use controlled experiments, but the research direction changes from cleanup/audit to proactive performance design.
+P1 removes the visible post-title image waterfall. The immediate next research question is no longer image compression or image priority; it is why a cold public PDP still needs roughly half a second to over a second for route/data resolution when the underlying DTC catalog is static and previously visited routes are effectively instantaneous.
 
 ## Threats to validity to preserve for the paper
 
 - Vercel edge-cache state can hide server execution cost; HIT and application-executed/BYPASS results must be distinguished.
 - Browser timing has run-to-run variance; medians and p75s are more reliable than single traces.
-- Some route-level timing changes can be confounded by cache state or unrelated streamed content (as seen in the S5 PDP anomaly).
+- Some route-level timing changes can be confounded by cache state or unrelated streamed content (as seen in the S5 PDP anomaly and P1 desktop title variance).
+- P1 cache-status populations were not perfectly balanced in all scenarios; claims should emphasize exact request ordering/reuse and no-byte duplication rather than attribute all visible improvement to CDN HIT rate.
+- Soft-navigation LCP instrumentation can be misleading because standard LCP is page-lifecycle oriented; title/hero-visible milestones are more reliable for PDP transition comparisons.
 - Chromium-only APIs cannot be generalized to Firefox/Safari without cross-browser controls.
 - The current real catalog is 38 products; synthetic 70-product probes are scale evidence, not production results.
 - Serverless preview behavior and network geography may differ from eventual production traffic distributions.
