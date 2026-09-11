@@ -102,6 +102,17 @@ For user-visible latency, prefer a change when it produces a repeatable visible 
 - **Decision:** **KEEP STRONG**.
 - **Why:** preserves initial desktop performance and keeps mobile first-card/LCP within the acceptance window while fixing the pagination correctness/reliability failure and materially simplifying the runtime. Do not tune the 1200 ms delay unless later evidence shows a user-visible need.
 
+### R009 — Remove public storefront `connection()` from category navigation
+- **Baseline:** S6B `c8ae438`; S3B `5447900`.
+- **Hypothesis:** static public category taxonomy should be prepared with the PPR shell rather than explicitly postponed to request time with `connection()`.
+- **Before:** the category tree was rendered behind mobile/header/footer Suspense boundaries at request time; navigation arrived in later streamed chunks and was injected with `$RC(...)`. Every public storefront request executed `getRootCategories()` dynamically.
+- **After:** removing one `connection()` call and its import moves category navigation into prepared Chunk 0. All tested routes remain Partial Prerendered and Vercel edge-cacheable; request-time category executions for navigation drop to 0.
+- **Visible result:** homepage nav readiness improves ~516 ms desktop / ~608 ms mobile; PLP nav readiness improves ~346 ms desktop / ~418 ms mobile. Homepage LCP improves ~30 ms desktop / ~22 ms mobile; other first-card/LCP deltas are within roughly ±30 ms.
+- **Streaming:** homepage streamed `$RC` replacements 9 -> 5; PLP 11 -> 9; category 12 -> 10; PDP 10 -> 8. Homepage application-executed median total completion 822.7 -> 236.4 ms (~586 ms earlier); TTFB is essentially unchanged. Category median total improves ~55 ms; PDP median total ~36 ms, with larger p75 improvements on PLP/PDP.
+- **Payload/complexity:** HTML changes are negligible/slightly smaller; RSC unchanged except homepage +543 B. One file, 3 lines removed, no new machinery.
+- **Decision:** **KEEP PERFORMANCE**.
+- **Why:** a tiny deletion removes request-time dynamic work for immutable public taxonomy and delivers navigation hundreds of milliseconds earlier while preserving PPR/cacheability.
+
 ## Current optimization audit
 
 | ID | Optimization / mechanism | Status | Current audit note |
@@ -117,7 +128,7 @@ For user-visible latency, prefer a change when it produces a repeatable visible 
 | O09 | `use cache: remote` around catalog reads | TEST | Keep unchanged until a dedicated cache-wrapper A/B; R002 intentionally did not conflate this variable. |
 | O10 | User token included in public catalog/category cache keys | SIMPLIFY | Public catalog is not personalized; token segmentation may reduce reuse. Later test. |
 | O11 | Root market/category reads via remote-style path | PARTLY RESOLVED | R002 moved server public reads to local repository/constants. Remaining layout/PPR behavior is separate from self-HTTP. |
-| O12 | `connection()` + dynamic navigation category subtree | TEST NEXT / S3B | Exactly one storefront `connection()` is a realistic removal candidate; the other six audited calls are private/transactional and should remain dynamic. |
+| O12 | `connection()` + dynamic navigation category subtree | RESOLVED: KEEP REMOVED | R009 removed the sole public storefront marker. Category nav now ships in PPR Chunk 0 and is ~346–608 ms earlier; private/transactional `connection()` calls remain untouched. |
 | O13 | Whole document children behind `Suspense fallback={null}` | RESOLVED: KEEP STRONG | R003 removed it. Category blank-after-TTFB ~463 -> 54 ms; PDP ~320 -> 38 ms; shell visible ~248–408 ms earlier. |
 | O14 | Currency resolved from direct country map | KEEP | No commerce call on visual critical path. |
 | O15 | Products and filters split into separate Suspense paths | KEEP | Products do not wait for facet computation. |
@@ -125,10 +136,10 @@ For user-visible latency, prefer a change when it produces a repeatable visible 
 | O17 | Automatic page-2 fetch 250 ms after PLP mount | RESOLVED: REMOVED | R008 replaced it with one 1200 ms deferred remainder request after critical rendering. |
 | O18 | 1000 px IntersectionObserver prefetch for later pages | RESOLVED: REMOVED | R008 removed observer-gated correctness; continuous mobile scroll now reaches 38/38 reliably. |
 | O19 | One high-priority product card image | KEEP / VERIFY | Verify actual LCP candidate per viewport. |
-| O20 | Manual product `router.prefetch()` on hover/touch | TEST | Overlaps Next default prefetch and Speculation Rules. |
-| O21 | Next `<Link>` automatic product prefetch | TEST | Current implementation is not truly intent-only. |
-| O22 | Chromium PDP Speculation Rules prerender | TEST | A/B after route/image behavior stabilizes. |
-| O23 | Category/product Speculation Rules prefetch rule | REMOVE / FIX | Current AND rule is effectively impossible and contributes no benefit. |
+| O20 | Manual product `router.prefetch()` on hover/touch | TEST NEXT | Overlaps Next default prefetch and Speculation Rules. Audit actual duplicate/background requests before choosing one scheduler. |
+| O21 | Next `<Link>` automatic product prefetch | TEST NEXT | Current ProductCard behavior can overlap manual intent prefetch; measure bandwidth and click latency rather than assuming the overlap helps. |
+| O22 | Chromium PDP Speculation Rules prerender | TEST NEXT | Potentially fastest clicks but may consume substantial bandwidth/CPU; compare only after tracing current rule behavior. |
+| O23 | Category/product Speculation Rules prefetch rule | REMOVE / FIX | Current AND rule is effectively impossible and contributes no benefit; treat it as dead behavior during S7 audit rather than assuming it helps. |
 | O24 | Sharp build-time image ingestion | KEEP | Strong fit as source preparation, but runtime Next Image should keep owning final responsive compression after R006. |
 | O25 | Seven widths x AVIF + WebP | TEST LATER | R006 shows generated variants are larger than final Next transforms at several target widths; prune only after measuring which source variants Next actually benefits from. |
 | O26 | Content-hashed product asset paths | KEEP | Enables immutable source caching and clean invalidation. |
@@ -167,13 +178,13 @@ For user-visible latency, prefer a change when it produces a repeatable visible 
 
 Do **not** add unrelated optimization techniques. Current order:
 
-1. **S3B — Storefront navigation `connection()`:** remove only the public category-layout dynamic marker if a controlled comparison justifies it; keep private account/checkout calls.
-2. **S7 — Navigation speculation:** Next automatic vs intent prefetch vs Speculation Rules; keep one scheduler.
-3. **S8 — Cart:** first remove redundant refresh/navigation refetch; only then consider a minimal client cart.
-4. **Later — cache-wrapper simplification, image-width pruning, stale feature/dependency cleanup.**
+1. **S7 — Navigation/prefetch scheduler:** trace current Next Link automatic prefetch, manual ProductCard intent prefetch, and Speculation Rules; compare isolated strategies and keep the simplest scheduler that preserves click latency without wasteful background work.
+2. **S8 — Cart:** first remove redundant refresh/navigation refetch; only then consider a minimal client cart.
+3. **Later — cache-wrapper simplification, image-width pruning, stale feature/dependency cleanup.**
 
 ## Measurement notes / known facts
 
+- R009 removed the public storefront `connection()`: static category navigation now ships in initial PPR Chunk 0, reaches the DOM ~346–608 ms earlier, and no longer performs request-time category rendering.
 - R008 resolved the listing-strategy tradeoff: keep 12 products in the critical initial payload, then fetch the remainder once after critical rendering. This preserves mobile startup while removing observer/page-by-page failure modes.
 - R007 showed why neither extreme was acceptable: all 38 immediately is simple and reliable on desktop but costs ~230 ms mobile LCP/first-card; old observer pagination preserves initial payload but can stall at 24 products.
 - R006 disproved the assumption that direct prepared catalog assets would be faster: Vercel Next Image cut first-viewport image bytes roughly in half and improved PLP/home image completion. Keep `/_next/image` for catalog surfaces.
