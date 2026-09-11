@@ -2,7 +2,6 @@ import { GoogleTagManager } from "@next/third-parties/google";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Geist } from "next/font/google";
-import { SpeculationRules } from "@/components/performance/SpeculationRules";
 import { localeDirection } from "@/i18n/locales";
 
 const gtmId = process.env.GTM_ID;
@@ -39,7 +38,6 @@ export function DocumentShell({ children, locale }: DocumentShellProps) {
             <link rel="dns-prefetch" href={spreeApiOrigin} />
           </>
         )}
-        <SpeculationRules />
       </head>
       {gtmId && <GoogleTagManager gtmId={gtmId} />}
       <body
