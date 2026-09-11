@@ -28,7 +28,7 @@ export interface Address {
   city: string;
   state: string;
   postal_code: string;
-  country_iso: string;
+  country_iso: string; // default 'IN'
   phone: string | null;
   is_default_shipping: boolean;
   is_default_billing: boolean;
@@ -74,7 +74,7 @@ export interface Variant {
   size_option: string;
   price_in_cents: number;
   compare_at_price_in_cents: number | null;
-  currency: string;
+  currency: string; // default 'INR'
   quantity_on_hand: number;
   backorderable: boolean;
   position: number;
@@ -118,7 +118,7 @@ export interface Cart {
   id: string;
   user_id: string | null;
   guest_token_hash: string | null;
-  currency: string;
+  currency: string; // default 'INR'
   shipping_address: Record<string, unknown> | null;
   billing_address: Record<string, unknown> | null;
   status: CartStatus;
@@ -153,7 +153,7 @@ export interface Order {
   user_id: string | null;
   email: string;
   status: OrderStatus;
-  currency: string;
+  currency: string; // default 'INR'
   subtotal_in_cents: number;
   tax_in_cents: number;
   shipping_in_cents: number;

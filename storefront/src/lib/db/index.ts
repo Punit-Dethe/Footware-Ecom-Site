@@ -41,21 +41,33 @@ export function isDatabaseConfigured(): boolean {
 }
 
 /**
- * Determines whether SSL should be enabled based on host or query params.
+ * Determines whether SSL should be enabled and validates encryption requirements.
+ * Cloud connections require SSL with certificate verification.
+ * Localhost may explicitly disable SSL for offline testing.
  */
-function getSslConfig(connectionString: string) {
-  // Local development postgres without SSL
-  if (
+export function getSslConfig(
+  connectionString: string,
+): boolean | { rejectUnauthorized: boolean } {
+  const isLocal =
     connectionString.includes("localhost") ||
     connectionString.includes("127.0.0.1") ||
-    connectionString.includes("sslmode=disable")
-  ) {
+    connectionString.includes("::1");
+
+  // Localhost may run without SSL for local testing unless explicitly required
+  if (isLocal && !connectionString.includes("sslmode=require")) {
     return false;
   }
 
-  // Supabase, Neon, AWS RDS, and cloud poolers require SSL
+  // Refuse unencrypted cloud connection
+  if (!isLocal && connectionString.includes("sslmode=disable")) {
+    throw new Error(
+      "[db] Insecure connection refused: Cloud database connection must require SSL encryption (sslmode=disable is forbidden).",
+    );
+  }
+
+  // Cloud database connections strictly require SSL
   return {
-    rejectUnauthorized: false,
+    rejectUnauthorized: true,
   };
 }
 
@@ -71,7 +83,7 @@ export function getDbPool(): Pool {
   const pool = new Pool({
     connectionString,
     ssl: getSslConfig(connectionString),
-    max: 5, // Serverless safe: small pool per function instance
+    max: 1, // Serverless safe: 1 connection per function instance against transaction pooler
     idleTimeoutMillis: 10_000, // Close idle clients after 10 seconds
     connectionTimeoutMillis: 5_000, // Fail fast after 5 seconds if connection stalled
   });

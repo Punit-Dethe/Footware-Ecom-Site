@@ -6,7 +6,7 @@ import { cookies } from "next/headers";
  * Supabase server client configuration for future B2 Auth and Storage.
  *
  * Prepared for official Next.js App Router SSR integration.
- * In B1, this utility is standalone and does not replace the active storefront auth flow.
+ * In B1.1, this utility is standalone and does not replace the active storefront auth flow.
  */
 
 export function getSupabaseUrl(): string {
@@ -19,11 +19,11 @@ export function getSupabaseUrl(): string {
   return url;
 }
 
-export function getSupabaseAnonKey(): string {
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
+export function getSupabasePublishableKey(): string {
+  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim();
   if (!key) {
     throw new Error(
-      "NEXT_PUBLIC_SUPABASE_ANON_KEY is not configured. Supabase client requires a valid publishable key.",
+      "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY is not configured. Supabase client requires a valid publishable key.",
     );
   }
   return key;
@@ -32,7 +32,7 @@ export function getSupabaseAnonKey(): string {
 export function isSupabaseConfigured(): boolean {
   return Boolean(
     process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() &&
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim(),
+      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim(),
   );
 }
 
@@ -43,7 +43,7 @@ export function isSupabaseConfigured(): boolean {
 export async function createClient() {
   const cookieStore = await cookies();
 
-  return createServerClient(getSupabaseUrl(), getSupabaseAnonKey(), {
+  return createServerClient(getSupabaseUrl(), getSupabasePublishableKey(), {
     cookies: {
       getAll() {
         return cookieStore.getAll();

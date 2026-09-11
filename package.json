@@ -2,6 +2,9 @@
   "name": "mirza-footwear",
   "version": "1.0.0",
   "private": true,
+  "engines": {
+    "node": "22.x"
+  },
   "description": "High-Performance Serverless Ecommerce Storefront for Mirza Footwear",
   "scripts": {
     "dev": "pnpm --prefix storefront dev",
