@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { AuthenticatedAccountShell } from "@/components/account/AuthenticatedAccountShell";
 import { REQUEST_PATHNAME_HEADER, REQUEST_SEARCH_HEADER } from "@/i18n/routing";
+import { getCustomer } from "@/lib/data/customer";
 import { getAccessToken, getRefreshToken } from "@/lib/spree";
 import {
   buildAccountLoginHref,
@@ -28,8 +29,14 @@ export async function AuthenticatedAccountLayoutContent({
   children,
   params,
 }: AuthenticatedAccountLayoutProps) {
-  const [{ country, locale }, requestHeaders, accessToken, refreshToken] =
-    await Promise.all([params, headers(), getAccessToken(), getRefreshToken()]);
+  const [{ country, locale }, requestHeaders, accessToken, refreshToken, customer] =
+    await Promise.all([
+      params,
+      headers(),
+      getAccessToken(),
+      getRefreshToken(),
+      getCustomer(),
+    ]);
 
   const basePath = `/${country}/${locale}`;
   const pathname = requestHeaders.get(REQUEST_PATHNAME_HEADER);
@@ -38,10 +45,8 @@ export async function AuthenticatedAccountLayoutContent({
   const returnTo = resolveAccountRedirect(requestedPath, basePath);
   const loginHref = buildAccountLoginHref(basePath, returnTo);
 
-  // A refresh token is also a recoverable session credential. Let the client
-  // session action rotate it in a cookie-writable context before deciding that
-  // the customer is anonymous.
-  if (!accessToken && !refreshToken) redirect(loginHref);
+  // Allow verified Supabase session or recoverable legacy credentials
+  if (!accessToken && !refreshToken && !customer) redirect(loginHref);
 
   return (
     <AuthenticatedAccountShell loginHref={loginHref}>

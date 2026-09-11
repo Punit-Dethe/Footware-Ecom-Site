@@ -36,6 +36,7 @@ export default async function AddressesPage({ params }: AddressesPageProps) {
         email: customer.email,
         first_name: customer.first_name,
         last_name: customer.last_name,
+        role: customer.role || "customer",
       }
     : undefined;
 

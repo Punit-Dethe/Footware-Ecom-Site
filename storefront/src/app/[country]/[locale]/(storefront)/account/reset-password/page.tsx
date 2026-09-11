@@ -25,9 +25,7 @@ export default function ResetPasswordPage() {
   const ta = useTranslations("account");
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const basePath = extractBasePath(pathname);
-  const token = searchParams.get("token");
 
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -37,29 +35,6 @@ export default function ResetPasswordPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-
-  // No token = invalid link
-  if (!token) {
-    return (
-      <div className="max-w-md mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <Card>
-          <CardHeader className="text-center">
-            <CardTitle>{t("invalidLink")}</CardTitle>
-            <CardDescription>{t("invalidLinkDescription")}</CardDescription>
-          </CardHeader>
-
-          <CardFooter className="justify-center">
-            <Link
-              href={`${basePath}/account/forgot-password`}
-              className="text-sm text-primary hover:text-primary/70 font-medium"
-            >
-              {t("requestNewLink")}
-            </Link>
-          </CardFooter>
-        </Card>
-      </div>
-    );
-  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -78,7 +53,7 @@ export default function ResetPasswordPage() {
     setSubmitting(true);
 
     try {
-      const result = await resetPassword(token, password, passwordConfirmation);
+      const result = await resetPassword("", password, passwordConfirmation);
       if (result.success) {
         setSuccess(true);
       } else {

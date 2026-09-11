@@ -7,12 +7,13 @@ import {
 } from "@/i18n/normalize";
 import { REQUEST_PATHNAME_HEADER, REQUEST_SEARCH_HEADER } from "@/i18n/routing";
 import { resolveRouteCachePolicy } from "@/lib/cache/cache-policy";
+import { verifyProxySession } from "@/lib/supabase/proxy";
 import { buildAccountLoginHref } from "@/lib/utils/account-redirect";
 
 const COUNTRY_COOKIE = "spree_country";
 const LOCALE_COOKIE = "spree_locale";
-const ACCESS_TOKEN_COOKIE = "_spree_jwt";
-const REFRESH_TOKEN_COOKIE = "_spree_refresh_token";
+const LEGACY_ACCESS_TOKEN_COOKIE = "_spree_jwt";
+const LEGACY_REFRESH_TOKEN_COOKIE = "_spree_refresh_token";
 const COOKIE_MAX_AGE = 365 * 24 * 60 * 60;
 
 const HAS_COUNTRY_LOCALE =
@@ -69,6 +70,24 @@ function setLocaleCookies(
   });
 }
 
+function clearLegacySpreeCookies(
+  response: NextResponse,
+  request?: NextRequest,
+): void {
+  response.cookies.set(LEGACY_ACCESS_TOKEN_COOKIE, "", {
+    maxAge: -1,
+    path: "/",
+  });
+  response.cookies.set(LEGACY_REFRESH_TOKEN_COOKIE, "", {
+    maxAge: -1,
+    path: "/",
+  });
+  if (request) {
+    request.cookies.delete(LEGACY_ACCESS_TOKEN_COOKIE);
+    request.cookies.delete(LEGACY_REFRESH_TOKEN_COOKIE);
+  }
+}
+
 function nextWithLocaleContext(
   request: NextRequest,
   country: string,
@@ -106,10 +125,12 @@ function nextWithLocaleContext(
  * - Detecting locale from cookies → accept-language → default
  * - Syncing spree_country / spree_locale cookies with URL segments so
  *   server-side data fetching (via `getLocaleOptions()`) uses the correct market
+ * - Guarding protected account routes via Supabase verified claims
+ * - Ensuring token refresh responses are not publicly cached
  */
 export function createSpreeMiddleware(
   config: SpreeMiddlewareConfig = {},
-): (request: NextRequest) => NextResponse {
+): (request: NextRequest) => Promise<NextResponse> {
   const defaultCountry = config.defaultCountry ?? "us";
   const supportedLocales = config.supportedLocales ?? [];
   const configuredDefaultLocale = config.defaultLocale ?? "en";
@@ -122,18 +143,15 @@ export function createSpreeMiddleware(
   const staticRoutes = config.staticRoutes ?? [
     "/_next",
     "/api",
+    "/auth",
     "/dev",
     "/favicon.ico",
   ];
-  const accessTokenCookieName =
-    config.accessTokenCookieName ?? ACCESS_TOKEN_COOKIE;
-  const refreshTokenCookieName =
-    config.refreshTokenCookieName ?? REFRESH_TOKEN_COOKIE;
 
-  return function middleware(request: NextRequest) {
+  return async function middleware(request: NextRequest): Promise<NextResponse> {
     const { pathname } = request.nextUrl;
 
-    // Skip static routes
+    // Skip static routes (including global auth callbacks /auth/...)
     if (staticRoutes.some((route) => pathname.startsWith(route))) {
       return NextResponse.next();
     }
@@ -174,23 +192,42 @@ export function createSpreeMiddleware(
         return response;
       }
 
+      const response = nextWithLocaleContext(request, country, locale);
+
+      // Defensively drop legacy Spree auth cookies if present
       if (
-        isProtectedAccountPath(pathname, canonicalPrefix) &&
-        !request.cookies.get(accessTokenCookieName)?.value &&
-        !request.cookies.get(refreshTokenCookieName)?.value
+        request.cookies.has(LEGACY_ACCESS_TOKEN_COOKIE) ||
+        request.cookies.has(LEGACY_REFRESH_TOKEN_COOKIE)
       ) {
-        const loginHref = buildAccountLoginHref(
-          canonicalPrefix,
-          `${pathname}${request.nextUrl.search}`,
-        );
-        const response = NextResponse.redirect(
-          new URL(loginHref, request.nextUrl),
-        );
-        setLocaleCookies(response, country, locale);
-        return response;
+        clearLegacySpreeCookies(response, request);
       }
 
-      return nextWithLocaleContext(request, country, locale);
+      if (isProtectedAccountPath(pathname, canonicalPrefix)) {
+        // Authenticate strictly via Supabase getClaims(); never trust legacy cookies or cookie presence alone
+        const authResult = await verifyProxySession(request, response);
+        if (!authResult.userId) {
+          const loginHref = buildAccountLoginHref(
+            canonicalPrefix,
+            `${pathname}${request.nextUrl.search}`,
+          );
+          const redirectResponse = NextResponse.redirect(
+            new URL(loginHref, request.nextUrl),
+          );
+          setLocaleCookies(redirectResponse, country, locale);
+          clearLegacySpreeCookies(redirectResponse);
+          return redirectResponse;
+        }
+
+        // If a Supabase token refresh wrote cookies, make sure this auth response is not cached publicly
+        if (authResult.cookiesRefreshed) {
+          response.headers.set(
+            "Cache-Control",
+            "private, no-cache, no-store, must-revalidate",
+          );
+        }
+      }
+
+      return response;
     }
 
     // Detect country: cookie → geo headers → default
