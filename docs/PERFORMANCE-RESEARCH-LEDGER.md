@@ -113,6 +113,17 @@ For user-visible latency, prefer a change when it produces a repeatable visible 
 - **Decision:** **KEEP PERFORMANCE**.
 - **Why:** a tiny deletion removes request-time dynamic work for immutable public taxonomy and delivers navigation hundreds of milliseconds earlier while preserving PPR/cacheability.
 
+### R010 — Remove Chromium Speculation Rules; keep Next + intent prefetch
+- **Baseline:** S3B `5447900`; S7B `fb72be5`.
+- **Hypothesis:** Next Link viewport prefetch plus ProductCard intent `router.prefetch()` provides most of the navigation benefit, while Chromium Speculation Rules add duplicate full-document prerender work.
+- **Audit:** CURRENT used three overlapping mechanisms: Next automatic/eager Link prefetch, manual pointer/touch `router.prefetch()`, and Chromium `moderate` PDP prerender. One 500 ms hover could trigger both RSC prefetch and a full-document prerender for the same PDP; the category speculation rule was impossible/dead.
+- **Hover network:** CURRENT 19 requests / 39,626 B with 11 RSC requests + 2 document prerenders; S7B 7 requests / 20,098 B with 4 RSC requests and 0 document prerenders. Roughly 19.5 KB and 12 requests are removed per measured hover interaction.
+- **Navigation:** Chromium desktop immediate useful PDP 721 -> 627 ms (S7B faster); desktop 500 ms hover 535 -> 630 ms median but p75 802 -> 722 ms; mobile tap 603 -> 639 ms (+36 ms median, +45 ms p75, inside acceptance window). Firefox immediate 696 -> 597 ms; hover 585 -> 581.5 ms.
+- **Idle/remainder cost:** five-second idle traffic is effectively unchanged because Next viewport prefetch remains (~63 KB speculative for three PDPs). S6B remainder append traffic also remains ~60.7 KB. S7B specifically removes duplicate Chromium document prerender work rather than Next RSC warming.
+- **Complexity:** one file, 2 lines removed; zero client-JS delta; removes ~1.5 KB inline speculation-rule HTML from the document.
+- **Decision:** **KEEP**.
+- **Why:** removes an overlapping Chromium-only scheduler and substantial per-hover duplicate requests while preserving the useful cross-browser Next + intent prefetch path. Mobile regression is within the project threshold and tail/other-browser behavior is neutral or better.
+
 ## Current optimization audit
 
 | ID | Optimization / mechanism | Status | Current audit note |
@@ -136,10 +147,10 @@ For user-visible latency, prefer a change when it produces a repeatable visible 
 | O17 | Automatic page-2 fetch 250 ms after PLP mount | RESOLVED: REMOVED | R008 replaced it with one 1200 ms deferred remainder request after critical rendering. |
 | O18 | 1000 px IntersectionObserver prefetch for later pages | RESOLVED: REMOVED | R008 removed observer-gated correctness; continuous mobile scroll now reaches 38/38 reliably. |
 | O19 | One high-priority product card image | KEEP / VERIFY | Verify actual LCP candidate per viewport. |
-| O20 | Manual product `router.prefetch()` on hover/touch | TEST NEXT | Overlaps Next default prefetch and Speculation Rules. Audit actual duplicate/background requests before choosing one scheduler. |
-| O21 | Next `<Link>` automatic product prefetch | TEST NEXT | Current ProductCard behavior can overlap manual intent prefetch; measure bandwidth and click latency rather than assuming the overlap helps. |
-| O22 | Chromium PDP Speculation Rules prerender | TEST NEXT | Potentially fastest clicks but may consume substantial bandwidth/CPU; compare only after tracing current rule behavior. |
-| O23 | Category/product Speculation Rules prefetch rule | REMOVE / FIX | Current AND rule is effectively impossible and contributes no benefit; treat it as dead behavior during S7 audit rather than assuming it helps. |
+| O20 | Manual product `router.prefetch()` on hover/touch | RESOLVED: KEEP WITH NEXT | R010 shows intent prefetch contributes useful navigation performance, especially outside Chromium speculation; retain alongside Next Link prefetch. |
+| O21 | Next `<Link>` automatic product prefetch | RESOLVED: KEEP | R010 keeps Next viewport/eager prefetch as the primary cross-browser warming mechanism. Idle cost is ~63 KB for three PDP RSC payloads in the measured PLP. |
+| O22 | Chromium PDP Speculation Rules prerender | RESOLVED: REMOVED | R010 removes it: hover duplicate work falls from 19 requests / 39.6 KB to 7 requests / 20.1 KB while mobile useful-PDP latency regresses only ~36 ms. |
+| O23 | Category/product Speculation Rules prefetch rule | RESOLVED: INERT/REMOVE CLEANUP | The category rule is logically impossible and no longer injected after R010. Delete the unused source during later cleanup, not as a claimed runtime win. |
 | O24 | Sharp build-time image ingestion | KEEP | Strong fit as source preparation, but runtime Next Image should keep owning final responsive compression after R006. |
 | O25 | Seven widths x AVIF + WebP | TEST LATER | R006 shows generated variants are larger than final Next transforms at several target widths; prune only after measuring which source variants Next actually benefits from. |
 | O26 | Content-hashed product asset paths | KEEP | Enables immutable source caching and clean invalidation. |
@@ -178,12 +189,13 @@ For user-visible latency, prefer a change when it produces a repeatable visible 
 
 Do **not** add unrelated optimization techniques. Current order:
 
-1. **S7 — Navigation/prefetch scheduler:** trace current Next Link automatic prefetch, manual ProductCard intent prefetch, and Speculation Rules; compare isolated strategies and keep the simplest scheduler that preserves click latency without wasteful background work.
-2. **S8 — Cart:** first remove redundant refresh/navigation refetch; only then consider a minimal client cart.
-3. **Later — cache-wrapper simplification, image-width pruning, stale feature/dependency cleanup.**
+1. **S8 — Cart path:** trace add/update/remove/cart hydration, then remove redundant `router.refresh()` and pathname-based cart refetch if measurements confirm they are wasted work. This is the final major audit experiment.
+2. **After S8 — improvement phase:** stop broad audit of existing micro-optimizations and design new high-impact work for native-feeling soft navigation, interaction latency, PDP transitions, and delivery strategy.
+3. **Later cleanup only:** cache-wrapper simplification, image-width pruning, unused SpeculationRules/Swiper CSS/dependencies, stale docs/features.
 
 ## Measurement notes / known facts
 
+- R010 closes navigation scheduler audit: keep Next Link viewport/eager prefetch plus manual ProductCard intent prefetch; remove the Chromium Speculation Rules injection. The latter duplicated RSC warming with full-document prerender work.
 - R009 removed the public storefront `connection()`: static category navigation now ships in initial PPR Chunk 0, reaches the DOM ~346–608 ms earlier, and no longer performs request-time category rendering.
 - R008 resolved the listing-strategy tradeoff: keep 12 products in the critical initial payload, then fetch the remainder once after critical rendering. This preserves mobile startup while removing observer/page-by-page failure modes.
 - R007 showed why neither extreme was acceptable: all 38 immediately is simple and reliable on desktop but costs ~230 ms mobile LCP/first-card; old observer pagination preserves initial payload but can stall at 24 products.
