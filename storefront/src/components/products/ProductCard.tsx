@@ -1,6 +1,7 @@
 "use client";
 
 import type { Product } from "@spree/sdk";
+import { getImageProps } from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -9,6 +10,36 @@ import { HiddenPricePrompt } from "@/components/products/HiddenPricePrompt";
 import { ProductImage } from "@/components/ui/product-image";
 import { trackSelectItem } from "@/lib/analytics/gtm";
 import type { ProductMedia } from "@/lib/media/types";
+
+const prewarmedHeros = new Set<string>();
+
+function prewarmPdpHero(heroSrc: string) {
+  if (typeof document === "undefined" || !heroSrc || prewarmedHeros.has(heroSrc)) {
+    return;
+  }
+  prewarmedHeros.add(heroSrc);
+
+  const { props } = getImageProps({
+    src: heroSrc,
+    alt: "",
+    fill: true,
+    sizes: "(max-width: 768px) 100vw, 50vw",
+    quality: 75,
+    priority: true,
+  });
+
+  const link = document.createElement("link");
+  link.rel = "preload";
+  link.as = "image";
+  if (props.srcSet) {
+    link.imageSrcset = props.srcSet;
+  }
+  if (props.sizes) {
+    link.imageSizes = props.sizes;
+  }
+  link.fetchPriority = "high";
+  document.head.appendChild(link);
+}
 
 interface ProductCardProps {
   product: Product;
@@ -45,12 +76,20 @@ export const ProductCard = memo(function ProductCard({
   const imageUrl = media.mainUrl;
   const productHref = `${basePath}/products/${product.slug}${categoryId ? `?category_id=${categoryId}` : ""}`;
   const isHighPriority = fetchPriority === "high" || Boolean(priority);
+  const pdpHeroSrc =
+    media.variants?.["1600"]?.webp ||
+    (product as any).media?.[0]?.xlarge_url ||
+    (product as any).primary_media?.xlarge_url ||
+    media.mainUrl;
 
-  const handleIntentPrefetch = useCallback(() => {
+  const handleIntent = useCallback(() => {
     if (!isHighPriority && productHref) {
       router.prefetch(productHref);
     }
-  }, [isHighPriority, productHref, router]);
+    if (pdpHeroSrc) {
+      prewarmPdpHero(pdpHeroSrc);
+    }
+  }, [isHighPriority, productHref, pdpHeroSrc, router]);
 
   // Current display price
   const displayPrice = product.price?.display_amount;
@@ -82,8 +121,8 @@ export const ProductCard = memo(function ProductCard({
   return (
     <div
       className="group relative"
-      onPointerEnter={handleIntentPrefetch}
-      onTouchStart={handleIntentPrefetch}
+      onPointerEnter={handleIntent}
+      onTouchStart={handleIntent}
     >
       {/* Image */}
       <div
