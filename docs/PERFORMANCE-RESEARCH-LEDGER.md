@@ -33,11 +33,11 @@ For user-visible latency, prefer a change when it produces a repeatable visible 
 - **Baseline:** S1 `ce097c0`; S2 `4dd3c8d`.
 - **Hypothesis:** server Components should read the in-process catalog repository directly rather than `@spree/sdk -> public Vercel HTTPS -> /api/v3/store/* -> repository`.
 - **Before:** homepage 1, PLP 3, category 4, PDP 2 internal API calls per render. In production S1 self-calls went through the public Vercel edge; warm cached calls were often ~20–40 ms, while uncached product API could approach ~945 ms total.
-- **After:** 0 internal catalog HTTP calls on all four routes; API compatibility remains intact; 3 files changed, +105/-137 (net -32 lines).
+- **After:** 0 internal catalog HTTP calls on the audited render paths; API compatibility remained intact; 3 files changed, +105/-137 (net -32 lines).
 - **Production A/B:** application-executed median TTFB differences were neutral/noisy: homepage +0.2%, PLP +1.4%, category -0.3%, PDP +3.1%. Warm CDN-HIT results also showed no reliable speed win.
 - **Serialization:** RSC/HTML shrank ~1.3–2.2% because SDK/JSON:API envelope metadata and duplicate master variant serialization disappeared; DOM markup remained byte-identical on the checked PDP.
 - **Decision:** **KEEP SIMPLIFICATION**, not a latency optimization.
-- **Why:** Vercel/Next caching had already hidden most warm self-HTTP cost. Keep the direct path because it deletes 1–4 nested HTTPS hops, cross-function recursion/failure modes, and 32 net lines without measurable latency regression.
+- **Why:** Vercel/Next caching had already hidden most warm self-HTTP cost. Keep the direct path because it removes architectural recursion/failure surface without measurable latency regression. P1 later showed that the current public PDP product helper still contains request/cache-oriented SDK machinery and must be re-audited separately in P2.
 
 ### R003 — Remove whole-page null Suspense blocker / add granular PPR boundaries
 - **Corrected baseline:** B0 `330b723` after separately fixing the ProductCarousel translation contract. S3A: `a501781`.
@@ -124,89 +124,106 @@ For user-visible latency, prefer a change when it produces a repeatable visible 
 - **Decision:** **KEEP**.
 - **Why:** removes an overlapping Chromium-only scheduler and substantial per-hover duplicate requests while preserving the useful cross-browser Next + intent prefetch path. Mobile regression is within the project threshold and tail/other-browser behavior is neutral or better.
 
+### R011 — Remove redundant cart refresh and route-change polling
+- **Baseline:** S7B `fb72be5`; S8A `ebf8549`; S8B `6749369`.
+- **Hypothesis:** cart mutation responses already contain authoritative state, so `router.refresh()` and pathname-driven `getCart()` polling are redundant.
+- **Mutation result:** removing `router.refresh()` cuts Add bytes 569,677 -> 458,498 B (-19.5%), Update 286,968 -> 196,998 B (-31.4%), Remove 693,405 -> 468,906 B (-32.4%). Visible update timing improves ~20–66 ms while header count, drawer, subtotal, quantity, removal and hard-refresh persistence remain correct.
+- **Navigation result:** five ordinary route transitions go from 5 `getCart` Server Actions + 5 cart API reads (~3.2 KB cart data) to 0. Initial hydration, add/update/remove across navigation, reload, new tab and order-placed reset all pass.
+- **Timing caveat:** five-route useful-navigation median moved ~359 -> ~402 ms, inside the project's noise/acceptance band and not causally tied to a required cart dependency.
+- **Decision:** **KEEP BOTH**.
+- **Why:** deletes large RSC/revalidation cascades after mutation and eliminates 100% of routine cart polling without correctness loss.
+
+### R012 — Prewarm the exact responsive PDP hero on product intent
+- **Baseline:** S8B `6749369`; P1 `7173c5d`.
+- **Hypothesis:** the visible PDP image lag is primarily late resource discovery: the hero request starts only after the cold PDP RSC/title arrives. Start the exact Next Image candidate on the existing ProductCard intent event so image and route work overlap.
+- **Baseline waterfall:** cold desktop hero request begins ~592–1098 ms after the RSC request starts; mobile ~476–479 ms after. The hero can paint ~187–991 ms after the title, making image latency the most visible second-stage delay.
+- **Implementation:** `getImageProps` generates the same responsive Next Image `srcset`/`sizes`/q75 candidates as the PDP (`zoom-1600.webp`; measured w=640 desktop, w=1200 mobile). Pointer/touch intent inserts one deduplicated image preload alongside the existing route prefetch.
+- **Reuse/cost:** preload reuse 60/60 measured runs, 0 duplicate hero requests, 0 image-byte increase (desktop 18,893 B unchanged; mobile 48,514 B unchanged), +180 B gzip / +480 B parsed client JS, 0 HTML/RSC delta.
+- **Visible result:** desktop 250 ms hover hero 1141.1 -> 672.3 ms (-468.8 ms); mobile normal tap 1034.1 -> 483.8 ms (-550.3 ms); title-to-hero gap falls to ~2 ms. At 500 ms hover the hero can finish before the click.
+- **Route-timing anomaly:** desktop immediate-click title timing varied 858.7 -> 1384.6 ms and the 500 ms case 676.6 -> 829.4 ms. Because the 500 ms hero was already fully downloaded before click, this cannot be explained by concurrent image transfer alone; cold-route/cache variance remains a confound. P2 must explicitly re-measure route timing and immediate-click contention rather than hiding this result.
+- **Decision:** **KEEP STRONG**, with the route anomaly carried forward as a P2 control.
+- **Why:** directly removes the serial image-discovery waterfall with exact cache reuse and no extra bytes. After P1, the hero appears essentially with the title; the remaining dominant latency is cold PDP route/data resolution.
+
 ## Current optimization audit
 
 | ID | Optimization / mechanism | Status | Current audit note |
 |---|---|---|---|
-| O01 | Next Cache Components + cache lifetimes | TEST | Catalog is now in-process static data. Re-test remote-style cache wrappers after larger visible bottlenecks are finished. |
+| O01 | Next Cache Components + cache lifetimes | TEST | Catalog is now in-process static data. Re-test remote-style cache wrappers only where the new improvement phase proves they are on a critical path. |
 | O02 | Canonical edge cache classes / `s-maxage` / SWR | KEEP | Production A/B confirms Vercel edge caching is active and materially hides server execution on warm routes. |
 | O03 | Suppress redundant locale `Set-Cookie` | KEEP | Prevents unnecessary cache-busting headers after locale is established. |
 | O04 | React request memoization (`cache()`) | KEEP | Cheap request-level deduplication. |
 | O05 | Parallel independent server work (`Promise.all`) | KEEP | Correct low-complexity waterfall removal. |
 | O06 | Narrow product-card fields | KEEP | Still reduces serialization/client props. |
-| O07 | Build-time `generateStaticParams` for PDP/category routes | KEEP | Current routes remain Partial Prerendered/cacheable after S3A. |
-| O08 | Server data layer -> SDK -> public same-app BFF -> local repository | RESOLVED: KEEP SIMPLIFICATION | R002 removed server self-HTTP. Production latency was neutral because caches hid the cost; direct path is simpler and removes failure surface. |
-| O09 | `use cache: remote` around catalog reads | TEST | Keep unchanged until a dedicated cache-wrapper A/B; R002 intentionally did not conflate this variable. |
-| O10 | User token included in public catalog/category cache keys | SIMPLIFY | Public catalog is not personalized; token segmentation may reduce reuse. Later test. |
-| O11 | Root market/category reads via remote-style path | PARTLY RESOLVED | R002 moved server public reads to local repository/constants. Remaining layout/PPR behavior is separate from self-HTTP. |
-| O12 | `connection()` + dynamic navigation category subtree | RESOLVED: KEEP REMOVED | R009 removed the sole public storefront marker. Category nav now ships in PPR Chunk 0 and is ~346–608 ms earlier; private/transactional `connection()` calls remain untouched. |
-| O13 | Whole document children behind `Suspense fallback={null}` | RESOLVED: KEEP STRONG | R003 removed it. Category blank-after-TTFB ~463 -> 54 ms; PDP ~320 -> 38 ms; shell visible ~248–408 ms earlier. |
+| O07 | Build-time `generateStaticParams` for PDP/category routes | KEEP / P2 VERIFY | PDP slugs are enumerated, but P1 shows cold PDP data still resolves slowly; P2 must determine why the prepared route is not effectively instant. |
+| O08 | Server data layer -> SDK -> public same-app BFF -> local repository | RESOLVED GENERALLY / P2 RE-AUDIT PDP | R002 simplified audited server reads, but current PDP helper still contains `getProduct -> getLocaleOptions/getAccessToken -> use cache: remote -> SDK` machinery before local fallback. P2 isolates this path. |
+| O09 | `use cache: remote` around catalog reads | P2 HIGH | P1 isolates cold PDP route/data as the dominant remaining latency; test whether the generic remote-style cache wrapper is unnecessary for public static DTC product data. |
+| O10 | User token included in public catalog/product cache keys | P2 HIGH | Public DTC catalog is not personalized; token/cookie participation may prevent static preparation and reduce cache reuse. |
+| O11 | Root market/category reads via remote-style path | PARTLY RESOLVED | R002 moved public reads toward local repository/constants; PDP-specific path is now being audited separately. |
+| O12 | `connection()` + dynamic navigation category subtree | RESOLVED: KEEP REMOVED | R009 moved category nav into PPR Chunk 0 and made it ~346–608 ms earlier. |
+| O13 | Whole document children behind `Suspense fallback={null}` | RESOLVED: KEEP STRONG | R003 removed it; visible shell arrives hundreds of milliseconds earlier. |
 | O14 | Currency resolved from direct country map | KEEP | No commerce call on visual critical path. |
 | O15 | Products and filters split into separate Suspense paths | KEEP | Products do not wait for facet computation. |
-| O16 | First page limited to 12 products | RESOLVED: KEEP 12 INITIAL | R008 keeps 12 for critical rendering, then fetches the remainder once. This avoids the ~230 ms mobile regression from all-38 initial render. |
-| O17 | Automatic page-2 fetch 250 ms after PLP mount | RESOLVED: REMOVED | R008 replaced it with one 1200 ms deferred remainder request after critical rendering. |
-| O18 | 1000 px IntersectionObserver prefetch for later pages | RESOLVED: REMOVED | R008 removed observer-gated correctness; continuous mobile scroll now reaches 38/38 reliably. |
-| O19 | One high-priority product card image | KEEP / VERIFY | Verify actual LCP candidate per viewport. |
-| O20 | Manual product `router.prefetch()` on hover/touch | RESOLVED: KEEP WITH NEXT | R010 shows intent prefetch contributes useful navigation performance, especially outside Chromium speculation; retain alongside Next Link prefetch. |
-| O21 | Next `<Link>` automatic product prefetch | RESOLVED: KEEP | R010 keeps Next viewport/eager prefetch as the primary cross-browser warming mechanism. Idle cost is ~63 KB for three PDP RSC payloads in the measured PLP. |
-| O22 | Chromium PDP Speculation Rules prerender | RESOLVED: REMOVED | R010 removes it: hover duplicate work falls from 19 requests / 39.6 KB to 7 requests / 20.1 KB while mobile useful-PDP latency regresses only ~36 ms. |
-| O23 | Category/product Speculation Rules prefetch rule | RESOLVED: INERT/REMOVE CLEANUP | The category rule is logically impossible and no longer injected after R010. Delete the unused source during later cleanup, not as a claimed runtime win. |
-| O24 | Sharp build-time image ingestion | KEEP | Strong fit as source preparation, but runtime Next Image should keep owning final responsive compression after R006. |
-| O25 | Seven widths x AVIF + WebP | TEST LATER | R006 shows generated variants are larger than final Next transforms at several target widths; prune only after measuring which source variants Next actually benefits from. |
+| O16 | First page limited to 12 products | RESOLVED: KEEP 12 INITIAL | R008 preserves fast critical rendering, then fetches the remainder once. |
+| O17 | Automatic page-2 fetch 250 ms after PLP mount | RESOLVED: REMOVED | Replaced by one deferred bulk remainder request. |
+| O18 | 1000 px IntersectionObserver pagination | RESOLVED: REMOVED | R008 fixes the 24/38 continuous-scroll stall. |
+| O19 | One high-priority product card image | KEEP / VERIFY | Verify actual PLP LCP candidate later; not current dominant issue. |
+| O20 | Manual product `router.prefetch()` on hover/touch | RESOLVED: KEEP WITH NEXT | Retained after R010; P1 reuses the same intent event for exact hero prewarm. |
+| O21 | Next `<Link>` automatic product prefetch | RESOLVED: KEEP | Primary cross-browser route warming mechanism; P2 must determine why cold PDP still requires ~0.5–1.1 s. |
+| O22 | Chromium PDP Speculation Rules prerender | RESOLVED: REMOVED | R010 removed duplicate full-document work. |
+| O23 | Category/product Speculation Rules rule | RESOLVED: INERT/REMOVE CLEANUP | No longer injected; delete source during cleanup only. |
+| O24 | Sharp build-time image ingestion | KEEP | Supplies stable hashed sources and P1's exact 1600 WebP hero source. |
+| O25 | Seven widths x AVIF + WebP | TEST LATER | Prune only after source/transform usage evidence. |
 | O26 | Content-hashed product asset paths | KEEP | Enables immutable source caching and clean invalidation. |
-| O27 | One-year immutable cache for `/products/*` static assets | KEEP | Correct for content-hashed source files used by Next Image. |
-| O28 | Per-image LQIP + dominant colour | KEEP | R001 proved per-product metadata can be delivered without shipping the global manifest in JS. |
-| O29 | Full media manifest imported by client ProductCard/PDP code | RESOLVED: KEEP STRONG | R001 removed it: ~53.8 KB parsed JS and ~9 KB compressed affected chunk eliminated without RSC/HTML relocation. |
-| O30 | `next/image` on pre-generated local WebP/AVIF | RESOLVED: KEEP NEXT IMAGE | R006 direct-delivery A/B nearly doubled first-viewport image bytes and delayed PLP/home image completion. Runtime transformation is doing useful responsive compression. |
-| O31 | 31-day Next transformed-image TTL | KEEP | Relevant and useful because R006 keeps Next Image runtime transformation. |
-| O32 | Broad Next image qualities/device sizes | TEST LOW PRIORITY | Still relevant while Next owns final transforms; simplify only with evidence about actual requested widths/qualities. |
-| O33 | ProductImage as Client Component solely for error fallback | LATER TEST | Lower priority than listing/navigation/cart simplification. |
-| O34 | PDP main image eager/high priority | KEEP / VERIFY | S5 PDP route timing was confounded; do not change priority policy based on that result. |
+| O27 | One-year immutable cache for `/products/*` sources | KEEP | Correct for content-hashed source files. |
+| O28 | Per-image LQIP + dominant colour | KEEP / PDP LQIP LATER | P1 fixed real image availability; using the real PDP LQIP is now a perceptual polish item, not the primary latency fix. |
+| O29 | Full media manifest in client JS | RESOLVED: REMOVED STRONG | R001 removed ~53.8 KB parsed JS without payload relocation. |
+| O30 | `next/image` on prepared assets | RESOLVED: KEEP NEXT IMAGE | R006 showed direct delivery nearly doubled viewport image bytes. P1 proves Next candidates can be prewarmed exactly without bypassing the optimizer. |
+| O31 | 31-day transformed-image TTL | KEEP | Useful with Next Image and P1 prewarming. |
+| O32 | Broad Next image qualities/device sizes | TEST LOW PRIORITY | Not the current bottleneck. |
+| O33 | ProductImage Client Component for error fallback | LATER TEST | Not current bottleneck. |
+| O34 | PDP main image eager/high priority | KEEP | P1 shows the problem was discovery timing, not lack of priority after discovery. |
 | O35 | PDP lightbox dynamic import | KEEP | Rare interaction; sensible deferral. |
-| O36 | Homepage hero from Unsplash through Next optimizer | SIMPLIFY LATER | Major remaining remote image origin; separate experiment only. |
-| O37 | Native CSS scroll-snap carousel replacing Swiper | KEEP | Simpler runtime; no active Swiper client chunk found. |
-| O38 | `swiper` package + old `.swiper-*` CSS still present | REMOVE CANDIDATE | Runtime bundle analysis found 0 KB Swiper. Cleanup, not a claimed speed win. |
-| O39 | Native carousel dynamically imported | RESOLVED: KEEP STATIC | R005 removed the legacy dynamic import: featured card ~135 ms earlier, skeleton halved, 0 parsed-JS increase. |
-| O40 | Featured products outer Suspense + dynamic carousel fallback | PARTLY RESOLVED | Dynamic-import fallback cost is removed by R005. Outer data Suspense remains and should only be changed in a separate experiment if it becomes measurable. |
-| O41 | Mobile `content-visibility:auto` for featured section | KEEP / VERIFY | Low complexity; remove only if it causes visible/layout issues. |
-| O42 | React Compiler + manual `memo(ProductCard)` | TEST LOW PRIORITY | Not worth touching until larger bottlenecks are exhausted. |
-| O43 | Whole PDP `ProductDetails` client boundary | LATER TEST | Real hydration cost exists but is not yet proven dominant. |
-| O44 | In-memory serverless BFF cart `Map` | SIMPLIFY / CORRECTNESS RISK | Ephemeral/instance-local. Client/localStorage may eventually be simpler for this research storefront. |
-| O45 | Legacy Spree cart orchestration on simple BFF cart | REMOVE CANDIDATE HIGH | Trace exact request graph before simplifying. |
-| O46 | `router.refresh()` after every cart mutation | REMOVE CANDIDATE HIGH | Mutation already returns updated cart; likely redundant RSC work. |
-| O47 | Re-fetch cart on every pathname change | REMOVE CANDIDATE HIGH | Likely unnecessary navigation work. |
-| O48 | Cart drawer opens immediately on Add | KEEP | Good instant acknowledgement. |
+| O36 | Homepage Unsplash hero | SIMPLIFY LATER | Separate from PDP critical path. |
+| O37 | Native CSS carousel | KEEP | Runtime Swiper already absent. |
+| O38 | `swiper` package / old CSS | REMOVE CLEANUP | Cleanup only. |
+| O39 | Native carousel dynamic import | RESOLVED: KEEP STATIC | R005 made featured cards ~135 ms earlier. |
+| O40 | Featured outer data Suspense | PARTLY RESOLVED | Only revisit with evidence. |
+| O41 | Mobile `content-visibility:auto` | KEEP / VERIFY | Low priority. |
+| O42 | React Compiler + `memo(ProductCard)` | TEST LOW PRIORITY | Not current bottleneck. |
+| O43 | Whole PDP `ProductDetails` client boundary | LATER | P1 shows route/data, not post-render hydration, is the immediate dominant delay. |
+| O44 | In-memory serverless BFF cart `Map` | SIMPLIFY / CORRECTNESS RISK | Persistence issue for real deployment; outside current PDP performance focus. |
+| O45 | Legacy Spree cart orchestration | LATER CLEANUP | S8 removed the measured refresh/polling waste; broader cart rewrite is not justified by current latency evidence. |
+| O46 | `router.refresh()` after cart mutation | RESOLVED: REMOVED | R011 cuts mutation bytes ~19–32% with no correctness loss. |
+| O47 | Re-fetch cart on pathname change | RESOLVED: REMOVED | R011 drops ordinary navigation cart reads to zero. |
+| O48 | Cart drawer opens immediately | KEEP | Good instant acknowledgement. |
 | O49 | Vercel Analytics + Speed Insights | KEEP | Measurement tooling justified during research. |
-| O50 | GTM optional by environment | KEEP OFF FOR CONTROL TESTS | Keep third-party analytics disabled in controlled benchmarks. |
-| O51 | Lighthouse budgets and CI | KEEP | Regression guard, not sufficient for visible navigation conclusions. |
-| O52 | Old `perf/benchmarks/latest-results.json` | HISTORICAL ONLY | Pre-serverless; not current baseline. |
-| O53 | HTTP-only benchmark harness | KEEP AS SERVER TOOL | Useful for server/network; not a substitute for visible browser milestones. |
-| O54 | Stale Render `/admin` redirects / orphan route cleanup | CLEANUP | Old backend is gone; keep repository consistent, but do not label as latency optimization. |
-| O55 | `docs/ARCHITECTURE.md` still describing Rails/Render | UPDATE | Documentation should match active architecture. |
-| O56 | Payment/checkout/wholesale feature surface | SCOPE CLEANUP | User does not need real payments/order lifecycle. Measure bundle leakage before claiming speed gains. |
+| O50 | GTM optional | KEEP OFF FOR CONTROL TESTS | Avoid third-party noise in benchmarks. |
+| O51 | Lighthouse budgets / CI | KEEP | Regression guard only. |
+| O52 | Old benchmark JSON | HISTORICAL ONLY | Pre-serverless baseline. |
+| O53 | HTTP-only harness | KEEP AS SERVER TOOL | Not a substitute for visible browser milestones. |
+| O54 | Stale Render redirects | CLEANUP | Repository hygiene only. |
+| O55 | Stale architecture docs | UPDATE | Documentation should match active architecture. |
+| O56 | Payment/checkout/wholesale surface | SCOPE CLEANUP | Prune only with bundle/runtime or project-scope evidence. |
+| O57 | Exact PDP hero intent prewarm | RESOLVED: KEEP STRONG | R012 starts the exact responsive Next Image candidate ~0.47–1.16 s earlier, reuses it 60/60 with zero duplicate bytes, and collapses title-to-hero lag to ~2 ms. |
+| O58 | Public DTC PDP product resolution through request/cache/SDK machinery | TEST NEXT / P2 | P1 leaves ~0.48–0.83 s median cold title latency and up to ~1.1 s observed response time. Audit whether local static product data can bypass locale/auth/remote-cache/SDK work. |
 
 ## Current execution queue
 
-Do **not** add unrelated optimization techniques. Current order:
-
-1. **S8 — Cart path:** trace add/update/remove/cart hydration, then remove redundant `router.refresh()` and pathname-based cart refetch if measurements confirm they are wasted work. This is the final major audit experiment.
-2. **After S8 — improvement phase:** stop broad audit of existing micro-optimizations and design new high-impact work for native-feeling soft navigation, interaction latency, PDP transitions, and delivery strategy.
-3. **Later cleanup only:** cache-wrapper simplification, image-width pruning, unused SpeculationRules/Swiper CSS/dependencies, stale docs/features.
+1. **P2 — Cold public DTC PDP route/data path:** trace the exact server request graph and compare the current generic `getCachedProduct/getProduct/use cache: remote/SDK` path against a direct local static DTC product resolution while preserving wholesale/private behavior. Keep P1 enabled and explicitly control for its desktop route-timing anomaly.
+2. **P3 — PDP perceptual polish only after P2:** feed the real generated product LQIP/dominant colour into the PDP hero if a visible placeholder gap remains. Do not confuse this with network latency reduction.
+3. **Later:** PDP client-boundary/hydration work only if post-P2 traces show JavaScript/hydration is the next dominant delay; otherwise move to the next measured UX bottleneck.
 
 ## Measurement notes / known facts
 
-- R010 closes navigation scheduler audit: keep Next Link viewport/eager prefetch plus manual ProductCard intent prefetch; remove the Chromium Speculation Rules injection. The latter duplicated RSC warming with full-document prerender work.
-- R009 removed the public storefront `connection()`: static category navigation now ships in initial PPR Chunk 0, reaches the DOM ~346–608 ms earlier, and no longer performs request-time category rendering.
-- R008 resolved the listing-strategy tradeoff: keep 12 products in the critical initial payload, then fetch the remainder once after critical rendering. This preserves mobile startup while removing observer/page-by-page failure modes.
-- R007 showed why neither extreme was acceptable: all 38 immediately is simple and reliable on desktop but costs ~230 ms mobile LCP/first-card; old observer pagination preserves initial payload but can stall at 24 products.
-- R006 disproved the assumption that direct prepared catalog assets would be faster: Vercel Next Image cut first-viewport image bytes roughly in half and improved PLP/home image completion. Keep `/_next/image` for catalog surfaces.
-- R006 PDP route timings moved earlier in the direct variant, but title moved by the same ~150 ms and mobile direct image duration regressed sharply; treat the PDP result as timing confound, not a reason for a hybrid implementation yet.
-- Full media manifest was ~66 KB raw source; R001 proved it should stay server-side/per-product.
-- Swiper is absent from runtime client chunks; dependency/CSS removal is cleanup only.
-- Vercel S1 self-calls were public HTTPS edge requests, not internal localhost calls. Warm edge caches made them cheap enough that R002 did not improve measured latency.
-- S3A production routes remained edge `HIT` + Partial Prerendered after replacing the blanket root boundary with targeted ones.
-- C3 fixed the homepage Resume Data Cache stream abort by removing unnecessary public-route cookie access and preserving Next dynamic exception propagation.
-- R005 proved the native carousel should remain statically imported: ~135 ms earlier featured cards with no parsed-JS increase.
+- R012 changes the PDP image problem from a serial waterfall into parallel work: exact hero preload begins on intent and is reused by the eventual Next `<Image>` with zero duplicate requests. The remaining dominant user-visible delay is cold route/data resolution.
+- R012 desktop immediate-click/title timing was noisy and sometimes worse; P2 must retain a baseline control and report whether high-priority image prewarm competes with the RSC on near-zero-dwell clicks.
+- R011 removes redundant cart refresh/polling: mutation responses are authoritative client state; routine navigation no longer performs cart reads.
+- R010 closes the navigation scheduler audit: keep Next Link + manual intent prefetch; remove Chromium full-document speculation.
+- R009 moved static category navigation into initial PPR Chunk 0, ~346–608 ms earlier.
+- R008 resolved listing strategy: 12 products critical, one deferred remainder request; continuous scroll reaches 38/38.
+- R006 proved Next Image should remain the final responsive optimizer despite pre-generated source variants.
+- R005 proved the native carousel should remain statically imported.
+- Edge-cache state can hide server inefficiency; distinguish HIT from application-executed results.
 
 ## Result entry template
 
