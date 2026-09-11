@@ -41,33 +41,75 @@ export function isDatabaseConfigured(): boolean {
 }
 
 /**
- * Determines whether SSL should be enabled and validates encryption requirements.
- * Cloud connections require SSL with certificate verification.
- * Localhost may explicitly disable SSL for offline testing.
+ * Retrieves and decodes the official Supabase CA certificate from SUPABASE_DB_CA_CERT_BASE64.
+ * Fails clearly if the variable is missing or does not contain a valid PEM certificate.
+ * Never logs certificate contents.
  */
-export function getSslConfig(
-  connectionString: string,
-): boolean | { rejectUnauthorized: boolean } {
+export function getDatabaseCaCertificate(): string {
+  const b64 = process.env.SUPABASE_DB_CA_CERT_BASE64?.trim();
+  if (!b64) {
+    throw new Error(
+      "[db] Cloud database connection requires SUPABASE_DB_CA_CERT_BASE64 to be configured with the Supabase Root CA certificate.",
+    );
+  }
+
+  let pem: string;
+  try {
+    pem = Buffer.from(b64, "base64").toString("utf8").trim();
+  } catch {
+    throw new Error(
+      "[db] Invalid SUPABASE_DB_CA_CERT_BASE64: Failed to decode base64 certificate.",
+    );
+  }
+
+  if (
+    !pem.includes("-----BEGIN CERTIFICATE-----") ||
+    !pem.includes("-----END CERTIFICATE-----")
+  ) {
+    throw new Error(
+      "[db] Invalid SUPABASE_DB_CA_CERT_BASE64: Decoded content does not contain a valid PEM certificate.",
+    );
+  }
+
+  return pem;
+}
+
+export type SslConfig = false | { rejectUnauthorized: true; ca: string };
+
+/**
+ * Determines whether SSL should be enabled and validates encryption requirements.
+ * Cloud connections strictly require SSL with trusted CA verification.
+ * Localhost may run without SSL for offline testing.
+ * Prevents node-postgres parameter override by banning SSL query parameters on cloud DATABASE_URL.
+ */
+export function getSslConfig(connectionString: string): SslConfig {
   const isLocal =
     connectionString.includes("localhost") ||
     connectionString.includes("127.0.0.1") ||
     connectionString.includes("::1");
 
-  // Localhost may run without SSL for local testing unless explicitly required
-  if (isLocal && !connectionString.includes("sslmode=require")) {
+  // Localhost may run without SSL for offline development
+  if (isLocal) {
     return false;
   }
 
-  // Refuse unencrypted cloud connection
-  if (!isLocal && connectionString.includes("sslmode=disable")) {
-    throw new Error(
-      "[db] Insecure connection refused: Cloud database connection must require SSL encryption (sslmode=disable is forbidden).",
-    );
+  // Refuse connection strings with embedded SSL query parameters to prevent node-postgres overrides
+  const forbiddenParams = ["sslmode", "sslcert", "sslkey", "sslrootcert"];
+  for (const param of forbiddenParams) {
+    const regex = new RegExp(`[?&]${param}(?:=|[&#]|$)`, "i");
+    if (regex.test(connectionString)) {
+      throw new Error(
+        `[db] Insecure or conflicting SSL parameter '${param}' detected in cloud DATABASE_URL. SSL configuration must be managed strictly via application pool options rather than connection string query parameters.`,
+      );
+    }
   }
 
-  // Cloud database connections strictly require SSL
+  // Cloud database connections strictly require SSL with trusted CA
+  const ca = getDatabaseCaCertificate();
+
   return {
     rejectUnauthorized: true,
+    ca,
   };
 }
 
