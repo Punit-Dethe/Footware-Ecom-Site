@@ -313,4 +313,36 @@ describe("Database Module & Configuration", () => {
       expect(sql).not.toMatch(/CREATE TABLE (?:public\.)?inventory\b/i);
     });
   });
+
+  describe("DB Verification Scripts & Security Regressions", () => {
+    it("ensures legacy storefront/scripts/verify-db-connection.mjs does not exist", () => {
+      const legacyPath = path.resolve(
+        process.cwd(),
+        "scripts/verify-db-connection.mjs",
+      );
+      expect(fs.existsSync(legacyPath)).toBe(false);
+    });
+
+    it("ensures canonical root scripts/verify-db-connection.mjs does NOT contain rejectUnauthorized: false", () => {
+      const rootVerifierPath = path.resolve(
+        process.cwd(),
+        "../scripts/verify-db-connection.mjs",
+      );
+      expect(fs.existsSync(rootVerifierPath)).toBe(true);
+      const content = fs.readFileSync(rootVerifierPath, "utf-8");
+      expect(content).not.toMatch(/rejectUnauthorized:\s*false/);
+      expect(content).toMatch(/rejectUnauthorized:\s*true/);
+    });
+
+    it("ensures application DB code strictly enforces rejectUnauthorized: true and CA injection", () => {
+      const dbIndexPath = path.resolve(
+        process.cwd(),
+        "src/lib/db/index.ts",
+      );
+      const content = fs.readFileSync(dbIndexPath, "utf-8");
+      expect(content).not.toMatch(/rejectUnauthorized:\s*false/);
+      expect(content).toMatch(/rejectUnauthorized:\s*true/);
+      expect(content).toMatch(/ca,\s*\n\s*};/);
+    });
+  });
 });
