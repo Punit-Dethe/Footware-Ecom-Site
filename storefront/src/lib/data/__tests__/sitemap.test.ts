@@ -1,75 +1,156 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const api = vi.hoisted(() => ({
-  marketsList: vi.fn(),
-  productsList: vi.fn(),
-  categoriesList: vi.fn(),
+const mockCatalog = vi.hoisted(() => ({
+  queryProducts: vi.fn(),
+  listCatalogCategories: vi.fn(),
 }));
 
-const cache = vi.hoisted(() => ({
-  life: vi.fn(),
-  tag: vi.fn(),
+const mockCache = vi.hoisted(() => ({
+  cacheLife: vi.fn(),
+  cacheTag: vi.fn(),
 }));
 
-vi.mock("@/lib/spree", () => ({
-  getClient: () => ({
-    markets: { list: api.marketsList },
-    products: { list: api.productsList },
-    categories: { list: api.categoriesList },
-  }),
+const mockSpree = vi.hoisted(() => ({
+  getClient: vi.fn(),
+}));
+
+vi.mock("@/lib/catalog/catalog-repository", () => ({
+  queryProducts: mockCatalog.queryProducts,
+  listCatalogCategories: mockCatalog.listCatalogCategories,
 }));
 
 vi.mock("next/cache", () => ({
-  cacheLife: cache.life,
-  cacheTag: cache.tag,
+  cacheLife: mockCache.cacheLife,
+  cacheTag: mockCache.cacheTag,
+}));
+
+vi.mock("@/lib/spree", () => ({
+  getClient: mockSpree.getClient,
 }));
 
 import {
   getSitemapCategoryPage,
+  getSitemapProductPage,
   getSitemapResourceCount,
 } from "@/lib/data/sitemap";
 
-describe("sitemap data cache", () => {
+describe("First-Party Sitemap Data Layer", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("counts only categories that produce sitemap URLs", async () => {
-    api.categoriesList.mockResolvedValue({
-      data: [],
-      meta: { count: 19 },
-    });
+  describe("getSitemapResourceCount", () => {
+    it("uses first-party queryProducts for product resource count and attaches catalog-public tag", async () => {
+      mockCatalog.queryProducts.mockResolvedValue({
+        data: [],
+        meta: { count: 1, total_count: 38, pages: 38 },
+      });
 
-    await expect(
-      getSitemapResourceCount("categories", "market-1", {
+      const count = await getSitemapResourceCount("products", "market-1", {
         country: "us",
         locale: "en",
-      }),
-    ).resolves.toBe(19);
+      });
 
-    expect(api.categoriesList).toHaveBeenCalledWith(
-      { page: 1, limit: 1, parent_id_not_null: true },
-      { country: "us", locale: "en" },
-    );
-    expect(cache.life).toHaveBeenCalledWith("tenMinutes");
-    expect(cache.tag).toHaveBeenCalledWith(
-      "sitemap",
-      "categories",
-      "sitemap-market:market-1",
-    );
-  });
-
-  it("keeps root categories out of cached sitemap pages", async () => {
-    api.categoriesList.mockResolvedValue({ data: [], meta: { count: 0 } });
-
-    await getSitemapCategoryPage("market-1", 2, 100, {
-      country: "us",
-      locale: "de",
+      expect(count).toBe(38);
+      expect(mockCatalog.queryProducts).toHaveBeenCalledWith({
+        page: 1,
+        limit: 1,
+      });
+      expect(mockCache.cacheLife).toHaveBeenCalledWith("tenMinutes");
+      expect(mockCache.cacheTag).toHaveBeenCalledWith(
+        "catalog-public",
+        "sitemap",
+        "products",
+        "sitemap-market:market-1",
+      );
+      expect(mockSpree.getClient).not.toHaveBeenCalled();
     });
 
-    expect(api.categoriesList).toHaveBeenCalledWith(
-      { page: 2, limit: 100, parent_id_not_null: true },
-      { country: "us", locale: "de" },
-    );
+    it("uses first-party listCatalogCategories for category resource count and attaches catalog-public tag", async () => {
+      mockCatalog.listCatalogCategories.mockResolvedValue([
+        { id: "cat-1", slug: "office-wear", name: "Office Wear" },
+        { id: "cat-2", slug: "traditional", name: "Traditional" },
+      ]);
+
+      const count = await getSitemapResourceCount("categories", "market-1", {
+        country: "us",
+        locale: "en",
+      });
+
+      expect(count).toBe(2);
+      expect(mockCatalog.listCatalogCategories).toHaveBeenCalled();
+      expect(mockCache.cacheLife).toHaveBeenCalledWith("tenMinutes");
+      expect(mockCache.cacheTag).toHaveBeenCalledWith(
+        "catalog-public",
+        "sitemap",
+        "categories",
+        "sitemap-market:market-1",
+      );
+      expect(mockSpree.getClient).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("getSitemapProductPage", () => {
+    it("uses first-party queryProducts for product pages and attaches catalog-public tag", async () => {
+      const dummyProducts = [
+        { id: "prod-1", slug: "office-footwear-01", name: "Oxford" },
+        { id: "prod-2", slug: "office-footwear-02", name: "Derby" },
+      ];
+      mockCatalog.queryProducts.mockResolvedValue({
+        data: dummyProducts,
+        meta: { count: 2, total_count: 38, pages: 19 },
+      });
+
+      const products = await getSitemapProductPage("market-1", 1, 2, {
+        country: "us",
+        locale: "en",
+      });
+
+      expect(products).toEqual(dummyProducts);
+      expect(mockCatalog.queryProducts).toHaveBeenCalledWith({
+        page: 1,
+        limit: 2,
+      });
+      expect(mockCache.cacheLife).toHaveBeenCalledWith("tenMinutes");
+      expect(mockCache.cacheTag).toHaveBeenCalledWith(
+        "catalog-public",
+        "sitemap",
+        "products",
+        "sitemap-market:market-1",
+      );
+      expect(mockSpree.getClient).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("getSitemapCategoryPage", () => {
+    it("uses first-party listCatalogCategories with in-memory pagination and attaches catalog-public tag", async () => {
+      const allCategories = [
+        { id: "cat-1", slug: "office-wear", name: "Office Wear" },
+        { id: "cat-2", slug: "traditional", name: "Traditional" },
+      ];
+      mockCatalog.listCatalogCategories.mockResolvedValue(allCategories);
+
+      const page1 = await getSitemapCategoryPage("market-1", 1, 1, {
+        country: "us",
+        locale: "en",
+      });
+      expect(page1).toEqual([allCategories[0]]);
+
+      const page2 = await getSitemapCategoryPage("market-1", 2, 1, {
+        country: "us",
+        locale: "en",
+      });
+      expect(page2).toEqual([allCategories[1]]);
+
+      expect(mockCatalog.listCatalogCategories).toHaveBeenCalledTimes(2);
+      expect(mockCache.cacheLife).toHaveBeenCalledWith("tenMinutes");
+      expect(mockCache.cacheTag).toHaveBeenCalledWith(
+        "catalog-public",
+        "sitemap",
+        "categories",
+        "sitemap-market:market-1",
+      );
+      expect(mockSpree.getClient).not.toHaveBeenCalled();
+    });
   });
 });
