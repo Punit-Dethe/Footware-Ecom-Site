@@ -1,6 +1,7 @@
 "use server";
 
 import { updateTag } from "next/cache";
+import { headers } from "next/headers";
 import { ensureProfile, getProfile, updateProfile } from "@/lib/db/profile";
 import {
   cacheTagSuffix,
@@ -8,6 +9,7 @@ import {
   clearAuthCookies,
   SURFACES,
 } from "@/lib/spree";
+import { getStoreUrl } from "@/lib/store";
 import { createClient } from "@/lib/supabase/server";
 import { actionResult } from "./utils";
 
@@ -26,59 +28,72 @@ export type Customer = AppUser;
 /**
  * Get the currently authenticated customer from Supabase Auth and PostgreSQL public.profiles.
  * Sourced strictly via cryptographic claim verification (auth.getClaims()); never trusts raw cookies.
+ *
+ * Distinction:
+ * - Anonymous user (no active claims) returns null.
+ * - Verified user with transient backend/database failure throws an error so callers know
+ *   this is a temporary outage rather than an anonymous user.
  */
 export async function getCustomer(): Promise<AppUser | null> {
+  const supabase = await createClient();
+  let claimsData: { claims?: Record<string, unknown> } | null = null;
+
   try {
-    const supabase = await createClient();
     const { data, error } = await supabase.auth.getClaims();
     if (error || !data?.claims) {
       return null;
     }
-
-    const claims = data.claims as Record<string, unknown>;
-    const userId = typeof claims.sub === "string" ? claims.sub : null;
-    const email = typeof claims.email === "string" ? claims.email : "";
-
-    if (!userId) return null;
-
-    let profile = await getProfile(userId);
-    if (!profile) {
-      // Idempotently heal missing profile record
-      profile = await ensureProfile({
-        id: userId,
-        first_name:
-          typeof claims.user_metadata === "object" && claims.user_metadata
-            ? ((claims.user_metadata as Record<string, unknown>)
-                .first_name as string) || null
-            : null,
-        last_name:
-          typeof claims.user_metadata === "object" && claims.user_metadata
-            ? ((claims.user_metadata as Record<string, unknown>)
-                .last_name as string) || null
-            : null,
-        phone:
-          typeof claims.user_metadata === "object" && claims.user_metadata
-            ? ((claims.user_metadata as Record<string, unknown>)
-                .phone as string) || null
-            : null,
-      });
-    }
-
-    return {
-      id: userId,
-      email,
-      first_name: profile.first_name,
-      last_name: profile.last_name,
-      phone: profile.phone,
-      role: profile.role,
-    };
+    claimsData = data as { claims: Record<string, unknown> };
   } catch {
+    // If getting claims throws an auth/cookie read error, treat as anonymous
     return null;
   }
+
+  const claims = claimsData.claims as Record<string, unknown>;
+  const userId = typeof claims.sub === "string" ? claims.sub : null;
+  const email = typeof claims.email === "string" ? claims.email : "";
+
+  if (!userId) return null;
+
+  // Once identity is verified, profile/database failures must THROW
+  // so transient outages are distinguished from anonymous users.
+  let profile = await getProfile(userId);
+  if (!profile) {
+    // Idempotently heal missing profile record
+    profile = await ensureProfile({
+      id: userId,
+      first_name:
+        typeof claims.user_metadata === "object" && claims.user_metadata
+          ? ((claims.user_metadata as Record<string, unknown>)
+              .first_name as string) || null
+          : null,
+      last_name:
+        typeof claims.user_metadata === "object" && claims.user_metadata
+          ? ((claims.user_metadata as Record<string, unknown>)
+              .last_name as string) || null
+          : null,
+      phone:
+        typeof claims.user_metadata === "object" && claims.user_metadata
+          ? ((claims.user_metadata as Record<string, unknown>)
+              .phone as string) || null
+          : null,
+    });
+  }
+
+  return {
+    id: userId,
+    email,
+    first_name: profile.first_name,
+    last_name: profile.last_name,
+    phone: profile.phone,
+    role: profile.role,
+  };
 }
 
 /**
  * Reconcile the customer session on the client.
+ * Returns stale: true when a verified session experiences a transient backend failure,
+ * allowing the client to preserve existing session state without flashing logged-out.
  */
 export async function syncSession(): Promise<{
   customer: AppUser | null;
@@ -87,8 +102,9 @@ export async function syncSession(): Promise<{
 }> {
   try {
     const customer = await getCustomer();
-    return { customer, refreshed: false };
+    return { customer, refreshed: false, stale: false };
   } catch {
+    // Session identity was verified but database / backend had a transient error
     return { customer: null, refreshed: false, stale: true };
   }
 }
@@ -142,11 +158,14 @@ export async function login(
       role: profile.role,
     };
 
-    return { success: true, user: appUser };
-  } catch {
+    return {
+      success: true,
+      user: appUser,
+    };
+  } catch (err) {
     return {
       success: false,
-      error: "Invalid email or password",
+      error: err instanceof Error ? err.message : "Login failed",
     };
   }
 }
@@ -155,6 +174,11 @@ export async function login(
  * Register a new customer account via Supabase Auth.
  * Server-side validates password confirmation and password length.
  * Only accepts harmless user metadata.
+ *
+ * Rules:
+ * - data.session exists (auto-confirmed) -> ensure verified profile, return user, requires_confirmation: false
+ * - data.session is null (confirmation required or existing-user obfuscation) -> DO NOT ensure profile,
+ *   DO NOT return user, return requires_confirmation: true.
  */
 export async function register(params: {
   email: string;
@@ -167,6 +191,7 @@ export async function register(params: {
 }): Promise<{
   success: boolean;
   user?: AppUser;
+  requires_confirmation?: boolean;
   error?: string;
 }> {
   if (params.password !== params.password_confirmation) {
@@ -221,30 +246,36 @@ export async function register(params: {
       };
     }
 
-    // If an active session was returned (e.g. email confirmation off/auto-confirm), ensure profile
-    let role: "customer" | "admin" = "customer";
-    if (data.session) {
-      const profile = await ensureProfile({
-        id: data.user.id,
-        first_name: params.first_name?.trim() || null,
-        last_name: params.last_name?.trim() || null,
-        phone: params.phone?.trim() || null,
-      });
-      role = profile.role;
+    // With email confirmation enabled (or on existing-user obfuscated response),
+    // data.session is null. This is NOT an authenticated user.
+    if (!data.session) {
+      return {
+        success: true,
+        requires_confirmation: true,
+      };
     }
+
+    // data.session exists -> verified authenticated session
+    const profile = await ensureProfile({
+      id: data.user.id,
+      first_name: params.first_name?.trim() || null,
+      last_name: params.last_name?.trim() || null,
+      phone: params.phone?.trim() || null,
+    });
 
     await clearAuthCookies();
     updateTag("customer");
 
     return {
       success: true,
+      requires_confirmation: false,
       user: {
         id: data.user.id,
         email: data.user.email || params.email.trim(),
-        first_name: params.first_name || null,
-        last_name: params.last_name || null,
-        phone: params.phone || null,
-        role,
+        first_name: profile.first_name,
+        last_name: profile.last_name,
+        phone: profile.phone,
+        role: profile.role,
       },
     };
   } catch (err) {
@@ -282,17 +313,67 @@ export async function logout(): Promise<void> {
 }
 
 /**
+ * Resolve a trusted server-side redirect URL for password reset.
+ * Rejects arbitrary external caller URLs (e.g. https://attacker.example/reset).
+ */
+async function resolveTrustedResetRedirect(
+  context?: { country?: string; locale?: string } | string,
+): Promise<string> {
+  let country = "us";
+  let locale = "en";
+
+  if (typeof context === "object" && context !== null) {
+    if (context.country && /^[a-z]{2}$/i.test(context.country)) {
+      country = context.country.toLowerCase();
+    }
+    if (context.locale && /^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/i.test(context.locale)) {
+      locale = context.locale.toLowerCase();
+    }
+  } else if (typeof context === "string") {
+    // If a relative path or base path was passed (e.g. "/us/en/account/reset-password" or "/us/en")
+    const match = context.match(/^\/([a-z]{2})\/([a-z]{2,3}(?:-[a-z0-9]{2,8})*)/i);
+    if (match) {
+      country = match[1].toLowerCase();
+      locale = match[2].toLowerCase();
+    }
+  }
+
+  // Derive origin strictly from trusted configuration or request context
+  let origin = getStoreUrl();
+  if (!origin) {
+    try {
+      const headerList = await headers();
+      const host = headerList.get("x-forwarded-host") || headerList.get("host");
+      const proto = headerList.get("x-forwarded-proto") || "https";
+      if (host) {
+        origin = `${proto}://${host}`;
+      }
+    } catch {
+      // Outside active request context
+    }
+  }
+
+  if (!origin) {
+    origin = "http://localhost:3001";
+  }
+
+  return `${origin.replace(/\/+$/, "")}/${country}/${locale}/account/reset-password`;
+}
+
+/**
  * Request a password reset email via Supabase Auth.
  * Returns a generic success response regardless of whether the email exists.
+ * Constructs the redirect URL on the server; never trusts caller-provided external origins.
  */
 export async function requestPasswordReset(
   email: string,
-  redirectUrl?: string,
+  context?: { country?: string; locale?: string } | string,
 ): Promise<{ success: boolean; message: string }> {
   try {
+    const redirectTo = await resolveTrustedResetRedirect(context);
     const supabase = await createClient();
     await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: redirectUrl,
+      redirectTo,
     });
   } catch {
     // Suppress error to avoid email enumeration
@@ -306,9 +387,9 @@ export async function requestPasswordReset(
 
 /**
  * Reset / update user password within an authenticated recovery session.
+ * Requires a verified Supabase session (auth.getClaims()) before updating password.
  */
 export async function resetPassword(
-  tokenOrUnused: string,
   password: string,
   passwordConfirmation: string,
 ): Promise<{ success: boolean; error?: string }> {
@@ -328,6 +409,17 @@ export async function resetPassword(
 
   try {
     const supabase = await createClient();
+
+    // Verify session identity before allowing password mutation
+    const { data: claimsData, error: claimsError } =
+      await supabase.auth.getClaims();
+    if (claimsError || !claimsData?.claims) {
+      return {
+        success: false,
+        error: "Unauthorized or expired password reset session",
+      };
+    }
+
     const { error } = await supabase.auth.updateUser({
       password,
     });
@@ -351,6 +443,8 @@ export async function resetPassword(
 
 /**
  * Update customer profile details.
+ * Reauthenticates with current_password when updating email address.
+ * Role remains strictly immutable.
  */
 export async function updateCustomer(data: {
   first_name?: string;
@@ -367,33 +461,49 @@ export async function updateCustomer(data: {
     }
 
     const userId = claimsData.claims.sub as string;
+    const currentEmail = (claimsData.claims.email as string) || "";
+    const requestedEmail = data.email?.trim();
+    const isEmailChanging = Boolean(requestedEmail && requestedEmail !== currentEmail);
 
-    // Update profile names in PostgreSQL
+    // If email is changing, reauthenticate with current_password before mutating anything
+    if (isEmailChanging) {
+      if (!data.current_password) {
+        throw new Error("Current password is required to change email address");
+      }
+
+      const { error: reauthError } = await supabase.auth.signInWithPassword({
+        email: currentEmail,
+        password: data.current_password,
+      });
+      if (reauthError) {
+        throw new Error("Invalid current password");
+      }
+
+      const { error: updateAuthError } = await supabase.auth.updateUser({
+        email: requestedEmail,
+      });
+      if (updateAuthError) {
+        throw new Error(updateAuthError.message);
+      }
+    }
+
+    // Update profile names in PostgreSQL (role cannot be changed by customer)
     const updatedProfile = await updateProfile(userId, {
       first_name: data.first_name,
       last_name: data.last_name,
     });
 
-    // Update email via Supabase Auth if provided and changed
-    if (data.email && data.email.trim() !== claimsData.claims.email) {
-      const { error: emailError } = await supabase.auth.updateUser({
-        email: data.email.trim(),
-      });
-      if (emailError) {
-        throw new Error(emailError.message);
-      }
-    }
-
     updateTag("customer");
     return {
       customer: {
         id: userId,
-        email: data.email?.trim() || (claimsData.claims.email as string),
+        // Authoritative email remains currentEmail until Supabase confirmation link is confirmed
+        email: currentEmail,
         first_name: updatedProfile.first_name,
         last_name: updatedProfile.last_name,
         phone: updatedProfile.phone,
         role: updatedProfile.role,
       },
     };
-  }, "Update failed");
+  }, "Failed to update customer");
 }

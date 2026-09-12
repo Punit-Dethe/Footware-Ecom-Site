@@ -130,13 +130,43 @@ describe("Spree locale middleware", () => {
     "/us/en/account/register",
     "/us/en/account/forgot-password",
     "/us/en/account/reset-password",
-  ])("keeps the public account route accessible: %s", async (pathname) => {
+  ])("keeps the public account route accessible and refreshes session: %s", async (pathname) => {
+    const response = await middleware(
+      new NextRequest(`https://store.example${pathname}`),
+    );
+
+    expect(response.headers.get("location")).toBeNull();
+    expect(mockVerifyProxySession).toHaveBeenCalled();
+  });
+
+  it.each([
+    "/us/en",
+    "/us/en/products",
+    "/us/en/products/running-shoes",
+    "/us/en/c/footwear",
+    "/us/en/search",
+    "/us/en/policies/terms-of-service",
+  ])("never invokes verifyProxySession on public catalog route: %s", async (pathname) => {
     const response = await middleware(
       new NextRequest(`https://store.example${pathname}`),
     );
 
     expect(response.headers.get("location")).toBeNull();
     expect(mockVerifyProxySession).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    "/us/en/checkout",
+    "/us/en/checkout/payment",
+    "/us/en/wholesale",
+    "/us/en/wholesale/orders",
+  ])("invokes verifyProxySession without anonymous redirect for: %s", async (pathname) => {
+    const response = await middleware(
+      new NextRequest(`https://store.example${pathname}`),
+    );
+
+    expect(response.headers.get("location")).toBeNull();
+    expect(mockVerifyProxySession).toHaveBeenCalled();
   });
 
   it("does NOT authorize a protected account request with legacy Spree cookies", async () => {
@@ -180,7 +210,7 @@ describe("Spree locale middleware", () => {
     expect(response.headers.get("location")).toBeNull();
   });
 
-  it("sets Cache-Control: private, no-cache when Supabase token refresh occurs", async () => {
+  it("sets Cache-Control: private, no-store when Supabase token refresh occurs", async () => {
     const request = new NextRequest(
       "https://store.example/us/en/account/orders",
     );
@@ -194,8 +224,7 @@ describe("Spree locale middleware", () => {
     const response = await middleware(request);
 
     expect(response.headers.get("location")).toBeNull();
-    expect(response.headers.get("Cache-Control")).toBe(
-      "private, no-cache, no-store, must-revalidate",
-    );
+    expect(response.headers.get("Cache-Control")).toBe("private, no-store");
   });
 });
+

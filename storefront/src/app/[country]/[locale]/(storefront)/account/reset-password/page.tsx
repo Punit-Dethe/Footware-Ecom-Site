@@ -2,7 +2,7 @@
 
 import { CircleAlert, CircleCheck, Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -53,7 +53,7 @@ export default function ResetPasswordPage() {
     setSubmitting(true);
 
     try {
-      const result = await resetPassword("", password, passwordConfirmation);
+      const result = await resetPassword(password, passwordConfirmation);
       if (result.success) {
         setSuccess(true);
       } else {

@@ -180,4 +180,96 @@ describe("AuthContext session sync", () => {
     expect(result.current.user?.role).toBe("customer");
     expect(result.current.user?.role).not.toBe("admin");
   });
+
+  it("preserves current authenticated user when syncSession returns stale: true on transient error", async () => {
+    // Initially authenticated
+    mockSyncSession.mockResolvedValueOnce({
+      customer: mockCustomer,
+      refreshed: false,
+      stale: false,
+    });
+
+    const { result } = renderHook(() => useAuth(), { wrapper });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.isAuthenticated).toBe(true);
+    expect(result.current.user?.email).toBe("test@example.com");
+
+    // Next sync encounters transient error (stale: true)
+    mockSyncSession.mockResolvedValueOnce({
+      customer: null,
+      refreshed: false,
+      stale: true,
+    });
+
+    await act(async () => {
+      await result.current.refreshUser();
+    });
+
+    // User is preserved, not logged out
+    expect(result.current.isAuthenticated).toBe(true);
+    expect(result.current.user?.email).toBe("test@example.com");
+  });
+
+  it("register without session (requires_confirmation) does NOT set user or isAuthenticated", async () => {
+    const { register: registerAction } = await import("@/lib/data/customer");
+    vi.mocked(registerAction).mockResolvedValue({
+      success: true,
+      requires_confirmation: true,
+    });
+
+    currentTestPathname = "/us/en/account/register";
+    mockSyncSession.mockResolvedValue({ customer: null, refreshed: false });
+
+    const { result } = renderHook(() => useAuth(), { wrapper });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    let regResult: unknown;
+    await act(async () => {
+      regResult = await result.current.register({
+        email: "unconfirmed@example.com",
+        password: "password123",
+        password_confirmation: "password123",
+      });
+    });
+
+    expect(regResult).toEqual({
+      success: true,
+      requires_confirmation: true,
+    });
+    expect(result.current.isAuthenticated).toBe(false);
+    expect(result.current.user).toBeNull();
+  });
+
+  it("register with session sets authenticated user immediately", async () => {
+    const { register: registerAction } = await import("@/lib/data/customer");
+    vi.mocked(registerAction).mockResolvedValue({
+      success: true,
+      requires_confirmation: false,
+      user: {
+        id: "new-user-id",
+        email: "confirmed@example.com",
+        first_name: "Confirmed",
+        last_name: "User",
+        role: "customer",
+      },
+    });
+
+    currentTestPathname = "/us/en/account/register";
+    mockSyncSession.mockResolvedValue({ customer: null, refreshed: false });
+
+    const { result } = renderHook(() => useAuth(), { wrapper });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.register({
+        email: "confirmed@example.com",
+        password: "password123",
+        password_confirmation: "password123",
+      });
+    });
+
+    expect(result.current.isAuthenticated).toBe(true);
+    expect(result.current.user?.email).toBe("confirmed@example.com");
+  });
 });
+

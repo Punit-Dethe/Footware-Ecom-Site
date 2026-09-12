@@ -4,7 +4,6 @@ import { Suspense } from "react";
 import { AuthenticatedAccountShell } from "@/components/account/AuthenticatedAccountShell";
 import { REQUEST_PATHNAME_HEADER, REQUEST_SEARCH_HEADER } from "@/i18n/routing";
 import { getCustomer } from "@/lib/data/customer";
-import { getAccessToken, getRefreshToken } from "@/lib/spree";
 import {
   buildAccountLoginHref,
   resolveAccountRedirect,
@@ -29,14 +28,10 @@ export async function AuthenticatedAccountLayoutContent({
   children,
   params,
 }: AuthenticatedAccountLayoutProps) {
-  const [{ country, locale }, requestHeaders, accessToken, refreshToken, customer] =
-    await Promise.all([
-      params,
-      headers(),
-      getAccessToken(),
-      getRefreshToken(),
-      getCustomer(),
-    ]);
+  const [{ country, locale }, requestHeaders] = await Promise.all([
+    params,
+    headers(),
+  ]);
 
   const basePath = `/${country}/${locale}`;
   const pathname = requestHeaders.get(REQUEST_PATHNAME_HEADER);
@@ -45,8 +40,12 @@ export async function AuthenticatedAccountLayoutContent({
   const returnTo = resolveAccountRedirect(requestedPath, basePath);
   const loginHref = buildAccountLoginHref(basePath, returnTo);
 
-  // Allow verified Supabase session or recoverable legacy credentials
-  if (!accessToken && !refreshToken && !customer) redirect(loginHref);
+  // If getCustomer() throws due to transient backend/DB outage while verified,
+  // it bubbles to the error boundary rather than misreporting as anonymous.
+  const customer = await getCustomer();
+
+  // Strictly require verified Supabase identity; legacy Spree cookies cannot authorize
+  if (!customer) redirect(loginHref);
 
   return (
     <AuthenticatedAccountShell loginHref={loginHref}>

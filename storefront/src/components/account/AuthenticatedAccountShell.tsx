@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useEffect } from "react";
+import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { AccountShell } from "./AccountShell";
 
@@ -35,20 +36,42 @@ interface AuthenticatedAccountShellProps {
 /**
  * The server layout rejects requests with no session credentials. This client
  * boundary verifies the remaining session before exposing account chrome and
- * preserves the existing refresh-token recovery flow.
+ * prevents false anonymous redirects during client SPA navigation from catalog routes.
  */
 export function AuthenticatedAccountShell({
   children,
   loginHref,
 }: AuthenticatedAccountShellProps) {
   const router = useRouter();
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading, refreshUser } = useAuth();
+  const [verifying, setVerifying] = useState(!isAuthenticated);
 
   useEffect(() => {
-    if (!loading && !isAuthenticated) router.replace(loginHref);
-  }, [isAuthenticated, loading, loginHref, router]);
+    let active = true;
+    if (!isAuthenticated) {
+      setVerifying(true);
+      if (typeof refreshUser === "function") {
+        refreshUser().finally(() => {
+          if (active) setVerifying(false);
+        });
+      } else {
+        setVerifying(false);
+      }
+    } else {
+      setVerifying(false);
+    }
+    return () => {
+      active = false;
+    };
+  }, [isAuthenticated, refreshUser]);
 
-  if (loading || !isAuthenticated) return <SessionFallback />;
+  useEffect(() => {
+    if (!loading && !verifying && !isAuthenticated) {
+      router.replace(loginHref);
+    }
+  }, [isAuthenticated, loading, verifying, loginHref, router]);
+
+  if (loading || verifying || !isAuthenticated) return <SessionFallback />;
 
   return <AccountShell>{children}</AccountShell>;
 }

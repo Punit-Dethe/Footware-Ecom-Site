@@ -41,6 +41,20 @@ const PUBLIC_ACCOUNT_PATHS = new Set([
   "/account/reset-password",
 ]);
 
+function isAuthConsumingRoute(pathname: string, localizedPrefix: string): boolean {
+  const localizedPath = pathname.slice(localizedPrefix.length);
+  const normalizedPath = localizedPath.replace(/\/+$/, "") || "/";
+
+  return (
+    normalizedPath === "/account" ||
+    normalizedPath.startsWith("/account/") ||
+    normalizedPath === "/checkout" ||
+    normalizedPath.startsWith("/checkout/") ||
+    normalizedPath === "/wholesale" ||
+    normalizedPath.startsWith("/wholesale/")
+  );
+}
+
 function isProtectedAccountPath(pathname: string, localizedPrefix: string) {
   const localizedPath = pathname.slice(localizedPrefix.length);
   const normalizedPath = localizedPath.replace(/\/+$/, "") || "/";
@@ -202,10 +216,17 @@ export function createSpreeMiddleware(
         clearLegacySpreeCookies(response, request);
       }
 
-      if (isProtectedAccountPath(pathname, canonicalPrefix)) {
-        // Authenticate strictly via Supabase getClaims(); never trust legacy cookies or cookie presence alone
+      if (isAuthConsumingRoute(pathname, canonicalPrefix)) {
+        // Run session verification/refresh for requests that actually consume authentication
         const authResult = await verifyProxySession(request, response);
-        if (!authResult.userId) {
+
+        // If a Supabase token refresh wrote cookies, make sure this auth response is not cached publicly
+        if (authResult.cookiesRefreshed) {
+          response.headers.set("Cache-Control", "private, no-store");
+        }
+
+        // Protected account children strictly require a verified user
+        if (isProtectedAccountPath(pathname, canonicalPrefix) && !authResult.userId) {
           const loginHref = buildAccountLoginHref(
             canonicalPrefix,
             `${pathname}${request.nextUrl.search}`,
@@ -216,14 +237,6 @@ export function createSpreeMiddleware(
           setLocaleCookies(redirectResponse, country, locale);
           clearLegacySpreeCookies(redirectResponse);
           return redirectResponse;
-        }
-
-        // If a Supabase token refresh wrote cookies, make sure this auth response is not cached publicly
-        if (authResult.cookiesRefreshed) {
-          response.headers.set(
-            "Cache-Control",
-            "private, no-cache, no-store, must-revalidate",
-          );
         }
       }
 

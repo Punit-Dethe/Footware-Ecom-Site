@@ -10,6 +10,7 @@ import {
   CheckoutSummary,
   useCheckout,
 } from "@/contexts/CheckoutContext";
+import { AuthRouteSync } from "@/components/auth/AuthRouteSync";
 import { POLICY_LINKS } from "@/lib/constants/policies";
 import { getStoreName } from "@/lib/store";
 import { extractBasePath } from "@/lib/utils/path";
@@ -152,6 +153,7 @@ export default function CheckoutLayout({ children }: CheckoutLayoutProps) {
   return (
     <CheckoutProvider>
       <Suspense fallback={null}>
+        <AuthRouteSync />
         <CheckoutLayoutContent>{children}</CheckoutLayoutContent>
       </Suspense>
     </CheckoutProvider>

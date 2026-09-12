@@ -117,8 +117,6 @@
     "failedToRemoveItem": "No se pudo eliminar este articulo de tu carrito. Por favor, intentalo de nuevo."
   },
   "products": {
-    "carouselPrev": "Productos anteriores",
-    "carouselNext": "Siguientes productos",
     "allProducts": "Todos los productos",
     "browseCollection": "Explora nuestra coleccion completa",
     "searchResultsFor": "Resultados de busqueda para \"{query}\"",

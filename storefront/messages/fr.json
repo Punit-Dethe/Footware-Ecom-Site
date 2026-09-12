@@ -117,8 +117,6 @@
     "failedToRemoveItem": "Impossible de retirer cet article de votre panier. Veuillez reessayer."
   },
   "products": {
-    "carouselPrev": "Produits précédents",
-    "carouselNext": "Produits suivants",
     "allProducts": "Tous les produits",
     "browseCollection": "Parcourez notre collection complete",
     "searchResultsFor": "Resultats de recherche pour \"{query}\"",

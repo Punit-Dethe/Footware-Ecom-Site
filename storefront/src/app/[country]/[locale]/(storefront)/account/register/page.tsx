@@ -1,6 +1,6 @@
 "use client";
 
-import { CircleAlert, Eye, EyeOff } from "lucide-react";
+import { CircleAlert, Eye, EyeOff, Mail } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -41,6 +41,7 @@ export default function RegisterPage() {
   const [error, setError] = useState<string | null>(null);
   const [policyConsent, setPolicyConsent] = useState(false);
   const [policyError, setPolicyError] = useState(false);
+  const [confirmationPending, setConfirmationPending] = useState(false);
 
   // Redirect if already authenticated
   // useEffect is needed here to prevent rendering issues.
@@ -88,7 +89,11 @@ export default function RegisterPage() {
         ...(lastName && { last_name: lastName }),
       });
       if (result.success) {
-        router.push(`${basePath}/account`);
+        if (result.requires_confirmation || !result.user) {
+          setConfirmationPending(true);
+        } else {
+          router.push(`${basePath}/account`);
+        }
       } else {
         setError(result.error || t("registrationFailed"));
       }
@@ -98,6 +103,34 @@ export default function RegisterPage() {
       setSubmitting(false);
     }
   };
+
+  if (confirmationPending) {
+    return (
+      <div className="max-w-md mx-auto px-4 sm:px-6 lg:px-8 py-16">
+        <Card>
+          <CardHeader className="text-center">
+            <div className="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-3">
+              <Mail className="w-6 h-6 text-primary" />
+            </div>
+            <CardTitle>Check your email</CardTitle>
+            <CardDescription>
+              We sent a confirmation link to{" "}
+              <strong className="text-foreground">{email}</strong>. Please check
+              your inbox and click the link to confirm your account and sign in.
+            </CardDescription>
+          </CardHeader>
+          <CardFooter className="justify-center">
+            <Link
+              href={`${basePath}/account`}
+              className="text-primary hover:text-primary/70 font-medium text-sm"
+            >
+              {t("signIn")}
+            </Link>
+          </CardFooter>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-md mx-auto px-4 sm:px-6 lg:px-8 py-16">

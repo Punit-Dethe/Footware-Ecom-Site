@@ -12,7 +12,7 @@ import {
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AccountShell } from "@/components/account/AccountShell";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -36,7 +36,27 @@ export default function AccountPage() {
   const searchParams = useSearchParams();
   const basePath = extractBasePath(pathname);
   const t = useTranslations("account");
-  const { login, isAuthenticated, loading: authLoading } = useAuth();
+  const { login, isAuthenticated, loading: authLoading, refreshUser } = useAuth();
+  const [verifying, setVerifying] = useState(!isAuthenticated);
+
+  useEffect(() => {
+    let active = true;
+    if (!isAuthenticated) {
+      setVerifying(true);
+      if (typeof refreshUser === "function") {
+        refreshUser().finally(() => {
+          if (active) setVerifying(false);
+        });
+      } else {
+        setVerifying(false);
+      }
+    } else {
+      setVerifying(false);
+    }
+    return () => {
+      active = false;
+    };
+  }, [isAuthenticated, refreshUser]);
 
   // Get redirect URL from query params (e.g., from checkout)
   const redirectUrl = resolveAccountRedirect(
@@ -67,8 +87,8 @@ export default function AccountPage() {
     setLoading(false);
   };
 
-  // Show loading state while auth is initializing
-  if (authLoading) {
+  // Show loading state while auth is initializing or verifying
+  if (authLoading || verifying) {
     return (
       <div className="max-w-md mx-auto px-4 sm:px-6 lg:px-8 py-16">
         <div className="animate-pulse space-y-4">

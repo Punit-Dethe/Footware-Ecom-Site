@@ -43,7 +43,12 @@ interface AuthContextType {
     last_name?: string;
     phone?: string;
     metadata?: Record<string, unknown>;
-  }) => Promise<{ success: boolean; user?: AppUser; error?: string }>;
+  }) => Promise<{
+    success: boolean;
+    user?: AppUser;
+    requires_confirmation?: boolean;
+    error?: string;
+  }>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   isAuthenticated: boolean;
@@ -88,7 +93,7 @@ function toUser(customer: User): User {
     last_name: customer.last_name,
     phone: customer.phone,
     // Role is strictly sourced from public.profiles.role; no email heuristics.
-    role: customer.role || "customer",
+    role: customer.role === "admin" ? "admin" : "customer",
   };
 }
 
@@ -104,6 +109,7 @@ export function AuthProvider({
   const router = useRouter();
 
   const refreshUser = useCallback(async () => {
+    setLoading(true);
     try {
       const { customer, refreshed, stale } = await syncSession();
       if (refreshed) {
@@ -113,6 +119,8 @@ export function AuthProvider({
       setUser(customer ? toUser(customer) : null);
     } catch {
       // Leave existing session untouched on unexpected error
+    } finally {
+      setLoading(false);
     }
   }, [router]);
 

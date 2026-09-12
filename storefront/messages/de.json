@@ -117,8 +117,6 @@
     "failedToRemoveItem": "Dieser Artikel konnte nicht aus Ihrem Warenkorb entfernt werden. Bitte versuchen Sie es erneut."
   },
   "products": {
-    "carouselPrev": "Vorherige Produkte",
-    "carouselNext": "Nächste Produkte",
     "allProducts": "Alle Produkte",
     "browseCollection": "Entdecken Sie unsere gesamte Kollektion",
     "searchResultsFor": "Suchergebnisse für \"{query}\"",
