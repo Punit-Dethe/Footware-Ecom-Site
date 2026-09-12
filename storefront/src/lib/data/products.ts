@@ -6,7 +6,7 @@ import {
   cacheTagSuffix,
   DEFAULT_SURFACE,
   getAccessToken,
-  getClientForSurface,
+  type getClientForSurface,
   getLocaleOptions,
   type Surface,
 } from "@/lib/spree";
@@ -38,7 +38,7 @@ export async function cachedListProducts(
 ) {
   "use cache: remote";
   cacheLife("tenMinutes");
-  cacheTag(`products${cacheTagSuffix(surface)}`);
+  cacheTag("catalog-public", `products${cacheTagSuffix(surface)}`);
 
   const raw = (params || {}) as Record<string, any>;
   const rawFilter = (raw.filter || {}) as Record<string, any>;
@@ -69,16 +69,23 @@ export async function cachedListProducts(
       : typeof rawFilter.category_id === "string"
       ? rawFilter.category_id
       : typeof raw["filter[category_id]"] === "string"
-      ? raw["filter[category_id]"]
+      ? (raw["filter[category_id]"] as string)
       : typeof raw["q[in_category]"] === "string"
-      ? raw["q[in_category]"]
+      ? (raw["q[in_category]"] as string)
       : typeof raw["q[category_id_eq]"] === "string"
       ? raw["q[category_id_eq]"]
       : undefined;
 
   const sort = typeof raw.sort === "string" ? raw.sort : undefined;
 
-  const result = queryProducts({ page, limit, offset, q, in_category, sort });
+  const result = await queryProducts({
+    page,
+    limit,
+    offset,
+    q,
+    in_category,
+    sort,
+  });
   return result as unknown as ReturnType<
     ReturnType<typeof getClientForSurface>["products"]["list"]
   >;
@@ -94,14 +101,7 @@ export async function getProducts(
 }
 
 /**
- * Persistent cached product detail fetch. Cache key is derived from:
- *
- * - slugOrId, expand: identify the product and response shape
- * - locale/country: determines language and market-specific pricing
- * - surface: DTC vs wholesale — see cachedListProducts
- * - userToken: per-user cache segmentation (separate arg, NOT passed to
- *   SDK). Authenticated users may see different prices (B2B, loyalty).
- *   Guest users pass undefined, so all guests share one entry.
+ * Cached single product fetch by slug.
  */
 export async function cachedGetProduct(
   slugOrId: string,
@@ -113,10 +113,11 @@ export async function cachedGetProduct(
   "use cache: remote";
   cacheLife("tenMinutes");
   cacheTag(
+    "catalog-public",
     `products${cacheTagSuffix(surface)}`,
     `product:${slugOrId}${cacheTagSuffix(surface)}`,
   );
-  const local = getProductBySlugOrId(slugOrId);
+  const local = await getProductBySlugOrId(slugOrId);
   if (local) {
     return local as unknown as ReturnType<
       ReturnType<typeof getClientForSurface>["products"]["get"]
@@ -141,7 +142,7 @@ export async function getProduct(
   );
 }
 
-async function cachedGetProductFilters(
+export async function cachedGetProductFilters(
   params: Record<string, unknown> | undefined,
   _options: { locale?: string; country?: string },
   surface: Surface,
@@ -149,7 +150,7 @@ async function cachedGetProductFilters(
 ) {
   "use cache: remote";
   cacheLife("tenMinutes");
-  cacheTag(`product-filters${cacheTagSuffix(surface)}`);
+  cacheTag("catalog-public", `product-filters${cacheTagSuffix(surface)}`);
 
   const in_category =
     typeof params?.in_category === "string"
@@ -162,7 +163,7 @@ async function cachedGetProductFilters(
       ? (params["q[in_category]"] as string)
       : undefined;
 
-  return getCatalogFilters({ in_category }) as unknown as ReturnType<
+  return (await getCatalogFilters({ in_category })) as unknown as ReturnType<
     ReturnType<typeof getClientForSurface>["products"]["filters"]
   >;
 }

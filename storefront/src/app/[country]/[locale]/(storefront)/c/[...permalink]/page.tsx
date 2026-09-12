@@ -21,14 +21,15 @@ interface CategoryPageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
-import { CATEGORIES } from "@/lib/catalog/catalog-repository";
+import { listCatalogCategories } from "@/lib/catalog/catalog-repository";
 import { getDefaultCountry, getDefaultLocale } from "@/lib/store";
 
-export function generateStaticParams() {
+export async function generateStaticParams() {
   const country = getDefaultCountry();
   const locale = getDefaultLocale();
+  const categories = await listCatalogCategories();
 
-  return CATEGORIES.map((c) => ({
+  return categories.map((c) => ({
     country,
     locale,
     permalink: c.permalink.split("/"),

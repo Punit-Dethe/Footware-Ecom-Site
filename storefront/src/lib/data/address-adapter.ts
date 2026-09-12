@@ -1,5 +1,5 @@
 import type { Address } from "@spree/sdk";
-import { COUNTRIES } from "@/lib/catalog/catalog-repository";
+import { COUNTRIES } from "@/lib/catalog/store-config";
 import type { AddressRow } from "@/lib/db/address";
 
 /**

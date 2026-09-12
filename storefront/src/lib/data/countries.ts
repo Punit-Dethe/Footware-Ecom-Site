@@ -2,7 +2,7 @@
 
 import type { Country } from "@spree/sdk";
 import { cacheLife, cacheTag } from "next/cache";
-import { COUNTRIES } from "@/lib/catalog/catalog-repository";
+import { COUNTRIES } from "@/lib/catalog/store-config";
 import { getClient, getLocaleOptions } from "@/lib/spree";
 
 export async function getCountries() {

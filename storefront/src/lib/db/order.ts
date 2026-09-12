@@ -1,9 +1,21 @@
 import "server-only";
 
 import crypto from "node:crypto";
-import { findCatalogVariantBySku } from "@/lib/catalog/catalog-repository";
+import manifestData from "@/lib/media/manifest.json";
 import type { CartSurface } from "./cart";
 import { query, transaction } from "./index";
+
+const typedManifest = manifestData as Record<
+  string,
+  {
+    slug: string;
+    hash: string;
+    dominantColor: string;
+    lqip: string;
+    mainUrl: string;
+    variants: Record<string, { avif: string; webp: string }>;
+  }
+>;
 
 export type OrderStatus = "placed" | "cancelled";
 
@@ -176,12 +188,30 @@ export async function placeOrderFromCart(params: {
       throw new Error(`Cannot place order: cart status is '${cart.status}', must be 'active'`);
     }
 
-    // 4. Load cart items
+    // 4. Load cart items joined directly to variants and products inside the transaction
     const cartItemsRes = await client.query<Record<string, unknown>>(
-      `SELECT id, cart_id, variant_id, variant_sku, quantity
-       FROM public.cart_items
-       WHERE cart_id = $1
-       FOR UPDATE;`,
+      `SELECT
+         ci.id AS cart_item_id,
+         ci.cart_id,
+         ci.variant_id,
+         ci.variant_sku,
+         ci.quantity,
+         v.id AS db_variant_id,
+         v.sku AS db_variant_sku,
+         v.size_option,
+         v.price_in_cents,
+         v.active AS variant_active,
+         v.quantity_on_hand,
+         v.backorderable,
+         p.id AS product_id,
+         p.name AS product_name,
+         p.slug AS product_slug,
+         p.status AS product_status
+       FROM public.cart_items ci
+       JOIN public.variants v ON v.id = ci.variant_id
+       JOIN public.products p ON p.id = v.product_id
+       WHERE ci.cart_id = $1
+       FOR UPDATE OF ci;`,
       [cartId],
     );
 
@@ -189,7 +219,7 @@ export async function placeOrderFromCart(params: {
       throw new Error("Cannot place order for an empty cart");
     }
 
-    // 5. Snapshot items and calculate totals from authoritative static catalog
+    // 5. Snapshot items and calculate totals directly from PostgreSQL catalog rows inside transaction
     let subtotalInCents = 0;
     const snapshottedItems: Array<{
       variant_id: string | null;
@@ -202,35 +232,53 @@ export async function placeOrderFromCart(params: {
       thumbnail_url: string | null;
     }> = [];
 
-    for (const item of cartItemsRes.rows) {
-      const sku = item.variant_sku as string;
-      const quantity = Number(item.quantity);
-      const match = findCatalogVariantBySku(sku);
+    for (const row of cartItemsRes.rows) {
+      const dbSku = row.db_variant_sku as string;
+      const recordedSku = row.variant_sku as string;
+      const quantity = Number(row.quantity);
 
-      if (!match) {
-        throw new Error(`Cannot place order: unknown catalog variant SKU '${sku}'`);
+      if (!row.db_variant_id || !row.product_id) {
+        throw new Error(`Cannot place order: unknown catalog variant SKU '${recordedSku || row.variant_id}'`);
       }
 
-      const priceInCents = match.variant.price.amount_in_cents;
+      if (recordedSku && dbSku !== recordedSku) {
+        throw new Error(
+          `Cannot place order: cart item variant_id '${row.variant_id}' has SKU '${dbSku}', but cart item recorded SKU '${recordedSku}'`,
+        );
+      }
+
+      const sku = dbSku;
+
+      if (row.product_status !== "active" || !row.variant_active) {
+        throw new Error(`Cannot place order: variant '${sku}' is no longer active`);
+      }
+
+      const qoh = Number(row.quantity_on_hand || 0);
+      const backorderable = Boolean(row.backorderable);
+      if (qoh <= 0 && !backorderable) {
+        throw new Error(`Cannot place order: variant '${sku}' is out of stock`);
+      }
+
+      const priceInCents = Number(row.price_in_cents);
       const lineTotalInCents = priceInCents * quantity;
       subtotalInCents += lineTotalInCents;
 
-      const rawVariantId = match.variant.id;
-      const validVariantId =
-        typeof rawVariantId === "string" && UUID_REGEX.test(rawVariantId)
-          ? rawVariantId
-          : null;
+      const slug = row.product_slug as string;
+      const manifest = typedManifest[slug];
+      const thumbUrl =
+        manifest?.variants?.["320"]?.webp ||
+        manifest?.mainUrl ||
+        `/products/${slug}/card-lg-640.webp`;
 
       snapshottedItems.push({
-        variant_id: validVariantId,
-        product_name: match.product.name,
+        variant_id: row.db_variant_id as string,
+        product_name: row.product_name as string,
         sku,
-        size_option: match.variant.options_text || "Standard",
+        size_option: row.size_option ? `Size: UK/India ${row.size_option}` : "Standard",
         price_in_cents: priceInCents,
         quantity,
         total_in_cents: lineTotalInCents,
-        thumbnail_url:
-          match.product.thumbnail_url || match.product.primary_media?.url || null,
+        thumbnail_url: thumbUrl,
       });
     }
 

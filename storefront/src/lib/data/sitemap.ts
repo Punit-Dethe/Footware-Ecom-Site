@@ -4,10 +4,10 @@ import type { Category, Media, Product } from "@spree/sdk";
 import { cacheLife, cacheTag } from "next/cache";
 import { getClient } from "@/lib/spree";
 import {
-  CATEGORIES,
-  MARKETS,
+  listCatalogCategories,
   queryProducts,
 } from "@/lib/catalog/catalog-repository";
+import { MARKETS } from "@/lib/catalog/store-config";
 
 interface LocaleOptions {
   locale: string;
@@ -56,7 +56,13 @@ export async function getSitemapResourceCount(
 
     return Math.max(0, response.meta.count);
   } catch (_error) {
-    return resource === "products" ? 38 : 2;
+    if (resource === "products") {
+      const res = await queryProducts({ limit: 1 });
+      return res.meta.total_count;
+    } else {
+      const cats = await listCatalogCategories();
+      return cats.length;
+    }
   }
 }
 
@@ -76,7 +82,8 @@ export async function getSitemapProductPage(
     );
     return response.data as SitemapProduct[];
   } catch (_error) {
-    return queryProducts({ page, limit }).data as unknown as SitemapProduct[];
+    const res = await queryProducts({ page, limit });
+    return res.data as unknown as SitemapProduct[];
   }
 }
 
@@ -96,6 +103,7 @@ export async function getSitemapCategoryPage(
     );
     return response.data;
   } catch (_error) {
-    return CATEGORIES as unknown as SitemapCategory[];
+    const cats = await listCatalogCategories();
+    return cats as unknown as SitemapCategory[];
   }
 }

@@ -2,24 +2,25 @@
 
 import type { CategoryListParams, ProductListParams } from "@spree/sdk";
 import { cacheLife, cacheTag } from "next/cache";
-import { getAccessToken, getClient, getLocaleOptions } from "@/lib/spree";
+import { getAccessToken, type getClient, getLocaleOptions } from "@/lib/spree";
 
 import {
-  CATEGORIES,
   getCategoryByPermalinkOrId,
+  listCatalogCategories,
   queryProducts,
 } from "@/lib/catalog/catalog-repository";
 
-async function cachedListCategories(
+export async function cachedListCategories(
   _params: CategoryListParams | undefined,
   _options: { locale?: string; country?: string },
 ) {
   "use cache: remote";
   cacheLife("hours");
-  cacheTag("categories");
+  cacheTag("categories", "catalog-public");
+  const categories = await listCatalogCategories();
   return {
-    data: CATEGORIES,
-    meta: { count: CATEGORIES.length, total_count: CATEGORIES.length },
+    data: categories,
+    meta: { count: categories.length, total_count: categories.length },
   } as unknown as ReturnType<ReturnType<typeof getClient>["categories"]["list"]>;
 }
 
@@ -38,8 +39,8 @@ export async function cachedGetCategory(
 ) {
   "use cache: remote";
   cacheLife("tenMinutes");
-  cacheTag("category");
-  const local = getCategoryByPermalinkOrId(idOrPermalink);
+  cacheTag("catalog-public", "category");
+  const local = await getCategoryByPermalinkOrId(idOrPermalink);
   if (local) {
     return local as unknown as ReturnType<
       ReturnType<typeof getClient>["categories"]["get"]
@@ -61,7 +62,7 @@ export async function getCategory(
  * all function arguments (categoryId, params, locale, country, userToken).
  * Guest users pass undefined so the cache entry is shared.
  */
-async function cachedListCategoryProducts(
+export async function cachedListCategoryProducts(
   categoryId: string,
   params: ProductListParams | undefined,
   _options: { locale?: string; country?: string },
@@ -69,7 +70,7 @@ async function cachedListCategoryProducts(
 ) {
   "use cache: remote";
   cacheLife("tenMinutes");
-  cacheTag("products", `category-products:${categoryId}`);
+  cacheTag("catalog-public", "products", `category-products:${categoryId}`);
 
   const raw = (params || {}) as Record<string, any>;
   const page = Number(raw.page) || 1;
@@ -85,7 +86,7 @@ async function cachedListCategoryProducts(
       : undefined;
   const sort = typeof raw.sort === "string" ? raw.sort : undefined;
 
-  const result = queryProducts({
+  const result = await queryProducts({
     in_category: categoryId,
     page,
     limit,

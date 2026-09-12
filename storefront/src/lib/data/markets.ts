@@ -2,8 +2,8 @@
 
 import type { Country, Market } from "@spree/sdk";
 import { cacheLife, cacheTag } from "next/cache";
-import { COUNTRIES, MARKETS } from "@/lib/catalog/catalog-repository";
-import { getClient, getLocaleOptions } from "@/lib/spree";
+import { COUNTRIES, MARKETS } from "@/lib/catalog/store-config";
+import { getLocaleOptions } from "@/lib/spree";
 
 async function cachedListMarkets(_options?: {
   locale?: string;

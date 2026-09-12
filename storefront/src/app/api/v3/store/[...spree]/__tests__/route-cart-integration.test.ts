@@ -32,25 +32,41 @@ const mockDbCart = vi.hoisted(() => ({
   findActiveUserCart: vi.fn().mockResolvedValue(null),
   findCartById: vi.fn(async (cartId: string) => mockCarts.get(cartId) || null),
   loadCartItems: vi.fn(async (cartId: string) => mockItems.get(cartId) || []),
-  addOrIncrementCartItem: vi.fn(async (cartId: string, sku: string, quantity: number) => {
-    const items = mockItems.get(cartId) || [];
-    const existing = items.find((i) => i.variant_sku === sku);
-    if (existing) {
-      existing.quantity += quantity;
-      return existing;
-    }
-    const newItem = {
-      id: `item-${Date.now()}`,
-      cart_id: cartId,
-      variant_sku: sku,
-      quantity,
-      unit_price: "99.00",
-      created_at: new Date().toISOString(),
-    };
-    items.push(newItem);
-    mockItems.set(cartId, items);
-    return newItem;
-  }),
+  addOrIncrementCartItem: vi.fn(
+    async (
+      cartId: string,
+      variantIdOrSku: string,
+      skuOrQty: string | number,
+      maybeQty?: number,
+    ) => {
+      const sku = typeof skuOrQty === "string" ? skuOrQty : variantIdOrSku;
+      const variantId = typeof skuOrQty === "string" ? variantIdOrSku : "test-var-id";
+      const quantity =
+        typeof maybeQty === "number"
+          ? maybeQty
+          : typeof skuOrQty === "number"
+            ? skuOrQty
+            : 1;
+      const items = mockItems.get(cartId) || [];
+      const existing = items.find((i) => i.variant_sku === sku);
+      if (existing) {
+        existing.quantity += quantity;
+        return existing;
+      }
+      const newItem = {
+        id: `item-${Date.now()}`,
+        cart_id: cartId,
+        variant_id: variantId,
+        variant_sku: sku,
+        quantity,
+        unit_price: "99.00",
+        created_at: new Date().toISOString(),
+      };
+      items.push(newItem);
+      mockItems.set(cartId, items);
+      return newItem;
+    },
+  ),
   updateCartItemQuantity: vi.fn(async (cartId: string, lineItemId: string, quantity: number) => {
     const items = mockItems.get(cartId) || [];
     const item = items.find((i) => i.id === lineItemId);
@@ -74,6 +90,92 @@ const mockDbCart = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/db/cart", () => mockDbCart);
+
+import {
+  EXPECTED_CATEGORIES,
+  EXPECTED_PRODUCTS,
+} from "@/lib/catalog/__tests__/catalog-parity-fixture";
+
+vi.mock("@/lib/db/catalog", () => ({
+  getVariantByIdOrSku: vi.fn(async (idOrSku: string) => {
+    for (const p of EXPECTED_PRODUCTS) {
+      const v = p.variants.find(
+        (vItem) => vItem.id === idOrSku || vItem.sku === idOrSku,
+      );
+      if (v) {
+        return {
+          id: v.id,
+          product_id: p.id,
+          sku: v.sku,
+          size_option: v.options_text.replace(/\D+/g, "") || "8",
+          price_in_cents: v.price.amount_in_cents,
+          compare_at_price_in_cents: v.price.compare_at_amount_in_cents ?? null,
+          currency: v.price.currency || "USD",
+          quantity_on_hand: 0,
+          backorderable: true,
+          position: 1,
+          is_default: v.is_master,
+          active: true,
+          product_name: p.name,
+          product_slug: p.slug,
+          product_status: "active",
+        };
+      }
+    }
+    return null;
+  }),
+  getVariantsByIdsOrSkus: vi.fn(async () => []),
+  loadPublicCatalogRows: vi.fn(async () => ({
+    categories: (EXPECTED_CATEGORIES as unknown as any[]).map((c) => ({
+      id: c.id,
+      name: c.name,
+      slug: c.slug || c.permalink.replace("categories/", ""),
+      permalink: c.permalink,
+      description: c.description || "",
+      parent_id: null,
+      position: 1,
+    })),
+    products: (EXPECTED_PRODUCTS as unknown as any[]).map((p) => ({
+      id: p.id,
+      name: p.name,
+      slug: p.slug,
+      sku: p.sku || `SKU-${p.slug}`,
+      description: p.description || "",
+      description_html: p.description_html || "",
+      status: "active" as const,
+      meta_title: p.meta_title || null,
+      meta_description: p.meta_description || null,
+      meta_keywords: p.meta_keywords || null,
+      created_at: new Date(),
+      updated_at: new Date(),
+    })),
+    variants: (EXPECTED_PRODUCTS as unknown as any[]).flatMap((p) =>
+      p.variants.map((v: any) => ({
+        id: v.id,
+        product_id: p.id,
+        sku: v.sku,
+        size_option: v.options_text?.replace(/\D+/g, "") || "8",
+        price_in_cents: v.price.amount_in_cents,
+        compare_at_price_in_cents: v.price.compare_at_amount_in_cents ?? null,
+        currency: v.price.currency || "USD",
+        quantity_on_hand: 0,
+        backorderable: true,
+        position: 1,
+        is_default: v.is_master,
+        active: true,
+        created_at: new Date(),
+        updated_at: new Date(),
+      })),
+    ),
+    productCategories: (EXPECTED_PRODUCTS as unknown as any[]).flatMap((p) =>
+      p.categories.map((c: any) => ({
+        product_id: p.id,
+        category_id: c.id,
+      })),
+    ),
+  })),
+  listActiveProductSlugs: vi.fn(async () => (EXPECTED_PRODUCTS as unknown as any[]).map((p) => p.slug)),
+}));
 
 // Track cookie operations
 const cookieJar = new Map<string, { value: string; options?: any }>();

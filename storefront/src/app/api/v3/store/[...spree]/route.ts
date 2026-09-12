@@ -1,15 +1,16 @@
 import { type NextRequest, NextResponse } from "next/server";
 import {
-  CATEGORIES,
-  COUNTRIES,
-  MARKETS,
-  POLICIES,
   getCatalogFilters,
   getCategoryByPermalinkOrId,
   getProductBySlugOrId,
+  listCatalogCategories,
   queryProducts,
 } from "@/lib/catalog/catalog-repository";
-
+import {
+  COUNTRIES,
+  MARKETS,
+  POLICIES,
+} from "@/lib/catalog/store-config";
 
 import {
   addToCart,
@@ -38,7 +39,7 @@ export async function GET(
       "";
     const sort = searchParams.get("sort") || "";
 
-    const result = queryProducts({ page, limit, q, in_category, sort });
+    const result = await queryProducts({ page, limit, q, in_category, sort });
     return NextResponse.json(result, {
       headers: {
         "Cache-Control":
@@ -53,7 +54,7 @@ export async function GET(
       searchParams.get("in_category") ||
       searchParams.get("filter[category_id]") ||
       "";
-    const filters = getCatalogFilters({ in_category });
+    const filters = await getCatalogFilters({ in_category });
     return NextResponse.json(filters, {
       headers: {
         "Cache-Control":
@@ -65,7 +66,7 @@ export async function GET(
   // 3. Single Product: GET /api/v3/store/products/:slugOrId
   if (path.startsWith("products/")) {
     const slugOrId = path.replace(/^products\//, "");
-    const product = getProductBySlugOrId(slugOrId);
+    const product = await getProductBySlugOrId(slugOrId);
     if (!product) {
       return NextResponse.json({ error: "Product not found" }, { status: 404 });
     }
@@ -79,10 +80,11 @@ export async function GET(
 
   // 4. Categories List: GET /api/v3/store/categories
   if (path === "categories") {
+    const categories = await listCatalogCategories();
     return NextResponse.json(
       {
-        data: CATEGORIES,
-        meta: { count: CATEGORIES.length, total_count: CATEGORIES.length },
+        data: categories,
+        meta: { count: categories.length, total_count: categories.length },
       },
       {
         headers: {
@@ -96,7 +98,7 @@ export async function GET(
   // 5. Single Category: GET /api/v3/store/categories/:permalinkOrId
   if (path.startsWith("categories/")) {
     const permalinkOrId = path.replace(/^categories\//, "");
-    const category = getCategoryByPermalinkOrId(permalinkOrId);
+    const category = await getCategoryByPermalinkOrId(permalinkOrId);
     if (!category) {
       return NextResponse.json(
         { error: "Category not found" },
