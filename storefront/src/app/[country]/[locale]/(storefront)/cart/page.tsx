@@ -1,12 +1,9 @@
-"use client";
-
+import type { Metadata } from "next";
 import type { LineItem } from "@spree/sdk";
 import { ShoppingBag } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useEffect, useRef, useState } from "react";
 import { QuantityPickerField } from "@/components/cart/QuantityPickerField";
 import { Button } from "@/components/ui/button";
 import { ProductImage } from "@/components/ui/product-image";
@@ -22,27 +19,26 @@ const ExpressCheckoutButton = dynamic(
   { ssr: false },
 );
 
-export default function CartPage() {
+export const metadata: Metadata = {
+  title: "Shopping Cart - Footware Store",
+  description: "Review and manage your shopping cart at Footware Store. View items, update quantities, and proceed to checkout to complete your purchase.",
+  openGraph: {
+    title: "Shopping Cart - Footware Store",
+    description: "Review and manage your shopping cart at Footware Store.",
+    type: "website",
+  },
+};
+
+interface CartPageProps {
+  params: Promise<{ country: string; locale: string }>;
+}
+
+function CartPageContent() {
   const { cart, loading, updating, updateItem, removeItem } = useCart();
-  const [expressProcessing, setExpressProcessing] = useState(false);
-  const pathname = usePathname();
+  const pathname = typeof window !== "undefined" ? window.location.pathname : "";
   const basePath = extractBasePath(pathname);
-  const viewCartFiredRef = useRef(false);
   const t = useTranslations("cart");
   const tc = useTranslations("common");
-
-  // Track view_cart when cart loads with items
-  useEffect(() => {
-    if (
-      !loading &&
-      cart &&
-      cart.total_quantity > 0 &&
-      !viewCartFiredRef.current
-    ) {
-      trackViewCart(cart);
-      viewCartFiredRef.current = true;
-    }
-  }, [cart, loading]);
 
   const handleRemove = async (item: LineItem) => {
     await removeItem(item.id);
@@ -53,7 +49,7 @@ export default function CartPage() {
 
   if (loading) {
     return (
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8  py-8">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="animate-pulse">
           <div className="h-8 bg-gray-200 rounded w-32 mb-8"></div>
           <div className="space-y-4">
@@ -68,11 +64,12 @@ export default function CartPage() {
 
   if (!cart?.items || cart.items.length === 0) {
     return (
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8  py-16">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-16">
         <div className="text-center">
           <ShoppingBag
             className="w-24 h-24 text-gray-300 mx-auto"
             strokeWidth={1}
+            aria-hidden="true"
           />
           <h1 className="mt-4 text-2xl font-bold text-gray-900">
             {t("emptyCart")}
@@ -91,17 +88,17 @@ export default function CartPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 sm:px-6 lg:px-8  py-8">
+    <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <h1 className="text-3xl font-bold text-gray-900 mb-8">
         {t("shoppingCart")}
       </h1>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Cart Items */}
-        <div className="lg:col-span-2">
+        <section className="lg:col-span-2" aria-label="Shopping cart items">
           <div className="bg-white rounded-xl border border-gray-200 divide-y">
             {cart.items.map((item) => (
-              <div key={item.id} className="p-6 flex gap-6">
+              <article key={item.id} className="p-6 flex gap-6">
                 {/* Image */}
                 <div className="relative w-24 h-24 bg-gray-100 rounded-xl overflow-hidden flex-shrink-0">
                   <ProductImage
@@ -115,9 +112,9 @@ export default function CartPage() {
 
                 {/* Details */}
                 <div className="flex-1 min-w-0">
-                  <h3 className="text-lg font-medium text-gray-900 truncate">
+                  <h2 className="text-lg font-medium text-gray-900 truncate">
                     {item.name}
-                  </h3>
+                  </h2>
                   {item.options_text && (
                     <p className="mt-1 text-sm text-gray-500">
                       {item.options_text}
@@ -147,19 +144,19 @@ export default function CartPage() {
                     {tc("remove")}
                   </Button>
                 </div>
-              </div>
+              </article>
             ))}
           </div>
-        </div>
+        </section>
 
         {/* Order Summary */}
-        <div className="lg:col-span-1">
+        <aside className="lg:col-span-1" aria-label="Order summary">
           <div className="bg-white rounded-xl border border-gray-200 p-6 sticky top-24">
-            <h2 className="text-lg font-medium text-gray-900">
+            <h2 className="text-lg font-bold text-gray-900 mb-6">
               {tc("orderSummary")}
             </h2>
 
-            <dl className="mt-6 space-y-4">
+            <dl className="space-y-4">
               <div className="flex justify-between">
                 <dt className="text-gray-500">{tc("subtotal")}</dt>
                 <dd className="text-gray-900">{cart.display_item_total}</dd>
@@ -185,7 +182,7 @@ export default function CartPage() {
                 </div>
               )}
               <div className="border-t pt-4 flex justify-between">
-                <dt className="text-lg font-medium text-gray-900">
+                <dt className="text-lg font-bold text-gray-900">
                   {tc("total")}
                 </dt>
                 <dd className="text-lg font-bold text-gray-900">
@@ -210,7 +207,7 @@ export default function CartPage() {
                 cart.amount_due !== cart.total &&
                 parseFloat(cart.amount_due) > 0 && (
                   <div className="border-t pt-4 flex justify-between">
-                    <dt className="text-lg font-medium text-gray-900">
+                    <dt className="text-lg font-bold text-gray-900">
                       {t("amountDue")}
                     </dt>
                     <dd className="text-lg font-bold text-gray-900">
@@ -220,33 +217,38 @@ export default function CartPage() {
                 )}
             </dl>
 
-            <div className="mt-6 space-y-3">
+            <nav className="mt-6 space-y-3">
               {parseFloat(cart.total ?? "0") > 0 && (
                 <ExpressCheckoutButton
                   cart={cart}
                   basePath={basePath}
                   onComplete={() => {}}
-                  onProcessingChange={setExpressProcessing}
+                  onProcessingChange={() => {}}
                 />
               )}
-              {!expressProcessing && (
-                <>
-                  <Button size="lg" asChild className="w-full">
-                    <Link href={`${basePath}/checkout/${cart.id}`}>
-                      {t("proceedToCheckout")}
-                    </Link>
-                  </Button>
-                  <Button variant="link" asChild className="w-full">
-                    <Link href={`${basePath}/products`}>
-                      {tc("continueShopping")}
-                    </Link>
-                  </Button>
-                </>
-              )}
-            </div>
+              <div>
+                <Button size="lg" asChild className="w-full">
+                  <Link href={`${basePath}/checkout/${cart.id}`}>
+                    {t("proceedToCheckout")}
+                  </Link>
+                </Button>
+              </div>
+              <div>
+                <Button variant="link" asChild className="w-full">
+                  <Link href={`${basePath}/products`}>
+                    {tc("continueShopping")}
+                  </Link>
+                </Button>
+              </div>
+            </nav>
           </div>
-        </div>
+        </aside>
       </div>
     </div>
   );
+}
+
+export default async function CartPage({ params }: CartPageProps) {
+  await params;
+  return <CartPageContent />;
 }
