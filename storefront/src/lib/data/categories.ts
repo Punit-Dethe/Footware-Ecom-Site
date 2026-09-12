@@ -2,11 +2,11 @@
 
 import type { CategoryListParams, ProductListParams } from "@spree/sdk";
 import { cacheLife, cacheTag } from "next/cache";
-import { getAccessToken, getClient, getLocaleOptions } from "@/lib/spree";
+import { getAccessToken, type getClient, getLocaleOptions } from "@/lib/spree";
 
 import {
-  CATEGORIES,
   getCategoryByPermalinkOrId,
+  listCatalogCategories,
   queryProducts,
 } from "@/lib/catalog/catalog-repository";
 
@@ -16,10 +16,11 @@ async function cachedListCategories(
 ) {
   "use cache: remote";
   cacheLife("hours");
-  cacheTag("categories");
+  cacheTag("categories", "catalog-public");
+  const categories = await listCatalogCategories();
   return {
-    data: CATEGORIES,
-    meta: { count: CATEGORIES.length, total_count: CATEGORIES.length },
+    data: categories,
+    meta: { count: categories.length, total_count: categories.length },
   } as unknown as ReturnType<ReturnType<typeof getClient>["categories"]["list"]>;
 }
 
@@ -39,7 +40,7 @@ export async function cachedGetCategory(
   "use cache: remote";
   cacheLife("tenMinutes");
   cacheTag("category");
-  const local = getCategoryByPermalinkOrId(idOrPermalink);
+  const local = await getCategoryByPermalinkOrId(idOrPermalink);
   if (local) {
     return local as unknown as ReturnType<
       ReturnType<typeof getClient>["categories"]["get"]
@@ -85,7 +86,7 @@ async function cachedListCategoryProducts(
       : undefined;
   const sort = typeof raw.sort === "string" ? raw.sort : undefined;
 
-  const result = queryProducts({
+  const result = await queryProducts({
     in_category: categoryId,
     page,
     limit,

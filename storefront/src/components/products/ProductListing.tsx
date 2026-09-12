@@ -131,7 +131,6 @@ async function ProductListingInner({
   const products = productsResponse.data;
   const totalCount =
     (productsResponse.meta as any).total_count ?? productsResponse.meta.count;
-  const totalPages = productsResponse.meta.pages;
 
   const hasResults = products.length > 0;
 

@@ -6,7 +6,7 @@ import {
   cacheTagSuffix,
   DEFAULT_SURFACE,
   getAccessToken,
-  getClientForSurface,
+  type getClientForSurface,
   getLocaleOptions,
   type Surface,
 } from "@/lib/spree";
@@ -78,7 +78,7 @@ export async function cachedListProducts(
 
   const sort = typeof raw.sort === "string" ? raw.sort : undefined;
 
-  const result = queryProducts({ page, limit, offset, q, in_category, sort });
+  const result = await queryProducts({ page, limit, offset, q, in_category, sort });
   return result as unknown as ReturnType<
     ReturnType<typeof getClientForSurface>["products"]["list"]
   >;
@@ -116,7 +116,7 @@ export async function cachedGetProduct(
     `products${cacheTagSuffix(surface)}`,
     `product:${slugOrId}${cacheTagSuffix(surface)}`,
   );
-  const local = getProductBySlugOrId(slugOrId);
+  const local = await getProductBySlugOrId(slugOrId);
   if (local) {
     return local as unknown as ReturnType<
       ReturnType<typeof getClientForSurface>["products"]["get"]
@@ -162,7 +162,7 @@ async function cachedGetProductFilters(
       ? (params["q[in_category]"] as string)
       : undefined;
 
-  return getCatalogFilters({ in_category }) as unknown as ReturnType<
+  return (await getCatalogFilters({ in_category })) as unknown as ReturnType<
     ReturnType<typeof getClientForSurface>["products"]["filters"]
   >;
 }

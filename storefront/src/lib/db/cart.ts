@@ -169,21 +169,44 @@ export async function loadCartItems(cartId: string): Promise<DbCartItem[]> {
  */
 export async function addOrIncrementCartItem(
   cartId: string,
-  sku: string,
-  quantity: number,
+  variantIdOrSku: string,
+  skuOrQty: string | number,
+  maybeQty?: number,
 ): Promise<DbCartItem> {
+  let variantId: string;
+  let sku: string;
+  let quantity: number;
+
+  if (typeof skuOrQty === "string" && typeof maybeQty === "number") {
+    variantId = variantIdOrSku;
+    sku = skuOrQty;
+    quantity = maybeQty;
+  } else {
+    sku = variantIdOrSku;
+    quantity = typeof skuOrQty === "number" ? skuOrQty : 1;
+    const variantRes = await query<{ id: string }>(
+      `SELECT id FROM public.variants WHERE sku = $1 LIMIT 1;`,
+      [sku],
+    );
+    if (!variantRes.rows[0]) {
+      throw new Error(`Cannot add to cart: variant '${sku}' not found in database`);
+    }
+    variantId = variantRes.rows[0].id;
+  }
+
   if (!Number.isInteger(quantity) || quantity <= 0) {
     throw new Error("Quantity must be a positive integer");
   }
 
   const res = await query<Record<string, unknown>>(
-    `INSERT INTO public.cart_items (cart_id, variant_sku, quantity, created_at, updated_at)
-     VALUES ($1, $2, $3, NOW(), NOW())
+    `INSERT INTO public.cart_items (cart_id, variant_id, variant_sku, quantity, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, NOW(), NOW())
      ON CONFLICT (cart_id, variant_sku) DO UPDATE
-     SET quantity = public.cart_items.quantity + EXCLUDED.quantity,
+     SET variant_id = EXCLUDED.variant_id,
+         quantity = public.cart_items.quantity + EXCLUDED.quantity,
          updated_at = NOW()
      RETURNING id, cart_id, variant_id, variant_sku, quantity, created_at, updated_at;`,
-    [cartId, sku, quantity],
+    [cartId, variantId, sku, quantity],
   );
 
   await query(`UPDATE public.carts SET updated_at = NOW() WHERE id = $1;`, [cartId]);

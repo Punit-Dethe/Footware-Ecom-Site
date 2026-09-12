@@ -88,7 +88,59 @@ import {
   updateCartItem,
   verifyAuthSession,
 } from "@/lib/data/cart";
-import { PRODUCTS } from "@/lib/catalog/catalog-repository";
+import {
+  EXPECTED_CATEGORIES,
+  EXPECTED_PRODUCTS,
+} from "@/lib/catalog/__tests__/catalog-parity-fixture";
+
+const PRODUCTS = EXPECTED_PRODUCTS;
+
+vi.mock("@/lib/db/catalog", () => ({
+  getVariantByIdOrSku: vi.fn(async (idOrSku: string) => {
+    for (const p of EXPECTED_PRODUCTS) {
+      const v = p.variants.find(
+        (vItem) => vItem.id === idOrSku || vItem.sku === idOrSku,
+      );
+      if (v) {
+        return {
+          id: v.id,
+          product_id: p.id,
+          sku: v.sku,
+          size_option: v.options_text.replace(/\D+/g, "") || "8",
+          price_in_cents: v.price.amount_in_cents,
+          compare_at_price_in_cents: v.price.compare_at_amount_in_cents ?? null,
+          currency: v.price.currency || "USD",
+          quantity_on_hand: 0,
+          backorderable: true,
+          position: 1,
+          is_default: v.is_master,
+          active: true,
+          product_name: p.name,
+          product_slug: p.slug,
+          product_status: "active",
+          product_sku: p.sku || null,
+          product_description: p.description,
+          meta_title: p.meta_title ?? null,
+          meta_description: p.meta_description ?? null,
+          meta_keywords: p.meta_keywords ?? null,
+        };
+      }
+    }
+    return null;
+  }),
+}));
+
+vi.mock("@/lib/catalog/catalog-repository", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/lib/catalog/catalog-repository")>();
+  return {
+    ...actual,
+    getPublicCatalogSnapshot: vi.fn(async () => ({
+      products: EXPECTED_PRODUCTS as any,
+      categories: EXPECTED_CATEGORIES as any,
+    })),
+  };
+});
 
 function hashToken(rawToken: string): string {
   return crypto.createHash("sha256").update(rawToken).digest("hex");
@@ -505,6 +557,7 @@ describe("B3 Persistent Cart — Server Actions & Data Layer", () => {
       expect(result.cart).toBeDefined();
       expect(mockDb.addOrIncrementCartItem).toHaveBeenCalledWith(
         "cart-uuid-1",
+        validVariant.id,
         validVariant.sku,
         2,
       );
@@ -528,6 +581,7 @@ describe("B3 Persistent Cart — Server Actions & Data Layer", () => {
       expect(result.success).toBe(true);
       expect(mockDb.addOrIncrementCartItem).toHaveBeenCalledWith(
         "cart-uuid-1",
+        validVariant.id,
         validVariant.sku,
         1,
       );

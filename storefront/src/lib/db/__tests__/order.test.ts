@@ -9,28 +9,6 @@ vi.mock("../index", () => ({
     mockTransaction(callback),
 }));
 
-vi.mock("@/lib/catalog/catalog-repository", () => ({
-  findCatalogVariantBySku: vi.fn((sku: string) => {
-    if (sku === "TEST-VALID-SKU") {
-      return {
-        variant: {
-          id: "var-123",
-          sku: "TEST-VALID-SKU",
-          price: { amount_in_cents: 8500 },
-          options: { Size: "42" },
-        },
-        product: {
-          id: "prod-123",
-          name: "Formal Derby",
-          slug: "formal-derby",
-          images: [{ url: "https://example.com/derby.jpg" }],
-        },
-      };
-    }
-    return null;
-  }),
-}));
-
 import {
   generateOrderNumber,
   getOrderForUser,
@@ -291,10 +269,12 @@ describe("Database Order Repository", () => {
             .mockResolvedValueOnce({
               rows: [
                 {
-                  id: "item-1",
+                  cart_item_id: "item-1",
                   cart_id: "11111111-1111-1111-1111-111111111111",
                   variant_sku: "NON-EXISTENT-SKU",
                   quantity: 1,
+                  db_variant_id: null,
+                  product_id: null,
                 },
               ],
             }), // 4. Cart items
@@ -375,10 +355,22 @@ describe("Database Order Repository", () => {
               return {
                 rows: [
                   {
-                    id: "cart-item-1",
+                    cart_item_id: "cart-item-1",
                     cart_id: "11111111-1111-1111-1111-111111111111",
+                    variant_id: "33333333-3333-3333-3333-333333333333",
                     variant_sku: "TEST-VALID-SKU",
                     quantity: 1,
+                    db_variant_id: "33333333-3333-3333-3333-333333333333",
+                    db_variant_sku: "TEST-VALID-SKU",
+                    size_option: "8",
+                    price_in_cents: 8500,
+                    variant_active: true,
+                    quantity_on_hand: 0,
+                    backorderable: true,
+                    product_id: "prod-123",
+                    product_name: "Formal Derby",
+                    product_slug: "office-footwear-01",
+                    product_status: "active",
                   },
                 ],
               };
@@ -416,6 +408,259 @@ describe("Database Order Repository", () => {
       );
       expect(updateCartCall).toBeDefined();
       expect(updateCartCall.params[0]).toBe("11111111-1111-1111-1111-111111111111");
+
+      // Verify the order transaction did NOT escape to the global pool
+      expect(mockQuery).not.toHaveBeenCalled();
+    });
+
+    it("snapshots price directly from PostgreSQL variant and never calls global pool", async () => {
+      const mockQueries: any[] = [];
+      mockTransaction.mockImplementation(async (cb) => {
+        const fakeClient = {
+          query: vi.fn(async (sql: string, params: any[]) => {
+            mockQueries.push({ sql, params });
+            if (sql.includes("FROM public.carts") && sql.includes("FOR UPDATE")) {
+              return {
+                rows: [
+                  {
+                    id: "cart-999",
+                    user_id: "user-1",
+                    guest_token_hash: null,
+                    surface: "dtc",
+                    currency: "USD",
+                    shipping_address: null,
+                    billing_address: null,
+                    checkout_email: "test@example.com",
+                    status: "active",
+                  },
+                ],
+              };
+            }
+            if (sql.includes("FROM public.orders WHERE source_cart_id")) {
+              return { rows: [] };
+            }
+            if (sql.includes("FROM public.cart_items")) {
+              return {
+                rows: [
+                  {
+                    cart_item_id: "ci-1",
+                    cart_id: "cart-999",
+                    variant_id: "var-1",
+                    variant_sku: "SKU-EXPENSIVE",
+                    quantity: 2,
+                    db_variant_id: "var-1",
+                    db_variant_sku: "SKU-EXPENSIVE",
+                    size_option: "9",
+                    price_in_cents: 14500, // $145.00 PostgreSQL authoritative price
+                    variant_active: true,
+                    quantity_on_hand: 5,
+                    backorderable: false,
+                    product_id: "prod-1",
+                    product_name: "Handcrafted Oxford",
+                    product_slug: "office-footwear-02",
+                    product_status: "active",
+                  },
+                ],
+              };
+            }
+            if (sql.includes("INSERT INTO public.orders")) {
+              return {
+                rows: [
+                  {
+                    id: "ord-1",
+                    order_number: "MRZ-PGPRICE12",
+                    status: "complete",
+                    subtotal_in_cents: 29000,
+                    total_in_cents: 29000,
+                    currency: "USD",
+                  },
+                ],
+              };
+            }
+            if (sql.includes("INSERT INTO public.order_items")) {
+              return {
+                rows: [
+                  {
+                    id: "oi-1",
+                    order_id: "ord-1",
+                    price_in_cents: 14500,
+                    quantity: 2,
+                    total_in_cents: 29000,
+                  },
+                ],
+              };
+            }
+            if (sql.includes("UPDATE public.carts SET status = 'converted'")) {
+              return { rowCount: 1 };
+            }
+            return { rows: [] };
+          }),
+        };
+        return cb(fakeClient);
+      });
+
+      await placeOrderFromCart({
+        cartId: "cart-999",
+        surface: "dtc",
+        verifiedUserId: "user-1",
+      });
+
+      // Verify global pool was never invoked
+      expect(mockQuery).not.toHaveBeenCalled();
+
+      // Verify order item insert used the DB price (14500 cents)
+      const orderItemInsert = mockQueries.find((q) =>
+        q.sql.includes("INSERT INTO public.order_items"),
+      );
+      expect(orderItemInsert).toBeDefined();
+      // Parameters: [orderId, variantId, productName, sku, sizeOption, priceInCents, quantity, totalInCents, thumbUrl]
+      expect(orderItemInsert.params[5]).toBe(14500);
+      expect(orderItemInsert.params[6]).toBe(2);
+      expect(orderItemInsert.params[7]).toBe(29000);
+    });
+
+    it("rejects order placement if variant is inactive", async () => {
+      mockTransaction.mockImplementation(async (cb) => {
+        const fakeClient = {
+          query: vi.fn(async (sql: string) => {
+            if (sql.includes("FROM public.carts")) {
+              return {
+                rows: [{ id: "cart-1", user_id: "user-1", surface: "dtc", status: "active" }],
+              };
+            }
+            if (sql.includes("FROM public.orders WHERE source_cart_id")) {
+              return { rows: [] };
+            }
+            if (sql.includes("FROM public.cart_items")) {
+              return {
+                rows: [
+                  {
+                    cart_item_id: "ci-1",
+                    cart_id: "cart-1",
+                    variant_id: "var-inactive",
+                    variant_sku: "SKU-INACTIVE",
+                    quantity: 1,
+                    db_variant_id: "var-inactive",
+                    db_variant_sku: "SKU-INACTIVE",
+                    price_in_cents: 8000,
+                    variant_active: false, // Inactive!
+                    quantity_on_hand: 10,
+                    backorderable: true,
+                    product_id: "prod-1",
+                    product_status: "active",
+                  },
+                ],
+              };
+            }
+            return { rows: [] };
+          }),
+        };
+        return cb(fakeClient);
+      });
+
+      await expect(
+        placeOrderFromCart({
+          cartId: "cart-1",
+          surface: "dtc",
+          verifiedUserId: "user-1",
+        }),
+      ).rejects.toThrow("Cannot place order: variant 'SKU-INACTIVE' is no longer active");
+    });
+
+    it("rejects order placement if product is draft or archived", async () => {
+      mockTransaction.mockImplementation(async (cb) => {
+        const fakeClient = {
+          query: vi.fn(async (sql: string) => {
+            if (sql.includes("FROM public.carts")) {
+              return {
+                rows: [{ id: "cart-1", user_id: "user-1", surface: "dtc", status: "active" }],
+              };
+            }
+            if (sql.includes("FROM public.orders WHERE source_cart_id")) {
+              return { rows: [] };
+            }
+            if (sql.includes("FROM public.cart_items")) {
+              return {
+                rows: [
+                  {
+                    cart_item_id: "ci-1",
+                    cart_id: "cart-1",
+                    variant_id: "var-1",
+                    variant_sku: "SKU-DRAFT",
+                    quantity: 1,
+                    db_variant_id: "var-1",
+                    db_variant_sku: "SKU-DRAFT",
+                    price_in_cents: 8000,
+                    variant_active: true,
+                    quantity_on_hand: 10,
+                    backorderable: true,
+                    product_id: "prod-1",
+                    product_status: "draft", // Draft product!
+                  },
+                ],
+              };
+            }
+            return { rows: [] };
+          }),
+        };
+        return cb(fakeClient);
+      });
+
+      await expect(
+        placeOrderFromCart({
+          cartId: "cart-1",
+          surface: "dtc",
+          verifiedUserId: "user-1",
+        }),
+      ).rejects.toThrow("Cannot place order: variant 'SKU-DRAFT' is no longer active");
+    });
+
+    it("rejects order placement if variant is out of stock and not backorderable", async () => {
+      mockTransaction.mockImplementation(async (cb) => {
+        const fakeClient = {
+          query: vi.fn(async (sql: string) => {
+            if (sql.includes("FROM public.carts")) {
+              return {
+                rows: [{ id: "cart-1", user_id: "user-1", surface: "dtc", status: "active" }],
+              };
+            }
+            if (sql.includes("FROM public.orders WHERE source_cart_id")) {
+              return { rows: [] };
+            }
+            if (sql.includes("FROM public.cart_items")) {
+              return {
+                rows: [
+                  {
+                    cart_item_id: "ci-1",
+                    cart_id: "cart-1",
+                    variant_id: "var-1",
+                    variant_sku: "SKU-OOS",
+                    quantity: 1,
+                    db_variant_id: "var-1",
+                    db_variant_sku: "SKU-OOS",
+                    price_in_cents: 8000,
+                    variant_active: true,
+                    quantity_on_hand: 0,
+                    backorderable: false, // Out of stock & cannot backorder!
+                    product_id: "prod-1",
+                    product_status: "active",
+                  },
+                ],
+              };
+            }
+            return { rows: [] };
+          }),
+        };
+        return cb(fakeClient);
+      });
+
+      await expect(
+        placeOrderFromCart({
+          cartId: "cart-1",
+          surface: "dtc",
+          verifiedUserId: "user-1",
+        }),
+      ).rejects.toThrow("Cannot place order: variant 'SKU-OOS' is out of stock");
     });
   });
 

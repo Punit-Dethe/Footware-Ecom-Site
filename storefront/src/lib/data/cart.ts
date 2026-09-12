@@ -4,9 +4,11 @@ import crypto from "node:crypto";
 import type { Cart, CreateCartParams } from "@spree/sdk";
 import { cookies } from "next/headers";
 import {
-  findCatalogVariantByIdOrSku,
-  findCatalogVariantBySku,
+  getPublicCatalogSnapshot,
+  type CatalogProduct,
+  type CatalogVariant,
 } from "@/lib/catalog/catalog-repository";
+import { getVariantByIdOrSku } from "@/lib/db/catalog";
 import {
   addOrIncrementCartItem,
   claimOrMergeGuestCart,
@@ -129,51 +131,69 @@ async function getVerifiedUserId(): Promise<string | null> {
  * Catalog attributes, prices, and thumbnails are derived live from the static catalog.
  * Unknown SKUs are never priced at $0; adaptation fails closed with an error.
  */
-function adaptDbCartToSpreeCart(
+async function adaptDbCartToSpreeCart(
   cart: DbCart,
   items: DbCartItem[],
   surface: Surface,
-): Cart {
+): Promise<Cart> {
   let totalCents = 0;
   let totalQty = 0;
 
-  const adaptedItems = items.map((item) => {
-    const match = findCatalogVariantBySku(item.variant_sku);
-    if (!match) {
-      throw new Error(
-        `Cart item references unavailable catalog variant: ${item.variant_sku}`,
-      );
-    }
-    const unitPriceCents = match.variant.price.amount_in_cents;
-    const lineTotalCents = unitPriceCents * item.quantity;
-    totalCents += lineTotalCents;
-    totalQty += item.quantity;
+  let adaptedItems: any[] = [];
+  if (items.length > 0) {
+    const { products } = await getPublicCatalogSnapshot();
 
-    const displayUnitPrice = match.variant.price.display_amount;
-    const displayLineTotal = `$${(lineTotalCents / 100).toFixed(2)}`;
+    adaptedItems = items.map((item) => {
+      let match: { product: CatalogProduct; variant: CatalogVariant } | null =
+        null;
+      for (const p of products) {
+        const v = p.variants.find(
+          (vItem) =>
+            (item.variant_id && vItem.id === item.variant_id) ||
+            vItem.sku === item.variant_sku,
+        );
+        if (v) {
+          match = { product: p, variant: v };
+          break;
+        }
+      }
 
-    return {
-      id: item.id,
-      name: match.product.name,
-      slug: match.product.slug,
-      sku: item.variant_sku,
-      variant_id: match.variant.id,
-      quantity: item.quantity,
-      price: {
-        amount: (unitPriceCents / 100).toFixed(2),
-        currency: cart.currency,
-        display_amount: displayUnitPrice,
-        amount_in_cents: unitPriceCents,
-      },
-      display_price: displayUnitPrice,
-      total: {
-        amount_in_cents: lineTotalCents,
-        display_amount: displayLineTotal,
-      },
-      thumbnail_url: match.product.thumbnail_url ?? null,
-      options_text: match.variant.options_text ?? null,
-    };
-  });
+      if (!match?.variant.in_stock || !match.variant.purchasable) {
+        throw new Error(
+          `Cart item references unavailable catalog variant: ${item.variant_sku || item.variant_id}`,
+        );
+      }
+      const unitPriceCents = match.variant.price.amount_in_cents;
+      const lineTotalCents = unitPriceCents * item.quantity;
+      totalCents += lineTotalCents;
+      totalQty += item.quantity;
+
+      const displayUnitPrice = match.variant.price.display_amount;
+      const displayLineTotal = `$${(lineTotalCents / 100).toFixed(2)}`;
+
+      return {
+        id: item.id,
+        name: match.product.name,
+        slug: match.product.slug,
+        sku: match.variant.sku,
+        variant_id: match.variant.id,
+        quantity: item.quantity,
+        price: {
+          amount: (unitPriceCents / 100).toFixed(2),
+          currency: cart.currency,
+          display_amount: displayUnitPrice,
+          amount_in_cents: unitPriceCents,
+        },
+        display_price: displayUnitPrice,
+        total: {
+          amount_in_cents: lineTotalCents,
+          display_amount: displayLineTotal,
+        },
+        thumbnail_url: match.product.thumbnail_url ?? null,
+        options_text: match.variant.options_text ?? null,
+      };
+    });
+  }
 
   const formattedTotal = `$${(totalCents / 100).toFixed(2)}`;
 
@@ -258,7 +278,7 @@ export async function getCart(
     }
 
     const items = await loadCartItems(userCart.id);
-    return adaptDbCartToSpreeCart(userCart, items, surface);
+    return await adaptDbCartToSpreeCart(userCart, items, surface);
   }
 
   // Anonymous guest flow
@@ -283,7 +303,7 @@ export async function getCart(
   }
 
   const items = await loadCartItems(guestCart.id);
-  return adaptDbCartToSpreeCart(guestCart, items, surface);
+  return await adaptDbCartToSpreeCart(guestCart, items, surface);
 }
 
 /**
@@ -308,7 +328,7 @@ export async function getOrCreateCart(
     } catch {
       // Best effort
     }
-    return adaptDbCartToSpreeCart(userCart, [], surface);
+    return await adaptDbCartToSpreeCart(userCart, [], surface);
   }
 
   // Generate secure 256-bit guest token
@@ -322,7 +342,7 @@ export async function getOrCreateCart(
     // Best effort
   }
 
-  return adaptDbCartToSpreeCart(guestCart, [], surface);
+  return await adaptDbCartToSpreeCart(guestCart, [], surface);
 }
 
 /**
@@ -342,7 +362,7 @@ export async function clearCart(surface: Surface = DEFAULT_SURFACE) {
 
 /**
  * Adds an item to the current cart.
- * Validates variant against current static catalog. Unknown variants are strictly rejected (no PRODUCTS[0] fallback).
+ * Validates variant against authoritative PostgreSQL catalog.
  */
 export async function addToCart(
   variantId: string,
@@ -350,13 +370,17 @@ export async function addToCart(
   surface: Surface = DEFAULT_SURFACE,
 ) {
   return actionResult(async () => {
-    const match = findCatalogVariantByIdOrSku(variantId);
+    const match = await getVariantByIdOrSku(variantId);
     if (!match) {
       throw new Error("Variant not found in catalog");
     }
 
-    if (!match.variant.purchasable || !match.variant.in_stock) {
+    if (match.product_status !== "active" || !match.active) {
       throw new Error("Variant is currently unavailable");
+    }
+
+    if (match.quantity_on_hand <= 0 && !match.backorderable) {
+      throw new Error("Variant is out of stock");
     }
 
     if (!Number.isInteger(quantity) || quantity <= 0) {
@@ -364,7 +388,7 @@ export async function addToCart(
     }
 
     const cart = await getOrCreateCart(undefined, surface);
-    await addOrIncrementCartItem(cart.id, match.variant.sku, quantity);
+    await addOrIncrementCartItem(cart.id, match.id, match.sku, quantity);
 
     const updatedCart = await getCart(cart.id, surface);
     return { cart: updatedCart };

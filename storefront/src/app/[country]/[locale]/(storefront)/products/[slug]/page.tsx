@@ -25,14 +25,15 @@ interface ProductPageProps {
   }>;
 }
 
-import { PRODUCTS } from "@/lib/catalog/catalog-repository";
+import { listCatalogProducts } from "@/lib/catalog/catalog-repository";
 import { getDefaultCountry, getDefaultLocale } from "@/lib/store";
 
-export function generateStaticParams() {
+export async function generateStaticParams() {
   const country = getDefaultCountry();
   const locale = getDefaultLocale();
+  const products = await listCatalogProducts();
 
-  return PRODUCTS.map((p) => ({
+  return products.map((p) => ({
     country,
     locale,
     slug: p.slug,

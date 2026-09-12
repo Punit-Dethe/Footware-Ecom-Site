@@ -1,5 +1,5 @@
 import type { Address, Cart, Order } from "@spree/sdk";
-import { COUNTRIES, findCatalogVariantBySku } from "@/lib/catalog/catalog-repository";
+import { COUNTRIES } from "@/lib/catalog/store-config";
 import type { DbOrder, DbOrderItem } from "@/lib/db/order";
 
 function adaptAddressSnapshot(raw: Record<string, unknown> | null | undefined): Address {
@@ -97,8 +97,16 @@ export function adaptDbOrderToSpree(
   const displayTotal = `$${(totalCents / 100).toFixed(2)}`;
 
   const adaptedItems = items.map((item) => {
-    const catalogMatch = findCatalogVariantBySku(item.sku);
-    const slug = catalogMatch?.product.slug || item.product_name.toLowerCase().replace(/\s+/g, "-");
+    let slug = item.product_name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    const matchOff = item.sku.match(/^MIRZA-OFF-(\d+)/);
+    if (matchOff) {
+      slug = `office-footwear-${String(Number(matchOff[1])).padStart(2, "0")}`;
+    } else {
+      const matchTrd = item.sku.match(/^MIRZA-TRD-(\d+)/);
+      if (matchTrd) {
+        slug = `traditional-footwear-${String(Number(matchTrd[1])).padStart(2, "0")}`;
+      }
+    }
     const displayPrice = `$${(item.price_in_cents / 100).toFixed(2)}`;
     const displayLineTotal = `$${(item.total_in_cents / 100).toFixed(2)}`;
 
