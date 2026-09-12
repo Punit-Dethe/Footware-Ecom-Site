@@ -75,6 +75,42 @@ describe("Admin Catalog Server Actions", () => {
     });
   });
 
+  describe("Draft Creation Invariant", () => {
+    it("rejects creation with status = 'active' before calling DAL", async () => {
+      mockAuth.requireAdmin.mockResolvedValue({ userId: "admin-1" });
+
+      const res = await createProductAction({ name: "Active Shoe", slug: "active-shoe", status: "active" });
+      expect(res.success).toBe(false);
+      expect(res.error).toBe("New products must be created as draft before publishing.");
+      expect(res.fieldErrors?.status).toBe("New products must be created as draft before publishing.");
+      expect(mockDal.createAdminProduct).not.toHaveBeenCalled();
+      expect(mockCache.updateTag).not.toHaveBeenCalled();
+    });
+
+    it("rejects creation with status = 'archived' before calling DAL", async () => {
+      mockAuth.requireAdmin.mockResolvedValue({ userId: "admin-1" });
+
+      const res = await createProductAction({ name: "Archived Shoe", slug: "archived-shoe", status: "archived" });
+      expect(res.success).toBe(false);
+      expect(res.error).toBe("New products must be created as draft before publishing.");
+      expect(mockDal.createAdminProduct).not.toHaveBeenCalled();
+      expect(mockCache.updateTag).not.toHaveBeenCalled();
+    });
+
+    it("allows creation with status = 'draft'", async () => {
+      mockAuth.requireAdmin.mockResolvedValue({ userId: "admin-1" });
+      mockDal.createAdminProduct.mockResolvedValue("prod-draft-id");
+
+      const res = await createProductAction({ name: "Draft Shoe", slug: "draft-shoe", status: "draft" });
+      expect(res.success).toBe(true);
+      expect(res.data?.id).toBe("prod-draft-id");
+      expect(mockDal.createAdminProduct).toHaveBeenCalledWith(
+        expect.objectContaining({ status: "draft" }),
+      );
+      expect(mockCache.updateTag).toHaveBeenCalledWith("catalog-public");
+    });
+  });
+
   describe("Cache Invalidation on Mutation", () => {
     it("invalidates 'catalog-public' tag after successful product creation", async () => {
       mockAuth.requireAdmin.mockResolvedValue({ userId: "admin-1" });

@@ -31,6 +31,14 @@ export async function createProductAction(
   try {
     await requireAdmin();
 
+    if (input.status && input.status !== "draft") {
+      return {
+        success: false,
+        error: "New products must be created as draft before publishing.",
+        fieldErrors: { status: "New products must be created as draft before publishing." },
+      };
+    }
+
     const productId = await createAdminProduct(input);
     updateTag("catalog-public");
     revalidatePath("/admin/products");

@@ -395,7 +395,17 @@ export async function createAdminProduct(
   const rawSlug = (input.slug || name.toLowerCase().replace(/[^a-z0-9]+/g, "-")).replace(/^-|-$/g, "");
   const slug = validateSlug(rawSlug, "slug");
   const sku = validateStringLength(input.sku, "sku", 100);
-  const status = input.status ? validateStatus(input.status, "status") : "draft";
+
+  if (input.status !== undefined && input.status !== null) {
+    const validatedStatus = validateStatus(input.status, "status");
+    if (validatedStatus !== "draft") {
+      throw new CatalogValidationError(
+        "New products must be created as draft before publishing.",
+        "status",
+      );
+    }
+  }
+
   const metaTitle = validateStringLength(input.metaTitle, "metaTitle", 255);
   const metaDescription = typeof input.metaDescription === "string" ? input.metaDescription.trim() || null : null;
   const metaKeywords = typeof input.metaKeywords === "string" ? input.metaKeywords.trim() || null : null;
@@ -416,7 +426,7 @@ export async function createAdminProduct(
           id, name, slug, sku, description, description_html,
           status, meta_title, meta_description, meta_keywords,
           created_at, updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW());`,
+        ) VALUES ($1, $2, $3, $4, $5, $6, 'draft', $7, $8, $9, NOW(), NOW());`,
         [
           productId,
           name,
@@ -424,7 +434,6 @@ export async function createAdminProduct(
           sku,
           safeDesc.description || null,
           safeDesc.description_html || null,
-          status,
           metaTitle,
           metaDescription,
           metaKeywords,

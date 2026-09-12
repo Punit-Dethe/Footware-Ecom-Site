@@ -109,8 +109,8 @@ describe("Admin Catalog DAL Unit Tests", () => {
     });
   });
 
-  describe("createAdminProduct", () => {
-    it("creates a product with draft status and safe description_html", async () => {
+  describe("createAdminProduct - Draft Creation Invariant", () => {
+    it("creates a product with draft status when status is omitted", async () => {
       const mockClient = {
         query: vi.fn().mockResolvedValue({ rows: [] }),
       };
@@ -125,6 +125,9 @@ describe("Admin Catalog DAL Unit Tests", () => {
       });
 
       expect(typeof newId).toBe("string");
+      const insertSql = mockClient.query.mock.calls[0][0];
+      expect(insertSql).toContain("INSERT INTO public.products");
+      expect(insertSql).toContain("'draft'");
       expect(mockClient.query).toHaveBeenCalledWith(
         expect.stringContaining("INSERT INTO public.products"),
         expect.arrayContaining([
@@ -136,6 +139,60 @@ describe("Admin Catalog DAL Unit Tests", () => {
           "<p>&lt;script&gt;alert(1)&lt;/script&gt; Great leather shoes.</p>",
         ]),
       );
+    });
+
+    it("creates a product with draft status when status is explicitly 'draft'", async () => {
+      const mockClient = {
+        query: vi.fn().mockResolvedValue({ rows: [] }),
+      };
+      mockDb.transaction.mockImplementation(async (cb: any) => cb(mockClient));
+
+      const newId = await createAdminProduct({
+        name: "Derby Draft",
+        slug: "derby-draft",
+        status: "draft",
+      });
+
+      expect(typeof newId).toBe("string");
+      const insertSql = mockClient.query.mock.calls[0][0];
+      expect(insertSql).toContain("INSERT INTO public.products");
+      expect(insertSql).toContain("'draft'");
+    });
+
+    it("rejects creation when status is explicitly 'active' (0 rows inserted)", async () => {
+      await expect(
+        createAdminProduct({
+          name: "Direct Active Shoe",
+          slug: "direct-active-shoe",
+          status: "active",
+        }),
+      ).rejects.toThrow("New products must be created as draft before publishing.");
+
+      expect(mockDb.transaction).not.toHaveBeenCalled();
+    });
+
+    it("rejects creation when status is explicitly 'archived' (0 rows inserted)", async () => {
+      await expect(
+        createAdminProduct({
+          name: "Direct Archived Shoe",
+          slug: "direct-archived-shoe",
+          status: "archived",
+        }),
+      ).rejects.toThrow("New products must be created as draft before publishing.");
+
+      expect(mockDb.transaction).not.toHaveBeenCalled();
+    });
+
+    it("rejects creation when status is invalid", async () => {
+      await expect(
+        createAdminProduct({
+          name: "Invalid Status Shoe",
+          slug: "invalid-status-shoe",
+          status: "invalid_status" as any,
+        }),
+      ).rejects.toThrow("Invalid status for status");
+
+      expect(mockDb.transaction).not.toHaveBeenCalled();
     });
   });
 
