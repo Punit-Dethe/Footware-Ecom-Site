@@ -236,6 +236,15 @@ export async function POST(
 
   // 3. Add Item to Cart: POST /api/v3/store/carts/:id/items
   if (path.match(/^carts\/[^/]+\/items$/)) {
+    const pathCartId = path.split("/")[1];
+    const authorizedCart = await getCart();
+    if (!authorizedCart || authorizedCart.id !== pathCartId) {
+      return NextResponse.json(
+        { error: "Cart not found or unauthorized" },
+        { status: 404 },
+      );
+    }
+
     const variantId = body.variant_id;
     const quantity = Number(body.quantity) || 1;
     const result = await addToCart(variantId, quantity);
@@ -267,7 +276,16 @@ export async function PATCH(
   // Update Cart Item Quantity: PATCH /api/v3/store/carts/:id/items/:itemId
   if (path.match(/^carts\/[^/]+\/items\/[^/]+$/)) {
     const parts = path.split("/");
+    const pathCartId = parts[1];
     const itemId = parts[3];
+    const authorizedCart = await getCart();
+    if (!authorizedCart || authorizedCart.id !== pathCartId) {
+      return NextResponse.json(
+        { error: "Cart not found or unauthorized" },
+        { status: 404 },
+      );
+    }
+
     const quantity = Number(body.quantity) || 1;
     const result = await updateCartItem(itemId, quantity);
     if (!result.success) {
@@ -292,7 +310,16 @@ export async function DELETE(
   // Remove Item from Cart: DELETE /api/v3/store/carts/:id/items/:itemId
   if (path.match(/^carts\/[^/]+\/items\/[^/]+$/)) {
     const parts = path.split("/");
+    const pathCartId = parts[1];
     const itemId = parts[3];
+    const authorizedCart = await getCart();
+    if (!authorizedCart || authorizedCart.id !== pathCartId) {
+      return NextResponse.json(
+        { error: "Cart not found or unauthorized" },
+        { status: 404 },
+      );
+    }
+
     const result = await removeCartItem(itemId);
     if (!result.success) {
       return NextResponse.json(

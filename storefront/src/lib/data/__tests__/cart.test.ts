@@ -16,7 +16,15 @@ const mockDb = vi.hoisted(() => ({
   claimOrMergeGuestCart: vi.fn(),
 }));
 
+const mockSpreeClient = vi.hoisted(() => ({
+  carts: {
+    get: vi.fn(),
+  },
+}));
+
 const mockSpree = vi.hoisted(() => ({
+  getClientForSurface: vi.fn(() => mockSpreeClient),
+  getClient: vi.fn(() => mockSpreeClient),
   getCartId: vi.fn(),
   getCartToken: vi.fn(),
   setCartCookies: vi.fn(),
@@ -78,6 +86,7 @@ import {
   removeCartItem,
   syncCartOnAuthChange,
   updateCartItem,
+  verifyAuthSession,
 } from "@/lib/data/cart";
 import { PRODUCTS } from "@/lib/catalog/catalog-repository";
 
@@ -215,6 +224,182 @@ describe("B3 Persistent Cart — Server Actions & Data Layer", () => {
       expect(cart).not.toBeNull();
       expect(cart?.id).toBe("cart-uuid-1");
       expect(mockDb.findActiveUserCart).toHaveBeenCalledWith("user-123", "dtc");
+    });
+
+    it("foreign explicit cart UUID: returns null and makes 0 Spree client calls", async () => {
+      mockCookies._store.set("sb-mock-auth-token", "token-xyz");
+      mockSupabase.auth.getClaims.mockResolvedValue({
+        data: { claims: { sub: "user-123" } },
+        error: null,
+      });
+      const userCart = {
+        ...mockDbCart,
+        id: "cart-uuid-1",
+        user_id: "user-123",
+      };
+      mockDb.findActiveUserCart.mockResolvedValue(userCart);
+
+      const cart = await getCart("foreign-cart-999");
+      expect(cart).toBeNull();
+      expect(mockSpree.getClientForSurface).not.toHaveBeenCalled();
+      expect(mockSpreeClient.carts.get).not.toHaveBeenCalled();
+    });
+
+    it("wrong guest token: returns null and makes 0 Spree client calls", async () => {
+      mockSpree.getCartToken.mockResolvedValue("invalid-attacker-raw-token");
+      mockDb.findActiveGuestCart.mockResolvedValue(null);
+
+      const cart = await getCart();
+      expect(cart).toBeNull();
+      expect(mockSpree.getClientForSurface).not.toHaveBeenCalled();
+      expect(mockSpreeClient.carts.get).not.toHaveBeenCalled();
+    });
+
+    it("cart UUID only without token: returns null and makes 0 Spree client calls", async () => {
+      mockSpree.getCartToken.mockResolvedValue(undefined);
+
+      const cart = await getCart("cart-uuid-1");
+      expect(cart).toBeNull();
+      expect(mockDb.findActiveGuestCart).not.toHaveBeenCalled();
+      expect(mockDb.findActiveUserCart).not.toHaveBeenCalled();
+      expect(mockSpree.getClientForSurface).not.toHaveBeenCalled();
+      expect(mockSpreeClient.carts.get).not.toHaveBeenCalled();
+    });
+
+    it("database failure throws and fails closed without falling back to Spree SDK", async () => {
+      mockSpree.getCartToken.mockResolvedValue(rawBearerToken);
+      mockDb.findActiveGuestCart.mockRejectedValue(
+        new Error("PostgreSQL connection timeout"),
+      );
+
+      await expect(getCart()).rejects.toThrow("PostgreSQL connection timeout");
+      expect(mockSpree.getClientForSurface).not.toHaveBeenCalled();
+      expect(mockSpreeClient.carts.get).not.toHaveBeenCalled();
+    });
+
+    it("auth verification infrastructure failure throws and fails closed without falling back to Spree or treating user as guest", async () => {
+      mockCookies._store.set("sb-mock-auth-token", "token-xyz");
+      mockSpree.getCartToken.mockResolvedValue(rawBearerToken);
+      mockSupabase.auth.getClaims.mockRejectedValue(
+        new Error("fetch failed: connection refused"),
+      );
+
+      await expect(getCart()).rejects.toThrow(
+        "Auth verification service unavailable",
+      );
+      expect(mockDb.findActiveGuestCart).not.toHaveBeenCalled();
+      expect(mockDb.claimOrMergeGuestCart).not.toHaveBeenCalled();
+      expect(mockSpree.getClientForSurface).not.toHaveBeenCalled();
+      expect(mockSpreeClient.carts.get).not.toHaveBeenCalled();
+    });
+
+    it("normal expired auth session falls back to anonymous guest without error", async () => {
+      mockCookies._store.set("sb-mock-auth-token", "token-expired");
+      mockSupabase.auth.getClaims.mockResolvedValue({
+        data: null,
+        error: {
+          status: 401,
+          message: "JWT expired",
+          name: "AuthSessionMissingError",
+        },
+      });
+      mockSpree.getCartToken.mockResolvedValue(rawBearerToken);
+      mockDb.findActiveGuestCart.mockResolvedValue(mockDbCart);
+      mockDb.loadCartItems.mockResolvedValue([]);
+
+      const cart = await getCart();
+      expect(cart?.id).toBe("cart-uuid-1");
+      expect(mockDb.findActiveGuestCart).toHaveBeenCalled();
+      expect(mockDb.claimOrMergeGuestCart).not.toHaveBeenCalled();
+    });
+
+    it("fails closed when persisted cart item references an unknown SKU (never prices at $0)", async () => {
+      mockSpree.getCartToken.mockResolvedValue(rawBearerToken);
+      mockDb.findActiveGuestCart.mockResolvedValue(mockDbCart);
+      mockDb.loadCartItems.mockResolvedValue([
+        {
+          id: "item-bad-sku",
+          cart_id: "cart-uuid-1",
+          variant_sku: "NON_EXISTENT_RETIRED_SKU_12345",
+          variant_id: "var_old",
+          quantity: 1,
+          created_at: new Date(),
+          updated_at: new Date(),
+        },
+      ]);
+
+      await expect(getCart()).rejects.toThrow(
+        "Cart item references unavailable catalog variant: NON_EXISTENT_RETIRED_SKU_12345",
+      );
+    });
+  });
+
+  describe("verifyAuthSession semantics", () => {
+    it("short-circuits to anonymous when no auth cookie is present (0 getClaims calls)", async () => {
+      const res = await verifyAuthSession();
+      expect(res).toEqual({ status: "anonymous" });
+      expect(mockSupabase.auth.getClaims).not.toHaveBeenCalled();
+    });
+
+    it("returns authenticated with userId when valid claims exist", async () => {
+      mockCookies._store.set("sb-proj-auth-token", "token-abc");
+      mockSupabase.auth.getClaims.mockResolvedValue({
+        data: { claims: { sub: "user-real-99" } },
+        error: null,
+      });
+
+      const res = await verifyAuthSession();
+      expect(res).toEqual({ status: "authenticated", userId: "user-real-99" });
+    });
+
+    it("returns anonymous on normal expired or invalid session (status 401)", async () => {
+      mockCookies._store.set("sb-proj-auth-token", "token-abc");
+      mockSupabase.auth.getClaims.mockResolvedValue({
+        data: null,
+        error: {
+          status: 401,
+          message: "Token has expired",
+          name: "AuthApiError",
+        },
+      });
+
+      const res = await verifyAuthSession();
+      expect(res).toEqual({ status: "anonymous" });
+    });
+
+    it("throws on server error (status 500)", async () => {
+      mockCookies._store.set("sb-proj-auth-token", "token-abc");
+      mockSupabase.auth.getClaims.mockResolvedValue({
+        data: null,
+        error: { status: 500, message: "Internal Server Error" },
+      });
+
+      await expect(verifyAuthSession()).rejects.toThrow(
+        "Auth verification service unavailable",
+      );
+    });
+
+    it("throws on network transport failure (fetch failed)", async () => {
+      mockCookies._store.set("sb-proj-auth-token", "token-abc");
+      mockSupabase.auth.getClaims.mockResolvedValue({
+        data: null,
+        error: { message: "fetch failed: ECONNREFUSED" },
+      });
+
+      await expect(verifyAuthSession()).rejects.toThrow(
+        "Auth verification service unavailable",
+      );
+    });
+
+    it("throws when getClaims throws an unexpected exception", async () => {
+      mockCookies._store.set("sb-proj-auth-token", "token-abc");
+      mockSupabase.auth.getClaims.mockRejectedValue(
+        new Error("Timeout waiting for response"),
+      );
+
+      await expect(verifyAuthSession()).rejects.toThrow(
+        "Auth verification service unavailable",
+      );
     });
   });
 

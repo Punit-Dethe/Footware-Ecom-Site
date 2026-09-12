@@ -27,10 +27,7 @@ import {
   clearCartCookies,
   clearCartToken,
   DEFAULT_SURFACE,
-  getAccessToken,
-  getCartId,
   getCartToken,
-  getClientForSurface,
   setCartCookies,
   type Surface,
 } from "@/lib/spree";
@@ -56,11 +53,20 @@ function hashGuestToken(rawToken: string): string {
   return crypto.createHash("sha256").update(rawToken).digest("hex");
 }
 
+export type AuthVerificationResult =
+  | { status: "anonymous" }
+  | { status: "authenticated"; userId: string };
+
 /**
- * Returns the verified Supabase user id if an active session exists.
- * Short-circuits for anonymous shoppers to avoid any remote Auth network calls.
+ * Verifies the Supabase authentication session.
+ *
+ * Semantic behavior:
+ * - No Supabase auth cookie: short-circuits to anonymous without remote network calls (0 auth requests).
+ * - Valid claims: returns authenticated with verified user id.
+ * - Normal invalid / expired session: returns anonymous.
+ * - Unexpected transport or server exception: throws to fail closed.
  */
-async function getVerifiedUserId(): Promise<string | null> {
+export async function verifyAuthSession(): Promise<AuthVerificationResult> {
   const cookieStore = await cookies();
   const allCookies =
     typeof cookieStore.getAll === "function" ? cookieStore.getAll() : [];
@@ -69,25 +75,70 @@ async function getVerifiedUserId(): Promise<string | null> {
   );
 
   if (!hasAuthCookie) {
-    return null;
+    return { status: "anonymous" };
   }
+
+  let data: any = null;
+  let error: any = null;
 
   try {
     const supabase = await createClient();
-    const { data, error } = await supabase.auth.getClaims();
-    if (error || !data?.claims) {
-      return null;
-    }
-    const claims = data.claims as Record<string, unknown>;
-    return typeof claims.sub === "string" ? claims.sub : null;
-  } catch {
-    return null;
+    const claimsRes = await supabase.auth.getClaims();
+    data = claimsRes.data;
+    error = claimsRes.error;
+  } catch (err: unknown) {
+    throw new Error(
+      `Auth verification service unavailable: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
+
+  if (error) {
+    const status =
+      typeof error === "object" && error !== null && "status" in error
+        ? (error as { status?: number }).status
+        : undefined;
+    const name = error.name || "";
+    const message = error.message || "";
+    if (
+      (typeof status === "number" && status >= 500) ||
+      name === "AuthRetryableFetchError" ||
+      message.includes("fetch failed") ||
+      message.includes("network") ||
+      message.includes("ECONNREFUSED") ||
+      message.includes("ETIMEDOUT")
+    ) {
+      throw new Error(`Auth verification service unavailable: ${message}`);
+    }
+    // Normal invalid/expired session
+    return { status: "anonymous" };
+  }
+
+  if (!data?.claims) {
+    return { status: "anonymous" };
+  }
+
+  const claims = data.claims as Record<string, unknown>;
+  const userId = typeof claims.sub === "string" ? claims.sub : null;
+  if (!userId) {
+    return { status: "anonymous" };
+  }
+
+  return { status: "authenticated", userId };
+}
+
+/**
+ * Returns the verified Supabase user id if an active session exists.
+ * Short-circuits for anonymous shoppers to avoid any remote Auth network calls.
+ */
+async function getVerifiedUserId(): Promise<string | null> {
+  const auth = await verifyAuthSession();
+  return auth.status === "authenticated" ? auth.userId : null;
 }
 
 /**
  * Adapts a persistent PostgreSQL cart and its line items into the Spree SDK Cart shape.
  * Catalog attributes, prices, and thumbnails are derived live from the static catalog.
+ * Unknown SKUs are never priced at $0; adaptation fails closed with an error.
  */
 function adaptDbCartToSpreeCart(
   cart: DbCart,
@@ -99,20 +150,25 @@ function adaptDbCartToSpreeCart(
 
   const adaptedItems = items.map((item) => {
     const match = findCatalogVariantBySku(item.variant_sku);
-    const unitPriceCents = match?.variant.price.amount_in_cents ?? 0;
+    if (!match) {
+      throw new Error(
+        `Cart item references unavailable catalog variant: ${item.variant_sku}`,
+      );
+    }
+    const unitPriceCents = match.variant.price.amount_in_cents;
     const lineTotalCents = unitPriceCents * item.quantity;
     totalCents += lineTotalCents;
     totalQty += item.quantity;
 
-    const displayUnitPrice = match?.variant.price.display_amount ?? `$${(unitPriceCents / 100).toFixed(2)}`;
+    const displayUnitPrice = match.variant.price.display_amount;
     const displayLineTotal = `$${(lineTotalCents / 100).toFixed(2)}`;
 
     return {
       id: item.id,
-      name: match?.product.name ?? item.variant_sku,
-      slug: match?.product.slug ?? "",
+      name: match.product.name,
+      slug: match.product.slug,
       sku: item.variant_sku,
-      variant_id: match?.variant.id ?? item.variant_id ?? item.variant_sku,
+      variant_id: match.variant.id,
       quantity: item.quantity,
       price: {
         amount: (unitPriceCents / 100).toFixed(2),
@@ -125,8 +181,8 @@ function adaptDbCartToSpreeCart(
         amount_in_cents: lineTotalCents,
         display_amount: displayLineTotal,
       },
-      thumbnail_url: match?.product.thumbnail_url ?? null,
-      options_text: match?.variant.options_text ?? null,
+      thumbnail_url: match.product.thumbnail_url ?? null,
+      options_text: match.variant.options_text ?? null,
     };
   });
 
@@ -170,89 +226,75 @@ async function dropSurfaceCartCookies(surface: Surface): Promise<void> {
 /**
  * Get the current authorized cart for a surface.
  * Returns null if no cart exists, or if cart ID does not match the caller's authorization.
+ * Persistent PostgreSQL cart is the sole source of truth; zero Spree SDK cart read fallbacks.
  */
 export async function getCart(
   explicitCartId?: string,
   surface: Surface = DEFAULT_SURFACE,
 ): Promise<Cart | null> {
-  const verifiedUserId = await getVerifiedUserId();
+  const auth = await verifyAuthSession();
   const rawGuestToken = await getCartToken(surface);
 
-  try {
-    // Authenticated flow
-    if (verifiedUserId) {
-      let userCart: DbCart | null = null;
+  // Authenticated flow
+  if (auth.status === "authenticated") {
+    const verifiedUserId = auth.userId;
+    let userCart: DbCart | null = null;
 
-      // If an active guest token is present, claim or merge it into the user cart
-      if (rawGuestToken) {
-        try {
-          const guestTokenHash = hashGuestToken(rawGuestToken);
-          userCart = await claimOrMergeGuestCart(
-            verifiedUserId,
-            guestTokenHash,
-            surface,
-          );
-          // Clear the raw guest token cookie now that it is merged into the user cart
-          try {
-            await clearCartToken(surface);
-            await setCartCookies(userCart.id, undefined, surface);
-          } catch {
-            // Read context ignore
-          }
-        } catch {
-          userCart = await findActiveUserCart(verifiedUserId, surface);
-        }
-      } else {
-        userCart = await findActiveUserCart(verifiedUserId, surface);
-      }
-
-      if (userCart) {
-        // IDOR Protection: explicit cart lookup must match the authenticated user's cart
-        if (!explicitCartId || userCart.id === explicitCartId) {
-          const items = await loadCartItems(userCart.id);
-          return adaptDbCartToSpreeCart(userCart, items, surface);
-        }
-      }
-    }
-
-    // Anonymous guest flow
+    // If an active guest token is present, claim or merge it into the user cart
     if (rawGuestToken) {
-      // IDOR Protection: cart UUID without matching guest token or user session is rejected
       const guestTokenHash = hashGuestToken(rawGuestToken);
-      const guestCart = await findActiveGuestCart(guestTokenHash, surface);
-
-      if (guestCart) {
-        if (!explicitCartId || guestCart.id === explicitCartId) {
-          const items = await loadCartItems(guestCart.id);
-          return adaptDbCartToSpreeCart(guestCart, items, surface);
-        }
-      } else {
-        // Stale or invalid guest token
-        await dropSurfaceCartCookies(surface);
+      userCart = await claimOrMergeGuestCart(
+        verifiedUserId,
+        guestTokenHash,
+        surface,
+      );
+      // Clear the raw guest token cookie now that it is merged into the user cart
+      try {
+        await clearCartToken(surface);
+        await setCartCookies(userCart.id, undefined, surface);
+      } catch {
+        // Read context ignore
       }
+    } else {
+      userCart = await findActiveUserCart(verifiedUserId, surface);
     }
-  } catch {
-    // Database transient failure or unconfigured in test environment
-  }
 
-  // Fallback for checkout cart lookups (e.g. order completion / legacy Spree backend)
-  const fallbackCartId = explicitCartId ?? (await getCartId(surface));
-  if (fallbackCartId) {
-    try {
-      const client = getClientForSurface(surface);
-      const spreeToken = rawGuestToken;
-      const token = await getAccessToken();
-      const spreeCart = await client.carts.get(fallbackCartId, {
-        spreeToken,
-        token,
-      });
-      return spreeCart;
-    } catch {
+    if (!userCart) {
       return null;
     }
+
+    // IDOR Protection: explicit cart lookup must match the authenticated user's cart
+    if (explicitCartId && userCart.id !== explicitCartId) {
+      return null;
+    }
+
+    const items = await loadCartItems(userCart.id);
+    return adaptDbCartToSpreeCart(userCart, items, surface);
   }
 
-  return null;
+  // Anonymous guest flow
+  if (!rawGuestToken) {
+    // An anonymous visitor with no guest token has no cart (0 DB rows created)
+    return null;
+  }
+
+  // IDOR Protection: cart UUID without matching guest token or user session is rejected
+  const guestTokenHash = hashGuestToken(rawGuestToken);
+  const guestCart = await findActiveGuestCart(guestTokenHash, surface);
+
+  if (!guestCart) {
+    // Stale or invalid guest token
+    await dropSurfaceCartCookies(surface);
+    return null;
+  }
+
+  // IDOR Protection: explicit cart lookup must match the guest cart
+  if (explicitCartId && guestCart.id !== explicitCartId) {
+    return null;
+  }
+
+  const items = await loadCartItems(guestCart.id);
+  return adaptDbCartToSpreeCart(guestCart, items, surface);
 }
 
 /**

@@ -138,7 +138,7 @@ export async function createUserCart(
     `INSERT INTO public.carts (
        user_id, surface, currency, status, created_at, updated_at
      ) VALUES ($1, $2, $3, 'active', NOW(), NOW())
-     ON CONFLICT (user_id, surface) WHERE status = 'active'
+     ON CONFLICT (user_id, surface) WHERE (user_id IS NOT NULL AND status = 'active')
      DO UPDATE SET updated_at = NOW()
      RETURNING id, user_id, guest_token_hash, surface, currency, shipping_address, billing_address, status, created_at, updated_at;`,
     [userId, surface, currency],
@@ -294,10 +294,12 @@ export async function claimOrMergeGuestCart(
     // Case B: User cart exists, no guest cart to merge
     if (!guestCart) {
       if (userCart) return userCart;
-      // Neither exists: create user cart
+      // Neither exists: create user cart with concurrency conflict resolution
       const createRes = await client.query<Record<string, unknown>>(
         `INSERT INTO public.carts (user_id, surface, currency, status, created_at, updated_at)
          VALUES ($1, $2, 'USD', 'active', NOW(), NOW())
+         ON CONFLICT (user_id, surface) WHERE (user_id IS NOT NULL AND status = 'active')
+         DO UPDATE SET updated_at = NOW()
          RETURNING id, user_id, guest_token_hash, surface, currency, shipping_address, billing_address, status, created_at, updated_at;`,
         [userId, surface],
       );

@@ -1,5 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const { mockGetCart } = vi.hoisted(() => ({
+  mockGetCart: vi.fn(),
+}));
+
+vi.mock("@/lib/data/cart", () => ({
+  getCart: mockGetCart,
+}));
+
 const mockClient = {
   carts: {
     get: vi.fn(),
@@ -84,17 +92,17 @@ describe("checkout server actions", () => {
 
   describe("getCheckoutOrder", () => {
     it("returns cart when still in checkout", async () => {
-      mockClient.carts.get.mockResolvedValue(mockOrder);
+      mockGetCart.mockResolvedValue(mockOrder);
 
       const result = await getCheckoutOrder("order-1");
 
-      expect(mockClient.carts.get).toHaveBeenCalled();
+      expect(mockGetCart).toHaveBeenCalled();
       expect(result).toBe(mockOrder);
     });
 
     it("falls back to getOrder when cart is null (completed)", async () => {
       const completedOrder = { ...mockOrder, current_step: "complete" };
-      mockClient.carts.get.mockRejectedValue(new Error("Not found"));
+      mockGetCart.mockResolvedValue(null);
       mockClient.orders.get.mockResolvedValue(completedOrder);
 
       const result = await getCheckoutOrder("order-1");
@@ -104,7 +112,7 @@ describe("checkout server actions", () => {
     });
 
     it("returns null when both cart and order fail", async () => {
-      mockClient.carts.get.mockRejectedValue(new Error("Not found"));
+      mockGetCart.mockResolvedValue(null);
       mockClient.orders.get.mockRejectedValue(new Error("Not found"));
 
       const result = await getCheckoutOrder("bad-id");

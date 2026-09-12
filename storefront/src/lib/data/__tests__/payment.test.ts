@@ -1,5 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const { mockGetCart } = vi.hoisted(() => ({
+  mockGetCart: vi.fn(),
+}));
+
+vi.mock("@/lib/data/cart", () => ({
+  getCart: mockGetCart,
+}));
+
 const mockClient = {
   carts: {
     get: vi.fn(),
@@ -197,21 +205,18 @@ describe("payment server actions", () => {
 
   describe("confirmPaymentAndCompleteCart", () => {
     it("passes cartId to getCart for explicit lookup", async () => {
-      mockClient.carts.get.mockResolvedValue({
+      mockGetCart.mockResolvedValue({
         id: "cart-1",
         current_step: "complete",
       });
 
       await confirmPaymentAndCompleteCart("cart-1", "session-1");
 
-      expect(mockClient.carts.get).toHaveBeenCalledWith("cart-1", {
-        spreeToken: "order-token-123",
-        token: undefined,
-      });
+      expect(mockGetCart).toHaveBeenCalledWith("cart-1", "dtc");
     });
 
     it("succeeds when cart is already complete", async () => {
-      mockClient.carts.get.mockResolvedValue({
+      mockGetCart.mockResolvedValue({
         id: "cart-1",
         current_step: "complete",
       });
@@ -227,7 +232,7 @@ describe("payment server actions", () => {
     });
 
     it("completes payment session then completes the order", async () => {
-      mockClient.carts.get.mockResolvedValue({
+      mockGetCart.mockResolvedValue({
         id: "cart-1",
         current_step: "payment",
       });
@@ -248,7 +253,7 @@ describe("payment server actions", () => {
     });
 
     it("returns error when payment session fails", async () => {
-      mockClient.carts.get.mockResolvedValue({
+      mockGetCart.mockResolvedValue({
         id: "cart-1",
         current_step: "payment",
       });
@@ -267,7 +272,7 @@ describe("payment server actions", () => {
     });
 
     it("skips session completion when no session ID provided", async () => {
-      mockClient.carts.get.mockResolvedValue({
+      mockGetCart.mockResolvedValue({
         id: "cart-1",
         current_step: "payment",
       });
@@ -284,7 +289,7 @@ describe("payment server actions", () => {
     });
 
     it("returns success when cart is not found (already completed by webhook)", async () => {
-      mockClient.carts.get.mockRejectedValue(new Error("Not found"));
+      mockGetCart.mockResolvedValue(null);
 
       const result = await confirmPaymentAndCompleteCart("cart-1", "session-1");
 
@@ -293,7 +298,7 @@ describe("payment server actions", () => {
     });
 
     it("returns error when complete throws non-403 error", async () => {
-      mockClient.carts.get.mockResolvedValue({
+      mockGetCart.mockResolvedValue({
         id: "cart-1",
         current_step: "payment",
       });
@@ -310,7 +315,7 @@ describe("payment server actions", () => {
     });
 
     it("treats 403 from complete as success (order already completed)", async () => {
-      mockClient.carts.get.mockResolvedValue({
+      mockGetCart.mockResolvedValue({
         id: "cart-1",
         current_step: "payment",
       });
@@ -324,14 +329,15 @@ describe("payment server actions", () => {
       expect(result).toEqual({ success: true, order: null });
     });
 
-    it("returns success when getCart throws (cart may have been completed)", async () => {
-      mockClient.carts.get.mockRejectedValue("unexpected");
+    it("returns error when getCart throws an unexpected database error", async () => {
+      mockGetCart.mockRejectedValue(new Error("Database connection error"));
 
       const result = await confirmPaymentAndCompleteCart("cart-1");
 
-      // getCart() returns null on error (clears stale cookies),
-      // so confirmPaymentAndCompleteCart treats it as already completed
-      expect(result).toEqual({ success: true, order: null });
+      expect(result).toEqual({
+        success: false,
+        error: "Database connection error",
+      });
     });
   });
 });
