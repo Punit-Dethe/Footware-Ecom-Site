@@ -60,7 +60,7 @@ export async function ensureProfile(user: {
 }
 
 /**
- * Updates editable profile identity fields (first_name, last_name).
+ * Updates editable profile identity fields (first_name, last_name, phone).
  * Role cannot be modified through this function.
  */
 export async function updateProfile(
@@ -68,17 +68,44 @@ export async function updateProfile(
   data: {
     first_name?: string | null;
     last_name?: string | null;
+    phone?: string | null;
   },
 ): Promise<ProfileRow> {
+  const setClauses: string[] = [];
+  const values: unknown[] = [userId];
+  let paramIdx = 2;
+
+  if (data.first_name !== undefined) {
+    setClauses.push(`first_name = $${paramIdx++}`);
+    values.push(data.first_name?.trim() || null);
+  }
+
+  if (data.last_name !== undefined) {
+    setClauses.push(`last_name = $${paramIdx++}`);
+    values.push(data.last_name?.trim() || null);
+  }
+
+  if (data.phone !== undefined) {
+    setClauses.push(`phone = $${paramIdx++}`);
+    values.push(data.phone?.trim() || null);
+  }
+
+  if (setClauses.length === 0) {
+    const existing = await getProfile(userId);
+    if (!existing) {
+      throw new Error(`Profile not found for user: ${userId}`);
+    }
+    return existing;
+  }
+
+  setClauses.push(`updated_at = NOW()`);
+
   const res = await query<ProfileRow>(
     `UPDATE public.profiles
-     SET
-       first_name = COALESCE($2, first_name),
-       last_name = COALESCE($3, last_name),
-       updated_at = NOW()
+     SET ${setClauses.join(", ")}
      WHERE id = $1
      RETURNING id, first_name, last_name, phone, role, created_at, updated_at;`,
-    [userId, data.first_name ?? null, data.last_name ?? null],
+    values,
   );
 
   if (res.rows.length === 0) {
@@ -87,3 +114,4 @@ export async function updateProfile(
 
   return res.rows[0];
 }
+

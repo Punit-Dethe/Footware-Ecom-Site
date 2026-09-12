@@ -315,7 +315,6 @@ export async function logout(): Promise<void> {
     updateTag(`cart${cacheTagSuffix(surface)}`);
     updateTag(`checkout${cacheTagSuffix(surface)}`);
   }
-  updateTag("addresses");
   updateTag("credit-cards");
 }
 
@@ -407,6 +406,7 @@ export async function resetPassword(
 export async function updateCustomer(data: {
   first_name?: string;
   last_name?: string;
+  phone?: string;
   email?: string;
   current_password?: string;
 }) {
@@ -445,10 +445,11 @@ export async function updateCustomer(data: {
       }
     }
 
-    // Update profile names in PostgreSQL (role cannot be changed by customer)
+    // Update profile in PostgreSQL (role cannot be changed by customer)
     const updatedProfile = await updateProfile(userId, {
       first_name: data.first_name,
       last_name: data.last_name,
+      phone: data.phone,
     });
 
     updateTag("customer");
