@@ -24,6 +24,7 @@ export {
   clearAccessToken,
   clearAllCartCookies,
   clearCartCookies,
+  clearCartToken,
   clearRefreshToken,
   getAccessToken,
   getCartId,

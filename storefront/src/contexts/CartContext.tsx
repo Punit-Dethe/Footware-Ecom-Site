@@ -9,11 +9,13 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   Suspense,
   type ReactNode,
 } from "react";
 import { toast } from "sonner";
+import { useOptionalAuth } from "@/contexts/AuthContext";
 import {
   addToCart as addToCartAction,
   getCart as getCartAction,
@@ -51,6 +53,9 @@ export function CartProvider({
   const [updating, setUpdating] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const t = useTranslations("cart");
+  const auth = useOptionalAuth();
+  const userId = auth?.user?.id ?? null;
+  const prevUserRef = useRef<string | null | undefined>(undefined);
 
   const openCart = useCallback(() => setIsOpen(true), []);
   const closeCart = useCallback(() => setIsOpen(false), []);
@@ -65,6 +70,25 @@ export function CartProvider({
       setLoading(false);
     }
   }, [surface]);
+
+  // Monitor auth transitions:
+  // - Anonymous -> Authenticated: trigger refreshCart() exactly once to claim/merge
+  // - Authenticated -> Logged out: clear client cart state exactly once
+  useEffect(() => {
+    if (prevUserRef.current === undefined) {
+      prevUserRef.current = userId;
+      return;
+    }
+
+    if (!prevUserRef.current && userId) {
+      refreshCart();
+    } else if (prevUserRef.current && !userId) {
+      setCart(null);
+      setLoading(false);
+    }
+
+    prevUserRef.current = userId;
+  }, [userId, refreshCart]);
 
   const mutateCart = useCallback(
     async (

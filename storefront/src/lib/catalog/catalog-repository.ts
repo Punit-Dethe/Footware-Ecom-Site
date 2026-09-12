@@ -785,3 +785,25 @@ export function getCatalogFilters(params?: {
     meta: { count: filters.length },
   };
 }
+
+export function findCatalogVariantBySku(
+  sku: string,
+): { product: CatalogProduct; variant: CatalogVariant } | null {
+  for (const p of PRODUCTS) {
+    const v = p.variants.find((vItem) => vItem.sku === sku);
+    if (v) return { product: p, variant: v };
+  }
+  return null;
+}
+
+export function findCatalogVariantByIdOrSku(
+  idOrSku: string,
+): { product: CatalogProduct; variant: CatalogVariant } | null {
+  for (const p of PRODUCTS) {
+    const v = p.variants.find(
+      (vItem) => vItem.id === idOrSku || vItem.sku === idOrSku,
+    );
+    if (v) return { product: p, variant: v };
+  }
+  return null;
+}
