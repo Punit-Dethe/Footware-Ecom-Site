@@ -82,18 +82,7 @@ const nextConfig: NextConfig = {
     ],
   },
   async redirects() {
-    return [
-      {
-        source: "/admin",
-        destination: "https://mirza-spree-backend.onrender.com/admin",
-        permanent: false,
-      },
-      {
-        source: "/:country/:locale/admin",
-        destination: "https://mirza-spree-backend.onrender.com/admin",
-        permanent: false,
-      },
-    ];
+    return [];
   },
   async headers() {
     return generateNextConfigCacheHeaders();
