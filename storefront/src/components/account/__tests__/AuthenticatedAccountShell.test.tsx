@@ -5,7 +5,9 @@ const mocks = vi.hoisted(() => ({
   auth: {
     isAuthenticated: false,
     loading: false,
-    refreshUser: vi.fn(async () => {}),
+  },
+  routeSync: {
+    isSyncing: false,
   },
   replace: vi.fn(),
 }));
@@ -18,6 +20,9 @@ vi.mock("next-intl", () => ({
 }));
 vi.mock("@/contexts/AuthContext", () => ({
   useAuth: () => mocks.auth,
+}));
+vi.mock("@/components/auth/AuthRouteSync", () => ({
+  useRouteSync: () => mocks.routeSync,
 }));
 vi.mock("@/components/account/AccountShell", () => ({
   AccountShell: ({ children }: { children: React.ReactNode }) => (
@@ -32,7 +37,7 @@ describe("AuthenticatedAccountShell", () => {
     vi.clearAllMocks();
     mocks.auth.isAuthenticated = false;
     mocks.auth.loading = true;
-    mocks.auth.refreshUser.mockResolvedValue(undefined);
+    mocks.routeSync.isSyncing = false;
   });
 
   it("does not reveal account chrome while the session is loading", () => {
@@ -85,14 +90,7 @@ describe("AuthenticatedAccountShell", () => {
     // Coming from catalog route: AuthContext is unauthenticated and loading=false
     mocks.auth.loading = false;
     mocks.auth.isAuthenticated = false;
-
-    let resolveRefresh: () => void = () => {};
-    mocks.auth.refreshUser.mockImplementation(
-      () =>
-        new Promise<void>((resolve) => {
-          resolveRefresh = resolve;
-        }),
-    );
+    mocks.routeSync.isSyncing = true;
 
     const { rerender } = render(
       <AuthenticatedAccountShell loginHref="/us/en/account?redirect=%2Fus%2Fen%2Faccount%2Forders">
@@ -106,7 +104,7 @@ describe("AuthenticatedAccountShell", () => {
 
     // Now session is resolved on client and authenticated
     mocks.auth.isAuthenticated = true;
-    resolveRefresh();
+    mocks.routeSync.isSyncing = false;
 
     rerender(
       <AuthenticatedAccountShell loginHref="/us/en/account?redirect=%2Fus%2Fen%2Faccount%2Forders">

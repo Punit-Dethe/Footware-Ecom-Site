@@ -8,8 +8,7 @@ export default function AccountLayout({
 }) {
   return (
     <Suspense fallback={null}>
-      <AuthRouteSync />
-      {children}
+      <AuthRouteSync>{children}</AuthRouteSync>
     </Suspense>
   );
 }

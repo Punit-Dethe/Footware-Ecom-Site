@@ -3,8 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useEffect } from "react";
-import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useRouteSync } from "@/components/auth/AuthRouteSync";
 import { AccountShell } from "./AccountShell";
 
 function SessionFallback() {
@@ -37,41 +37,23 @@ interface AuthenticatedAccountShellProps {
  * The server layout rejects requests with no session credentials. This client
  * boundary verifies the remaining session before exposing account chrome and
  * prevents false anonymous redirects during client SPA navigation from catalog routes.
+ * Relies on the parent AuthRouteSync as the sole owner of route-entry session synchronization.
  */
 export function AuthenticatedAccountShell({
   children,
   loginHref,
 }: AuthenticatedAccountShellProps) {
   const router = useRouter();
-  const { isAuthenticated, loading, refreshUser } = useAuth();
-  const [verifying, setVerifying] = useState(!isAuthenticated);
+  const { isAuthenticated, loading } = useAuth();
+  const { isSyncing } = useRouteSync();
 
   useEffect(() => {
-    let active = true;
-    if (!isAuthenticated) {
-      setVerifying(true);
-      if (typeof refreshUser === "function") {
-        refreshUser().finally(() => {
-          if (active) setVerifying(false);
-        });
-      } else {
-        setVerifying(false);
-      }
-    } else {
-      setVerifying(false);
-    }
-    return () => {
-      active = false;
-    };
-  }, [isAuthenticated, refreshUser]);
-
-  useEffect(() => {
-    if (!loading && !verifying && !isAuthenticated) {
+    if (!loading && !isSyncing && !isAuthenticated) {
       router.replace(loginHref);
     }
-  }, [isAuthenticated, loading, verifying, loginHref, router]);
+  }, [isAuthenticated, loading, isSyncing, loginHref, router]);
 
-  if (loading || verifying || !isAuthenticated) return <SessionFallback />;
+  if (loading || isSyncing || !isAuthenticated) return <SessionFallback />;
 
   return <AccountShell>{children}</AccountShell>;
 }

@@ -38,3 +38,4 @@ meilisearch_data/
 .git_backup/
 *.backup/
 *.bak
+scratch/

@@ -22,8 +22,7 @@ export default function WholesaleLayout({ children }: WholesaleLayoutProps) {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <AuthRouteSync />
-      {children}
+      <AuthRouteSync>{children}</AuthRouteSync>
     </div>
   );
 }

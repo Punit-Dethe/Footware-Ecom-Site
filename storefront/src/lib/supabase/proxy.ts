@@ -1,5 +1,5 @@
 import { createServerClient } from "@supabase/ssr";
-import type { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { getSupabasePublishableKey, getSupabaseUrl } from "./server";
 
 export interface ProxyAuthResult {
@@ -7,28 +7,48 @@ export interface ProxyAuthResult {
   email: string | null;
   claims: Record<string, unknown> | null;
   cookiesRefreshed: boolean;
+  response: NextResponse;
+  transientFailure?: boolean;
+}
+
+export interface ProxyClientHandle {
+  supabase: ReturnType<typeof createServerClient>;
+  getResponse: () => NextResponse;
+  getCookiesRefreshed: () => boolean;
 }
 
 /**
  * Creates a Supabase client configured for Next.js proxy/middleware execution.
- * Synchronizes refreshed session cookies across both request and response objects.
+ * Follows the official @supabase/ssr Next.js pattern:
+ * When setAll() is called:
+ * 1. updates request.cookies so downstream Server Components in the same request see current tokens
+ * 2. rebuilds NextResponse.next({ request }) with the updated request headers
+ * 3. sets the rotated cookies on that response for the browser
  */
 export function createProxySupabaseClient(
   request: NextRequest,
-  response: NextResponse,
   onCookiesSet?: () => void,
-) {
-  return createServerClient(getSupabaseUrl(), getSupabasePublishableKey(), {
+): ProxyClientHandle {
+  let cookiesRefreshed = false;
+  let supabaseResponse = NextResponse.next({
+    request,
+  });
+
+  const supabase = createServerClient(getSupabaseUrl(), getSupabasePublishableKey(), {
     cookies: {
       getAll() {
         return request.cookies.getAll();
       },
       setAll(cookiesToSet) {
+        cookiesRefreshed = true;
         for (const { name, value } of cookiesToSet) {
           request.cookies.set(name, value);
         }
+        supabaseResponse = NextResponse.next({
+          request,
+        });
         for (const { name, value, options } of cookiesToSet) {
-          response.cookies.set(name, value, options);
+          supabaseResponse.cookies.set(name, value, options);
         }
         if (cookiesToSet.length > 0 && onCookiesSet) {
           onCookiesSet();
@@ -36,29 +56,63 @@ export function createProxySupabaseClient(
       },
     },
   });
+
+  return {
+    supabase,
+    getResponse: () => supabaseResponse,
+    getCookiesRefreshed: () => cookiesRefreshed,
+  };
 }
 
 /**
  * Verifies the Supabase session in proxy/middleware using cryptographic claim verification.
- * Does NOT trust raw cookie presence alone.
+ * Owns and returns the NextResponse carrying rotated request & response cookies.
+ * Does NOT treat transient network/service outages as anonymous.
  */
 export async function verifyProxySession(
   request: NextRequest,
-  response: NextResponse,
 ): Promise<ProxyAuthResult> {
-  let cookiesRefreshed = false;
-  const supabase = createProxySupabaseClient(request, response, () => {
-    cookiesRefreshed = true;
-  });
+  const { supabase, getResponse, getCookiesRefreshed } =
+    createProxySupabaseClient(request);
 
   try {
     const { data, error } = await supabase.auth.getClaims();
-    if (error || !data?.claims) {
+    if (error) {
+      const status =
+        typeof error === "object" && error !== null && "status" in error
+          ? (error as { status?: number }).status
+          : undefined;
+      const name = error.name || "";
+      if (
+        (typeof status === "number" && status >= 500) ||
+        name === "AuthRetryableFetchError" ||
+        error.message?.includes("fetch failed")
+      ) {
+        return {
+          userId: null,
+          email: null,
+          claims: null,
+          cookiesRefreshed: getCookiesRefreshed(),
+          response: getResponse(),
+          transientFailure: true,
+        };
+      }
       return {
         userId: null,
         email: null,
         claims: null,
-        cookiesRefreshed,
+        cookiesRefreshed: getCookiesRefreshed(),
+        response: getResponse(),
+      };
+    }
+
+    if (!data?.claims) {
+      return {
+        userId: null,
+        email: null,
+        claims: null,
+        cookiesRefreshed: getCookiesRefreshed(),
+        response: getResponse(),
       };
     }
 
@@ -70,14 +124,18 @@ export async function verifyProxySession(
       userId,
       email,
       claims,
-      cookiesRefreshed,
+      cookiesRefreshed: getCookiesRefreshed(),
+      response: getResponse(),
     };
-  } catch {
+  } catch (_err) {
+    // Unexpected transport/network exception thrown during claims retrieval
     return {
       userId: null,
       email: null,
       claims: null,
-      cookiesRefreshed,
+      cookiesRefreshed: getCookiesRefreshed(),
+      response: getResponse(),
+      transientFailure: true,
     };
   }
 }

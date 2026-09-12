@@ -12,7 +12,7 @@ import {
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { AccountShell } from "@/components/account/AccountShell";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,7 @@ import {
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
+import { useRouteSync } from "@/components/auth/AuthRouteSync";
 import { resolveAccountRedirect } from "@/lib/utils/account-redirect";
 import { extractBasePath } from "@/lib/utils/path";
 
@@ -36,27 +37,9 @@ export default function AccountPage() {
   const searchParams = useSearchParams();
   const basePath = extractBasePath(pathname);
   const t = useTranslations("account");
-  const { login, isAuthenticated, loading: authLoading, refreshUser } = useAuth();
-  const [verifying, setVerifying] = useState(!isAuthenticated);
-
-  useEffect(() => {
-    let active = true;
-    if (!isAuthenticated) {
-      setVerifying(true);
-      if (typeof refreshUser === "function") {
-        refreshUser().finally(() => {
-          if (active) setVerifying(false);
-        });
-      } else {
-        setVerifying(false);
-      }
-    } else {
-      setVerifying(false);
-    }
-    return () => {
-      active = false;
-    };
-  }, [isAuthenticated, refreshUser]);
+  const { login, isAuthenticated, loading: authLoading } = useAuth();
+  const { isSyncing } = useRouteSync();
+  const verifying = authLoading || isSyncing;
 
   // Get redirect URL from query params (e.g., from checkout)
   const redirectUrl = resolveAccountRedirect(

@@ -1,7 +1,6 @@
 "use server";
 
 import { updateTag } from "next/cache";
-import { headers } from "next/headers";
 import { ensureProfile, getProfile, updateProfile } from "@/lib/db/profile";
 import {
   cacheTagSuffix,
@@ -9,7 +8,6 @@ import {
   clearAuthCookies,
   SURFACES,
 } from "@/lib/spree";
-import { getStoreUrl } from "@/lib/store";
 import { createClient } from "@/lib/supabase/server";
 import { actionResult } from "./utils";
 
@@ -36,20 +34,29 @@ export type Customer = AppUser;
  */
 export async function getCustomer(): Promise<AppUser | null> {
   const supabase = await createClient();
-  let claimsData: { claims?: Record<string, unknown> } | null = null;
 
-  try {
-    const { data, error } = await supabase.auth.getClaims();
-    if (error || !data?.claims) {
-      return null;
+  const { data, error } = await supabase.auth.getClaims();
+  if (error) {
+    const status =
+      typeof error === "object" && error !== null && "status" in error
+        ? (error as { status?: number }).status
+        : undefined;
+    const name = error.name || "";
+    if (
+      (typeof status === "number" && status >= 500) ||
+      name === "AuthRetryableFetchError" ||
+      error.message?.includes("fetch failed")
+    ) {
+      throw error;
     }
-    claimsData = data as { claims: Record<string, unknown> };
-  } catch {
-    // If getting claims throws an auth/cookie read error, treat as anonymous
     return null;
   }
 
-  const claims = claimsData.claims as Record<string, unknown>;
+  if (!data?.claims) {
+    return null;
+  }
+
+  const claims = data.claims as Record<string, unknown>;
   const userId = typeof claims.sub === "string" ? claims.sub : null;
   const email = typeof claims.email === "string" ? claims.email : "";
 
@@ -313,68 +320,19 @@ export async function logout(): Promise<void> {
 }
 
 /**
- * Resolve a trusted server-side redirect URL for password reset.
- * Rejects arbitrary external caller URLs (e.g. https://attacker.example/reset).
- */
-async function resolveTrustedResetRedirect(
-  context?: { country?: string; locale?: string } | string,
-): Promise<string> {
-  let country = "us";
-  let locale = "en";
-
-  if (typeof context === "object" && context !== null) {
-    if (context.country && /^[a-z]{2}$/i.test(context.country)) {
-      country = context.country.toLowerCase();
-    }
-    if (context.locale && /^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/i.test(context.locale)) {
-      locale = context.locale.toLowerCase();
-    }
-  } else if (typeof context === "string") {
-    // If a relative path or base path was passed (e.g. "/us/en/account/reset-password" or "/us/en")
-    const match = context.match(/^\/([a-z]{2})\/([a-z]{2,3}(?:-[a-z0-9]{2,8})*)/i);
-    if (match) {
-      country = match[1].toLowerCase();
-      locale = match[2].toLowerCase();
-    }
-  }
-
-  // Derive origin strictly from trusted configuration or request context
-  let origin = getStoreUrl();
-  if (!origin) {
-    try {
-      const headerList = await headers();
-      const host = headerList.get("x-forwarded-host") || headerList.get("host");
-      const proto = headerList.get("x-forwarded-proto") || "https";
-      if (host) {
-        origin = `${proto}://${host}`;
-      }
-    } catch {
-      // Outside active request context
-    }
-  }
-
-  if (!origin) {
-    origin = "http://localhost:3001";
-  }
-
-  return `${origin.replace(/\/+$/, "")}/${country}/${locale}/account/reset-password`;
-}
-
-/**
  * Request a password reset email via Supabase Auth.
  * Returns a generic success response regardless of whether the email exists.
- * Constructs the redirect URL on the server; never trusts caller-provided external origins.
+ * In accordance with the canonical B2 email template model:
+ * Recovery link is built using {{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=recovery
+ * The origin strictly comes from the canonical Supabase Site URL.
  */
 export async function requestPasswordReset(
   email: string,
-  context?: { country?: string; locale?: string } | string,
+  _context?: { country?: string; locale?: string } | string,
 ): Promise<{ success: boolean; message: string }> {
   try {
-    const redirectTo = await resolveTrustedResetRedirect(context);
     const supabase = await createClient();
-    await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo,
-    });
+    await supabase.auth.resetPasswordForEmail(email.trim());
   } catch {
     // Suppress error to avoid email enumeration
   }

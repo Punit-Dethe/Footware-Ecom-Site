@@ -153,8 +153,9 @@ export default function CheckoutLayout({ children }: CheckoutLayoutProps) {
   return (
     <CheckoutProvider>
       <Suspense fallback={null}>
-        <AuthRouteSync />
-        <CheckoutLayoutContent>{children}</CheckoutLayoutContent>
+        <AuthRouteSync>
+          <CheckoutLayoutContent>{children}</CheckoutLayoutContent>
+        </AuthRouteSync>
       </Suspense>
     </CheckoutProvider>
   );

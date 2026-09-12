@@ -152,6 +152,15 @@ describe("customer server actions (Supabase Auth)", () => {
 
       await expect(getCustomer()).rejects.toThrow("Database connection timeout");
     });
+
+    it("throws error when getClaims encounters unexpected transport/5xx failure, NOT anonymous", async () => {
+      mockSupabase.auth.getClaims.mockResolvedValue({
+        data: null,
+        error: { name: "AuthRetryableFetchError", message: "fetch failed", status: 503 },
+      });
+
+      await expect(getCustomer()).rejects.toMatchObject({ status: 503 });
+    });
   });
 
   describe("syncSession", () => {
@@ -184,6 +193,18 @@ describe("customer server actions (Supabase Auth)", () => {
         error: null,
       });
       mockGetProfile.mockRejectedValue(new Error("Postgres connection failure"));
+
+      const result = await syncSession();
+
+      expect(result.customer).toBeNull();
+      expect(result.stale).toBe(true);
+    });
+
+    it("returns stale: true when getClaims encounters unexpected transport failure", async () => {
+      mockSupabase.auth.getClaims.mockResolvedValue({
+        data: null,
+        error: { name: "AuthRetryableFetchError", message: "fetch failed", status: 503 },
+      });
 
       const result = await syncSession();
 
@@ -379,9 +400,8 @@ describe("customer server actions (Supabase Auth)", () => {
       expect(mockSupabase.auth.signOut).toHaveBeenCalledTimes(1);
     });
   });
-
   describe("requestPasswordReset", () => {
-    it("constructs trusted server redirect and rejects external URL", async () => {
+    it("invokes resetPasswordForEmail with sanitized email using canonical SiteURL model", async () => {
       mockSupabase.auth.resetPasswordForEmail.mockResolvedValue({
         data: {},
         error: null,
@@ -394,12 +414,9 @@ describe("customer server actions (Supabase Auth)", () => {
       );
 
       expect(result.success).toBe(true);
+      // Origin is strictly governed by Supabase SiteURL; external redirect is rejected/ignored
       expect(mockSupabase.auth.resetPasswordForEmail).toHaveBeenCalledWith(
         "user@example.com",
-        {
-          // Constructed strictly server-side
-          redirectTo: "http://localhost:3001/us/en/account/reset-password",
-        },
       );
     });
 

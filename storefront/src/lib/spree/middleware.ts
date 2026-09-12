@@ -6,9 +6,22 @@ import {
   negotiateLocale,
 } from "@/i18n/normalize";
 import { REQUEST_PATHNAME_HEADER, REQUEST_SEARCH_HEADER } from "@/i18n/routing";
-import { resolveRouteCachePolicy } from "@/lib/cache/cache-policy";
+import { CACHE_POLICIES, resolveRouteCachePolicy } from "@/lib/cache/cache-policy";
 import { verifyProxySession } from "@/lib/supabase/proxy";
 import { buildAccountLoginHref } from "@/lib/utils/account-redirect";
+
+/**
+ * Copies cookies set on the Supabase proxy response onto a target response (including redirects).
+ * Ensures cookie rotation/clearing is preserved across redirects and locale context composition.
+ */
+function copySupabaseResponseCookies(
+  source: NextResponse,
+  target: NextResponse,
+): void {
+  for (const cookie of source.cookies.getAll()) {
+    target.cookies.set(cookie);
+  }
+}
 
 const COUNTRY_COOKIE = "spree_country";
 const LOCALE_COOKIE = "spree_locale";
@@ -206,27 +219,28 @@ export function createSpreeMiddleware(
         return response;
       }
 
-      const response = nextWithLocaleContext(request, country, locale);
-
-      // Defensively drop legacy Spree auth cookies if present
-      if (
-        request.cookies.has(LEGACY_ACCESS_TOKEN_COOKIE) ||
-        request.cookies.has(LEGACY_REFRESH_TOKEN_COOKIE)
-      ) {
-        clearLegacySpreeCookies(response, request);
-      }
-
       if (isAuthConsumingRoute(pathname, canonicalPrefix)) {
-        // Run session verification/refresh for requests that actually consume authentication
-        const authResult = await verifyProxySession(request, response);
+        // 1. Run session verification/refresh FIRST so request.cookies are mutated before downstream response construction
+        const authResult = await verifyProxySession(request);
 
-        // If a Supabase token refresh wrote cookies, make sure this auth response is not cached publicly
-        if (authResult.cookiesRefreshed) {
-          response.headers.set("Cache-Control", "private, no-store");
+        // Fail closed on transient auth service failure for protected account routes
+        if (
+          authResult.transientFailure &&
+          isProtectedAccountPath(pathname, canonicalPrefix)
+        ) {
+          return new NextResponse("Authentication service temporarily unavailable", {
+            status: 503,
+            headers: {
+              "Cache-Control": CACHE_POLICIES.PRIVATE_SESSION,
+            },
+          });
         }
 
-        // Protected account children strictly require a verified user
-        if (isProtectedAccountPath(pathname, canonicalPrefix) && !authResult.userId) {
+        // 2. Protected account children strictly require a verified user
+        if (
+          isProtectedAccountPath(pathname, canonicalPrefix) &&
+          !authResult.userId
+        ) {
           const loginHref = buildAccountLoginHref(
             canonicalPrefix,
             `${pathname}${request.nextUrl.search}`,
@@ -236,10 +250,54 @@ export function createSpreeMiddleware(
           );
           setLocaleCookies(redirectResponse, country, locale);
           clearLegacySpreeCookies(redirectResponse);
+          // Preserve any Supabase cookie rotation/clearing on redirect
+          copySupabaseResponseCookies(authResult.response, redirectResponse);
           return redirectResponse;
         }
+
+        // 3. Request cookies are now current. Construct final localized response from updated request
+        const response = nextWithLocaleContext(request, country, locale);
+        copySupabaseResponseCookies(authResult.response, response);
+
+        if (
+          request.cookies.has(LEGACY_ACCESS_TOKEN_COOKIE) ||
+          request.cookies.has(LEGACY_REFRESH_TOKEN_COOKIE)
+        ) {
+          clearLegacySpreeCookies(response, request);
+        }
+
+        // Cache-Control invariants:
+        // - Any response where Supabase wrote/rotated cookies: PRIVATE_SESSION
+        // - Account routes: PRIVATE_SESSION
+        // - Checkout routes: PRIVATE_SESSION
+        // - Authenticated wholesale: PRIVATE_SESSION
+        // - Anonymous wholesale with no cookie rotation: public catalog policy preserved
+        const isAccount = pathname.startsWith(`${canonicalPrefix}/account`);
+        const isCheckout = pathname.startsWith(`${canonicalPrefix}/checkout`);
+        const isAuthWholesale =
+          pathname.startsWith(`${canonicalPrefix}/wholesale`) &&
+          Boolean(authResult.userId);
+
+        if (
+          authResult.cookiesRefreshed ||
+          isAccount ||
+          isCheckout ||
+          isAuthWholesale
+        ) {
+          response.headers.set("Cache-Control", CACHE_POLICIES.PRIVATE_SESSION);
+        }
+
+        return response;
       }
 
+      // Public catalog routes: bypass auth verification completely (0 auth overhead)
+      const response = nextWithLocaleContext(request, country, locale);
+      if (
+        request.cookies.has(LEGACY_ACCESS_TOKEN_COOKIE) ||
+        request.cookies.has(LEGACY_REFRESH_TOKEN_COOKIE)
+      ) {
+        clearLegacySpreeCookies(response, request);
+      }
       return response;
     }
 

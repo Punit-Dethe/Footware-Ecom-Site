@@ -105,37 +105,46 @@ export function AuthProvider({
   initialPathname?: string;
 }) {
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
-
-  const refreshUser = useCallback(async () => {
-    setLoading(true);
-    try {
-      const { customer, refreshed, stale } = await syncSession();
-      if (refreshed) {
-        router.refresh();
-      }
-      if (stale) return;
-      setUser(customer ? toUser(customer) : null);
-    } catch {
-      // Leave existing session untouched on unexpected error
-    } finally {
-      setLoading(false);
-    }
-  }, [router]);
-
+  const inFlightSyncRef = useRef<Promise<void> | null>(null);
   const lastSyncRef = useRef(0);
 
-  // Initialize auth state with route-awareness to preserve storefront performance.
-  // We use window.location.pathname inside useEffect to avoid dynamic usePathname()
-  // blocking static prerendering at the layout root.
+  useEffect(() => {
+    lastSyncRef.current = Date.now();
+  }, []);
+
+  const refreshUser = useCallback(async () => {
+    if (inFlightSyncRef.current) {
+      return inFlightSyncRef.current;
+    }
+    const syncPromise = (async () => {
+      setLoading(true);
+      try {
+        lastSyncRef.current = Date.now();
+        const { customer, refreshed, stale } = await syncSession();
+        if (refreshed) {
+          router.refresh();
+        }
+        if (stale) return;
+        setUser(customer ? toUser(customer) : null);
+      } catch {
+        // Leave existing session untouched on unexpected error
+      } finally {
+        setLoading(false);
+        inFlightSyncRef.current = null;
+      }
+    })();
+    inFlightSyncRef.current = syncPromise;
+    return syncPromise;
+  }, [router]);
+
+  // Route-aware initial auth check: 0 overhead on public catalog routes
   useEffect(() => {
     let active = true;
 
     const initAuth = async () => {
       const currentPath = initialPathname ?? getClientPathname();
-      // Ordinary public catalog routes (homepage, PLP, PDP, category, search)
-      // must NOT perform an auth roundtrip on initial render/hydration.
       if (!isAuthSensitivePath(currentPath)) {
         if (active) {
           setLoading(false);
@@ -143,7 +152,6 @@ export function AuthProvider({
         return;
       }
 
-      lastSyncRef.current = Date.now();
       await refreshUser();
       if (active) {
         setLoading(false);
