@@ -11,7 +11,7 @@ import {
 } from "@/lib/db/address";
 import { createClient } from "@/lib/supabase/server";
 import { adaptDbAddressToSpree } from "./address-adapter";
-import { actionResult, withFallback } from "./utils";
+import { actionResult } from "./utils";
 
 /**
  * Extracts and cryptographically verifies the authenticated Supabase user ID.
@@ -19,7 +19,7 @@ import { actionResult, withFallback } from "./utils";
  *
  * Rules:
  * - If no Supabase auth token cookie exists: fast-paths to null without network call
- *   (guaranteeing 0 remote auth calls on anonymous catalog pages).
+ *   (guaranteeing 0 remote auth calls on anonymous catalog pages). Supports chunked cookies.
  * - If Supabase returns a transient 500+ / fetch failure: fails closed (throws error).
  * - If unauthenticated and allowAnonymous is false: throws Error("Unauthorized").
  */
@@ -29,7 +29,7 @@ async function getVerifiedUserId(options?: {
   const cookieStore = await cookies();
   const allCookies = cookieStore.getAll();
   const hasAuthCookie = allCookies.some(
-    (c) => c.name.startsWith("sb-") && c.name.endsWith("-auth-token"),
+    (c) => c.name.startsWith("sb-") && c.name.includes("-auth-token"),
   );
 
   if (!hasAuthCookie) {
@@ -75,31 +75,40 @@ async function getVerifiedUserId(options?: {
 /**
  * Retrieve saved addresses for the authenticated customer.
  * Sourced strictly from PostgreSQL public.addresses.
+ *
+ * Rules:
+ * - Anonymous / no auth cookie -> returns { data: [] } (0 remote auth calls)
+ * - Normal invalid / expired session -> returns { data: [] }
+ * - Authenticated user with no addresses -> returns { data: [] }
+ * - Supabase auth outage (500+, fetch failure) -> throws / fails closed
+ * - PostgreSQL failure -> throws / fails closed
  */
 export async function getAddresses(): Promise<{ data: Address[] }> {
-  return withFallback(
-    async () => {
-      const userId = await getVerifiedUserId({ allowAnonymous: true });
-      if (!userId) {
-        return { data: [] };
-      }
-      const rows = await dbListAddresses(userId);
-      return { data: rows.map(adaptDbAddressToSpree) };
-    },
-    { data: [] as Address[] },
-  );
+  const userId = await getVerifiedUserId({ allowAnonymous: true });
+  if (!userId) {
+    return { data: [] };
+  }
+  const rows = await dbListAddresses(userId);
+  return { data: rows.map(adaptDbAddressToSpree) };
 }
 
 /**
  * Retrieve a specific saved address by ID, scoped strictly to the authenticated user.
+ *
+ * Rules:
+ * - Anonymous / no auth cookie -> returns null (0 remote auth calls)
+ * - Normal invalid / expired session -> returns null
+ * - Foreign / nonexistent address -> returns null
+ * - Supabase auth outage (500+, fetch failure) -> throws / fails closed
+ * - PostgreSQL failure -> throws / fails closed
  */
 export async function getAddress(id: string): Promise<Address | null> {
-  return withFallback(async () => {
-    const userId = await getVerifiedUserId({ allowAnonymous: false });
-    if (!userId) return null;
-    const row = await dbGetAddress(userId, id);
-    return row ? adaptDbAddressToSpree(row) : null;
-  }, null);
+  const userId = await getVerifiedUserId({ allowAnonymous: true });
+  if (!userId) {
+    return null;
+  }
+  const row = await dbGetAddress(userId, id);
+  return row ? adaptDbAddressToSpree(row) : null;
 }
 
 /**

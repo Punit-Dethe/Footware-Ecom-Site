@@ -108,6 +108,38 @@ describe("Addresses Data Access Layer (B4)", () => {
     });
   });
 
+  describe("Cookie Detection & Chunking", () => {
+    it("detects standard auth cookie and calls getClaims", async () => {
+      mockCookies.getAll.mockReturnValue([
+        { name: "sb-cleanproject-auth-token", value: "valid-session" },
+      ]);
+      mockSupabase.auth.getClaims.mockResolvedValueOnce({
+        data: { claims: { sub: "user-1" } },
+        error: null,
+      });
+      mockDbListAddresses.mockResolvedValueOnce([]);
+
+      await getAddresses();
+      expect(mockSupabase.auth.getClaims).toHaveBeenCalled();
+    });
+
+    it("detects chunked auth cookies (e.g. sb-<project>-auth-token.0) and calls getClaims", async () => {
+      mockCookies.getAll.mockReturnValue([
+        { name: "sb-cleanproject-auth-token.0", value: "chunk-0" },
+        { name: "sb-cleanproject-auth-token.1", value: "chunk-1" },
+      ]);
+      mockSupabase.auth.getClaims.mockResolvedValueOnce({
+        data: { claims: { sub: "user-chunked" } },
+        error: null,
+      });
+      mockDbListAddresses.mockResolvedValueOnce([]);
+
+      await getAddresses();
+      expect(mockSupabase.auth.getClaims).toHaveBeenCalled();
+      expect(mockDbListAddresses).toHaveBeenCalledWith("user-chunked");
+    });
+  });
+
   describe("getAddresses", () => {
     it("fast-paths anonymous visitor (no auth cookie) to { data: [] } without calling Supabase", async () => {
       mockCookies.getAll.mockReturnValue([]);
@@ -134,22 +166,69 @@ describe("Addresses Data Access Layer (B4)", () => {
       expect(result.data[0].full_name).toBe("Alice Smith");
     });
 
-    it("fails closed on Supabase auth 500+ infrastructure outage", async () => {
+    it("returns { data: [] } when authenticated user has no saved addresses", async () => {
+      mockSupabase.auth.getClaims.mockResolvedValueOnce({
+        data: { claims: { sub: "user-A" } },
+        error: null,
+      });
+      mockDbListAddresses.mockResolvedValueOnce([]);
+
+      const result = await getAddresses();
+
+      expect(result).toEqual({ data: [] });
+      expect(mockDbListAddresses).toHaveBeenCalledWith("user-A");
+    });
+
+    it("returns { data: [] } for normal invalid or expired session", async () => {
+      mockSupabase.auth.getClaims.mockResolvedValueOnce({
+        data: null,
+        error: { status: 401, message: "JWT expired" },
+      });
+
+      const result = await getAddresses();
+
+      expect(result).toEqual({ data: [] });
+      expect(mockDbListAddresses).not.toHaveBeenCalled();
+    });
+
+    it("fails closed and throws on Supabase auth 500+ infrastructure outage", async () => {
       mockSupabase.auth.getClaims.mockResolvedValueOnce({
         data: null,
         error: { status: 503, message: "Service Unavailable" },
       });
 
-      const result = await getAddresses();
-      // withFallback catches and returns fallback { data: [] }, but ensures error logged
-      expect(result).toEqual({ data: [] });
+      await expect(getAddresses()).rejects.toMatchObject({ status: 503 });
       expect(mockDbListAddresses).not.toHaveBeenCalled();
+    });
+
+    it("propagates PostgreSQL failure on getAddresses instead of swallowing it", async () => {
+      mockSupabase.auth.getClaims.mockResolvedValueOnce({
+        data: { claims: { sub: "user-A" } },
+        error: null,
+      });
+      mockDbListAddresses.mockRejectedValueOnce(
+        new Error("Database connection error"),
+      );
+
+      await expect(getAddresses()).rejects.toThrow("Database connection error");
     });
   });
 
-  describe("getAddress (IDOR Isolation)", () => {
-    it("returns null for anonymous caller", async () => {
+  describe("getAddress (IDOR Isolation & Failure Semantics)", () => {
+    it("returns null for normal anonymous caller without calling Supabase", async () => {
       mockCookies.getAll.mockReturnValue([]);
+
+      const result = await getAddress("addr-123");
+      expect(result).toBeNull();
+      expect(mockSupabase.auth.getClaims).not.toHaveBeenCalled();
+      expect(mockDbGetAddress).not.toHaveBeenCalled();
+    });
+
+    it("returns null for invalid or expired session", async () => {
+      mockSupabase.auth.getClaims.mockResolvedValueOnce({
+        data: null,
+        error: { status: 401, message: "JWT expired" },
+      });
 
       const result = await getAddress("addr-123");
       expect(result).toBeNull();
@@ -181,6 +260,28 @@ describe("Addresses Data Access Layer (B4)", () => {
 
       expect(mockDbGetAddress).toHaveBeenCalledWith("user-B", "addr-123");
       expect(result).toBeNull();
+    });
+
+    it("fails closed and throws on Supabase auth 500+ infrastructure outage", async () => {
+      mockSupabase.auth.getClaims.mockResolvedValueOnce({
+        data: null,
+        error: { status: 500, message: "Internal Server Error" },
+      });
+
+      await expect(getAddress("addr-123")).rejects.toMatchObject({ status: 500 });
+      expect(mockDbGetAddress).not.toHaveBeenCalled();
+    });
+
+    it("propagates PostgreSQL failure on getAddress instead of swallowing it", async () => {
+      mockSupabase.auth.getClaims.mockResolvedValueOnce({
+        data: { claims: { sub: "user-A" } },
+        error: null,
+      });
+      mockDbGetAddress.mockRejectedValueOnce(
+        new Error("PostgreSQL query failed"),
+      );
+
+      await expect(getAddress("addr-123")).rejects.toThrow("PostgreSQL query failed");
     });
   });
 
