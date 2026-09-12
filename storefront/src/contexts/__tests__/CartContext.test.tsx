@@ -17,6 +17,14 @@ vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => key,
 }));
 
+const { mockUseOptionalAuth } = vi.hoisted(() => ({
+  mockUseOptionalAuth: vi.fn().mockReturnValue(null),
+}));
+
+vi.mock("@/contexts/AuthContext", () => ({
+  useOptionalAuth: mockUseOptionalAuth,
+}));
+
 import { toast } from "sonner";
 import { CartProvider, useCart } from "@/contexts/CartContext";
 import {
@@ -234,4 +242,47 @@ describe("CartContext", () => {
       expect(result.current.isOpen).toBe(false);
     });
   });
+
+  describe("auth transitions and client sync", () => {
+    it("refreshes cart exactly once when transition from anonymous to authenticated occurs", async () => {
+      let currentAuth: any = null;
+      mockUseOptionalAuth.mockImplementation(() => currentAuth);
+
+      const { result, rerender } = renderHook(() => useCart(), { wrapper });
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+      expect(mockGetCart).toHaveBeenCalledTimes(1);
+
+      // Transition to authenticated
+      currentAuth = { user: { id: "user-123" } };
+      rerender();
+
+      await waitFor(() => {
+        expect(mockGetCart).toHaveBeenCalledTimes(2);
+      });
+    });
+
+    it("clears cart to null when user logs out", async () => {
+      let currentAuth: any = { user: { id: "user-123" } };
+      mockUseOptionalAuth.mockImplementation(() => currentAuth);
+
+      const { result, rerender } = renderHook(() => useCart(), { wrapper });
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+      expect(result.current.cart).toBe(mockCart);
+
+      // Transition to logged out
+      currentAuth = null;
+      rerender();
+
+      await waitFor(() => {
+        expect(result.current.cart).toBeNull();
+      });
+    });
+  });
 });
+

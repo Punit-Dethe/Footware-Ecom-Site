@@ -4,7 +4,6 @@ import {
   COUNTRIES,
   MARKETS,
   POLICIES,
-  PRODUCTS,
   getCatalogFilters,
   getCategoryByPermalinkOrId,
   getProductBySlugOrId,
@@ -12,54 +11,13 @@ import {
 } from "@/lib/catalog/catalog-repository";
 
 
-// Stateful in-memory carts
-const CARTS = new Map<string, any>();
-
-function getOrCreateCart(cartId?: string) {
-  const id = cartId || "cart_mirza_demo";
-  if (!CARTS.has(id)) {
-    CARTS.set(id, {
-      id,
-      number: `R-MRZ-${id.slice(-4).toUpperCase()}`,
-      token: `token_${id}`,
-      currency: "USD",
-      item_count: 0,
-      total_quantity: 0,
-      total: "$0.00",
-      item_total: "$0.00",
-      ship_total: "$0.00",
-      tax_total: "$0.00",
-      promo_total: "$0.00",
-      current_step: "cart",
-      state: "cart",
-      items: [],
-    });
-  }
-  return CARTS.get(id);
-}
-
-function recalculateCart(cart: any) {
-  const totalCents = cart.items.reduce(
-    (sum: number, item: any) =>
-      sum + item.price.amount_in_cents * item.quantity,
-    0,
-  );
-  const totalQty = cart.items.reduce(
-    (sum: number, item: any) => sum + item.quantity,
-    0,
-  );
-  const formatted = `$${(totalCents / 100).toFixed(2)}`;
-
-  cart.total_quantity = totalQty;
-  cart.item_count = totalQty;
-  cart.item_total = { display_amount: formatted, amount_in_cents: totalCents };
-  cart.total = { display_amount: formatted, amount_in_cents: totalCents };
-  cart.ship_total = { display_amount: "$0.00", amount_in_cents: 0 };
-  cart.tax_total = { display_amount: "$0.00", amount_in_cents: 0 };
-  cart.promo_total = { display_amount: "$0.00", amount_in_cents: 0 };
-
-  return cart;
-}
+import {
+  addToCart,
+  getCart,
+  getOrCreateCart,
+  removeCartItem,
+  updateCartItem,
+} from "@/lib/data/cart";
 
 export async function GET(
   request: NextRequest,
@@ -230,8 +188,13 @@ export async function GET(
 
   // 13. Carts Get: GET /api/v3/store/carts/:id or /cart
   if (path.startsWith("carts/") || path === "cart") {
-    const cartId = path.replace(/^carts\//, "");
-    const cart = getOrCreateCart(cartId);
+    const cartId = path.startsWith("carts/")
+      ? path.replace(/^carts\//, "")
+      : undefined;
+    const cart = await getCart(cartId);
+    if (!cart) {
+      return NextResponse.json({ error: "Cart not found" }, { status: 404 });
+    }
     return NextResponse.json(cart);
   }
 
@@ -267,69 +230,31 @@ export async function POST(
 
   // 2. Create Cart: POST /api/v3/store/carts
   if (path === "carts") {
-    const cartId = `cart_${Math.random().toString(36).slice(2, 9)}`;
-    const cart = getOrCreateCart(cartId);
+    const cart = await getOrCreateCart();
     return NextResponse.json(cart);
   }
 
   // 3. Add Item to Cart: POST /api/v3/store/carts/:id/items
   if (path.match(/^carts\/[^/]+\/items$/)) {
-    const cartId = path.split("/")[1];
-    const cart = getOrCreateCart(cartId);
+    const pathCartId = path.split("/")[1];
+    const authorizedCart = await getCart();
+    if (!authorizedCart || authorizedCart.id !== pathCartId) {
+      return NextResponse.json(
+        { error: "Cart not found or unauthorized" },
+        { status: 404 },
+      );
+    }
 
     const variantId = body.variant_id;
     const quantity = Number(body.quantity) || 1;
-
-    // Look up product & variant in catalog
-    let foundProduct: any = null;
-    let foundVariant: any = null;
-
-    for (const p of PRODUCTS) {
-      const v = p.variants.find(
-        (vItem) => vItem.id === variantId || vItem.sku === variantId,
+    const result = await addToCart(variantId, quantity);
+    if (!result.success) {
+      return NextResponse.json(
+        { error: result.error || "Failed to add item to cart" },
+        { status: 400 },
       );
-      if (v) {
-        foundProduct = p;
-        foundVariant = v;
-        break;
-      }
     }
-
-    if (!foundProduct) {
-      foundProduct = PRODUCTS[0];
-      foundVariant = foundProduct.variants[0];
-    }
-
-    const existingItem = cart.items.find(
-      (i: any) => i.variant_id === foundVariant.id,
-    );
-    if (existingItem) {
-      existingItem.quantity += quantity;
-      existingItem.total = {
-        amount_in_cents:
-          foundVariant.price.amount_in_cents * existingItem.quantity,
-        display_amount: `$${((foundVariant.price.amount_in_cents * existingItem.quantity) / 100).toFixed(2)}`,
-      };
-    } else {
-      cart.items.push({
-        id: `li_${Math.random().toString(36).slice(2, 9)}`,
-        name: foundProduct.name,
-        slug: foundProduct.slug,
-        sku: foundVariant.sku,
-        variant_id: foundVariant.id,
-        quantity,
-        price: foundVariant.price,
-        total: {
-          amount_in_cents: foundVariant.price.amount_in_cents * quantity,
-          display_amount: `$${((foundVariant.price.amount_in_cents * quantity) / 100).toFixed(2)}`,
-        },
-        thumbnail_url: foundProduct.thumbnail_url,
-        options_text: foundVariant.options_text,
-      });
-    }
-
-    recalculateCart(cart);
-    return NextResponse.json(cart);
+    return NextResponse.json(result.cart);
   }
 
   return NextResponse.json({ success: true });
@@ -351,22 +276,25 @@ export async function PATCH(
   // Update Cart Item Quantity: PATCH /api/v3/store/carts/:id/items/:itemId
   if (path.match(/^carts\/[^/]+\/items\/[^/]+$/)) {
     const parts = path.split("/");
-    const cartId = parts[1];
+    const pathCartId = parts[1];
     const itemId = parts[3];
-    const cart = getOrCreateCart(cartId);
-
-    const quantity = Number(body.quantity) || 1;
-    const item = cart.items.find((i: any) => i.id === itemId);
-    if (item) {
-      item.quantity = quantity;
-      item.total = {
-        amount_in_cents: item.price.amount_in_cents * quantity,
-        display_amount: `$${((item.price.amount_in_cents * quantity) / 100).toFixed(2)}`,
-      };
+    const authorizedCart = await getCart();
+    if (!authorizedCart || authorizedCart.id !== pathCartId) {
+      return NextResponse.json(
+        { error: "Cart not found or unauthorized" },
+        { status: 404 },
+      );
     }
 
-    recalculateCart(cart);
-    return NextResponse.json(cart);
+    const quantity = Number(body.quantity) || 1;
+    const result = await updateCartItem(itemId, quantity);
+    if (!result.success) {
+      return NextResponse.json(
+        { error: result.error || "Failed to update item" },
+        { status: 400 },
+      );
+    }
+    return NextResponse.json(result.cart);
   }
 
   return NextResponse.json({ success: true });
@@ -382,13 +310,24 @@ export async function DELETE(
   // Remove Item from Cart: DELETE /api/v3/store/carts/:id/items/:itemId
   if (path.match(/^carts\/[^/]+\/items\/[^/]+$/)) {
     const parts = path.split("/");
-    const cartId = parts[1];
+    const pathCartId = parts[1];
     const itemId = parts[3];
-    const cart = getOrCreateCart(cartId);
+    const authorizedCart = await getCart();
+    if (!authorizedCart || authorizedCart.id !== pathCartId) {
+      return NextResponse.json(
+        { error: "Cart not found or unauthorized" },
+        { status: 404 },
+      );
+    }
 
-    cart.items = cart.items.filter((i: any) => i.id !== itemId);
-    recalculateCart(cart);
-    return NextResponse.json(cart);
+    const result = await removeCartItem(itemId);
+    if (!result.success) {
+      return NextResponse.json(
+        { error: result.error || "Failed to remove item" },
+        { status: 400 },
+      );
+    }
+    return NextResponse.json(result.cart);
   }
 
   return NextResponse.json({ success: true });

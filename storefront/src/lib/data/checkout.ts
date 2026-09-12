@@ -12,6 +12,7 @@ import {
   requireCartId,
   type Surface,
 } from "@/lib/spree";
+import { findCartById } from "@/lib/db/cart";
 import { getCart } from "./cart";
 import { getOrder } from "./orders";
 import { actionResult, withFallback } from "./utils";
@@ -19,7 +20,7 @@ import { getWholesaleChannel } from "./wholesale";
 
 /**
  * Determine which surface a checkout belongs to by matching its cart id against
- * the per-surface cart-id cookie. Cheap and correct for in-session actions,
+ * the per-surface cart-id cookie or the database carts.surface column. Cheap and correct for in-session actions,
  * where the cookie is always present. For the offsite-payment return path — where
  * the cookie may be gone — use {@link resolveSurfaceForCartVerified} instead.
  * Defaults to DTC when it matches neither.
@@ -27,7 +28,18 @@ import { getWholesaleChannel } from "./wholesale";
 export async function resolveSurfaceForCart(cartId: string): Promise<Surface> {
   if (!isWholesaleEnabled()) return "dtc";
   const wholesaleCartId = await getCartId("wholesale");
-  return wholesaleCartId === cartId ? "wholesale" : "dtc";
+  if (wholesaleCartId === cartId) return "wholesale";
+
+  try {
+    const dbCart = await findCartById(cartId);
+    if (dbCart?.surface) {
+      return dbCart.surface;
+    }
+  } catch {
+    // Fall back to DTC
+  }
+
+  return "dtc";
 }
 
 /**
@@ -40,15 +52,8 @@ export async function resolveSurfaceForCart(cartId: string): Promise<Surface> {
 export type VerifiedSurface = Surface | "unverified";
 
 /**
- * Like {@link resolveSurfaceForCart}, but confirms an ambiguous cart against its
- * own `channel_id` rather than trusting the cookie. Used on the offsite-payment
- * return, where the wholesale cart cookie can be dropped during the redirect and
- * a cookie-only check would route a wholesale checkout through the DTC client.
- * The extra fetch only runs when wholesale is enabled and the cookie didn't
- * already resolve the cart.
- *
- * Returns `"unverified"` when the wholesale lookup fails so the caller can fail
- * closed — a transient failure must not be mistaken for a confirmed DTC cart.
+ * Like {@link resolveSurfaceForCart}, but confirms an ambiguous cart against the
+ * database carts.surface column or channel_id rather than trusting the cookie alone.
  */
 export async function resolveSurfaceForCartVerified(
   cartId: string,
@@ -58,11 +63,15 @@ export async function resolveSurfaceForCartVerified(
   const wholesaleCartId = await getCartId("wholesale");
   if (wholesaleCartId === cartId) return "wholesale";
 
-  // Cookie says DTC or is absent — verify against the cart's channel. Only a
-  // *positive* signal decides the surface: a fetched cart whose channel matches
-  // wholesale → "wholesale"; a fetched cart whose channel differs → confirmed
-  // "dtc". Anything else (fetch threw, cart null, channel null) is "unverified"
-  // so the caller fails closed instead of defaulting to DTC.
+  try {
+    const dbCart = await findCartById(cartId);
+    if (dbCart?.surface) {
+      return dbCart.surface;
+    }
+  } catch {
+    // DB lookup error, fall through
+  }
+
   try {
     const [cart, channel] = await Promise.all([
       getCart(cartId, "wholesale"),

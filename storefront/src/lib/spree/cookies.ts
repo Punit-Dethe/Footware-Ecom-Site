@@ -91,6 +91,14 @@ export async function setCartCookies(
   }
 }
 
+export async function clearCartToken(
+  surface: Surface = DEFAULT_SURFACE,
+): Promise<void> {
+  const cookieStore = await cookies();
+  const opts = { maxAge: -1, path: "/" };
+  cookieStore.set(getCartCookieName(surface), "", opts);
+}
+
 export async function clearCartCookies(
   surface: Surface = DEFAULT_SURFACE,
 ): Promise<void> {
