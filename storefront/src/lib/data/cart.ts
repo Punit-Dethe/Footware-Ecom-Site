@@ -3,7 +3,6 @@
 import crypto from "node:crypto";
 import type { Cart, CreateCartParams } from "@spree/sdk";
 import { cookies } from "next/headers";
-import { updateTag } from "next/cache";
 import {
   findCatalogVariantByIdOrSku,
   findCatalogVariantBySku,
@@ -23,7 +22,6 @@ import {
   type DbCartItem,
 } from "@/lib/db/cart";
 import {
-  cacheTagSuffix,
   clearCartCookies,
   clearCartToken,
   DEFAULT_SURFACE,
@@ -33,15 +31,6 @@ import {
 } from "@/lib/spree";
 import { createClient } from "@/lib/supabase/server";
 import { actionResult } from "./utils";
-
-/** Cache tag for a surface's cart, so DTC and wholesale carts invalidate independently. */
-function cartTag(surface: Surface): string {
-  return `cart${cacheTagSuffix(surface)}`;
-}
-
-function checkoutTag(surface: Surface): string {
-  return `checkout${cacheTagSuffix(surface)}`;
-}
 
 /** Generates a cryptographically secure 256-bit guest bearer token. */
 function generateGuestBearerToken(): string {
@@ -319,7 +308,6 @@ export async function getOrCreateCart(
     } catch {
       // Best effort
     }
-    updateTag(cartTag(surface));
     return adaptDbCartToSpreeCart(userCart, [], surface);
   }
 
@@ -334,7 +322,6 @@ export async function getOrCreateCart(
     // Best effort
   }
 
-  updateTag(cartTag(surface));
   return adaptDbCartToSpreeCart(guestCart, [], surface);
 }
 
@@ -349,8 +336,6 @@ export async function clearCart(surface: Surface = DEFAULT_SURFACE) {
       await markCartAbandoned(cart.id);
     }
     await clearCartCookies(surface);
-    updateTag(cartTag(surface));
-    updateTag(checkoutTag(surface));
     return {};
   }, "Failed to clear cart");
 }
@@ -381,7 +366,6 @@ export async function addToCart(
     const cart = await getOrCreateCart(undefined, surface);
     await addOrIncrementCartItem(cart.id, match.variant.sku, quantity);
 
-    updateTag(cartTag(surface));
     const updatedCart = await getCart(cart.id, surface);
     return { cart: updatedCart };
   }, "Failed to add item to cart");
@@ -406,7 +390,6 @@ export async function updateCartItem(
       throw new Error("Line item not found in cart");
     }
 
-    updateTag(cartTag(surface));
     const updatedCart = await getCart(cart.id, surface);
     return { cart: updatedCart };
   }, "Failed to update cart item");
@@ -430,7 +413,6 @@ export async function removeCartItem(
       throw new Error("Line item not found in cart");
     }
 
-    updateTag(cartTag(surface));
     const updatedCart = await getCart(cart.id, surface);
     return { cart: updatedCart };
   }, "Failed to remove cart item");
@@ -473,8 +455,6 @@ export async function associateCartWithUser(
     await clearCartToken(surface);
     await setCartCookies(mergedCart.id, undefined, surface);
 
-    updateTag(cartTag(surface));
-    updateTag(checkoutTag(surface));
     return {};
   }, "Failed to associate cart");
 }
