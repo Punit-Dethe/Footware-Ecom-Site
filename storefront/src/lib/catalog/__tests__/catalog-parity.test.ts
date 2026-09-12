@@ -76,6 +76,7 @@ import {
   listCatalogCategories,
   listCatalogProducts,
   queryProducts,
+  searchCatalogVariants,
 } from "../catalog-repository";
 import { getVariantByIdOrSku } from "@/lib/db/catalog";
 import { query } from "@/lib/db";
@@ -601,3 +602,48 @@ describe("Outer Cache Invalidation Tag Propagation", () => {
     );
   });
 });
+
+describe("searchCatalogVariants in-memory search", () => {
+  it("returns empty array for query with fewer than 2 characters", async () => {
+    const res = await searchCatalogVariants("a");
+    expect(res).toEqual([]);
+  });
+
+  it("searches variants by product name matching public snapshot", async () => {
+    const res = await searchCatalogVariants("Wholecut Oxford", 5);
+    expect(res.length).toBeGreaterThan(0);
+    expect(res[0].productName).toContain("Wholecut Oxford");
+    expect(res[0].variantId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    );
+    expect(res[0].sku).toMatch(/^MIRZA-/);
+    expect(res[0].purchasable).toBe(true);
+    expect(res[0].displayPrice).toBeDefined();
+  });
+
+  it("searches variants by exact or partial variant SKU", async () => {
+    const res = await searchCatalogVariants("MIRZA-OFF-001-8", 5);
+    expect(res.length).toBe(1);
+    expect(res[0].sku).toBe("MIRZA-OFF-001-8");
+    expect(res[0].productName).toBe("The Sovereign Wholecut Oxford");
+  });
+
+  it("searches variants by options text (size)", async () => {
+    const res = await searchCatalogVariants("UK/India 10", 10);
+    expect(res.length).toBeGreaterThan(0);
+    for (const item of res) {
+      expect(item.optionsText).toContain("10");
+    }
+  });
+
+  it("respects the limit parameter", async () => {
+    const res = await searchCatalogVariants("MIRZA", 3);
+    expect(res).toHaveLength(3);
+  });
+
+  it("returns empty array when no product or variant matches query", async () => {
+    const res = await searchCatalogVariants("NON_EXISTENT_QUERY_XYZ", 5);
+    expect(res).toEqual([]);
+  });
+});
+

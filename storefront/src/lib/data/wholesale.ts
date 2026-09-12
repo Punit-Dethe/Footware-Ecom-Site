@@ -5,7 +5,6 @@ import {
   getAccessToken,
   getWholesaleClient,
   isWholesaleEnabled,
-  withAuthRefresh,
 } from "@/lib/spree";
 import {
   getProduct as getProductBySurface,
@@ -13,6 +12,8 @@ import {
   getProducts as getProductsBySurface,
 } from "./products";
 import { withFallback } from "./utils";
+import { searchCatalogVariants } from "@/lib/catalog/catalog-repository";
+import { getVariantByIdOrSku } from "@/lib/db/catalog";
 
 /**
  * Fetch the wholesale channel's resolved configuration (access posture, guest
@@ -72,6 +73,8 @@ export interface WholesaleVariantSuggestion {
  * name or SKU), for the quick-order autocomplete. Flattens products to variants
  * so buyers can pick the exact colour/size rather than just the product.
  * Requires the customer JWT — the channel 401s guests.
+ *
+ * Uses the first-party B6A cached catalog snapshot with 0 database queries when warm.
  */
 export async function searchWholesaleVariants(
   query: string,
@@ -83,39 +86,23 @@ export async function searchWholesaleVariants(
   const token = await getAccessToken();
   if (!token) return [];
 
-  return withFallback(async () => {
-    const response = await withAuthRefresh((options) =>
-      getWholesaleClient().products.list(
-        { search: trimmed, expand: ["variants"], limit },
-        options,
-      ),
-    );
-
-    const suggestions: WholesaleVariantSuggestion[] = [];
-    for (const product of response.data) {
-      // Products always expose at least a default variant; list every variant
-      // so multi-variant products are individually selectable.
-      for (const variant of product.variants ?? []) {
-        if (!variant.sku) continue;
-        suggestions.push({
-          variantId: variant.id,
-          productName: product.name,
-          optionsText: variant.options_text || undefined,
-          sku: variant.sku,
-          displayPrice: variant.price?.display_amount ?? undefined,
-          purchasable: variant.purchasable ?? false,
-        });
-        if (suggestions.length >= limit) return suggestions;
-      }
-    }
-    return suggestions;
-  }, []);
+  const results = await searchCatalogVariants(trimmed, limit);
+  return results.map((r) => ({
+    variantId: r.variantId,
+    productName: r.productName,
+    optionsText: r.optionsText,
+    sku: r.sku,
+    displayPrice: r.displayPrice,
+    purchasable: r.purchasable,
+  }));
 }
 
 /**
  * Resolve a SKU to a purchasable variant on the wholesale channel, for the
- * quick-order form. Searches products by SKU and returns the first matching
- * variant with enough detail to add it to the cart. Requires the customer JWT.
+ * quick-order form.
+ *
+ * Uses authoritative PostgreSQL lookup with exact case-insensitive SKU matching.
+ * Requires the customer JWT — fails closed on database / infrastructure errors.
  */
 export async function findWholesaleVariantBySku(sku: string): Promise<
   | {
@@ -131,46 +118,38 @@ export async function findWholesaleVariantBySku(sku: string): Promise<
   | { found: false }
 > {
   const trimmed = sku.trim();
-  if (!trimmed) return { found: false };
+  if (!trimmed) return { found: false as const };
 
   const token = await getAccessToken();
-  if (!token) return { found: false };
+  if (!token) return { found: false as const };
 
-  return withFallback(
-    async () => {
-      const response = await withAuthRefresh((options) =>
-        getWholesaleClient().products.list(
-          {
-            // Full-text search spans product name + SKU; we match the exact
-            // SKU against the returned variants below.
-            search: trimmed,
-            expand: ["variants"],
-            limit: 5,
-          },
-          options,
-        ),
-      );
+  const variant = await getVariantByIdOrSku(trimmed);
+  if (!variant) {
+    return { found: false as const };
+  }
 
-      for (const product of response.data) {
-        const variant = product.variants?.find(
-          (v) => v.sku?.toLowerCase() === trimmed.toLowerCase(),
-        );
-        if (variant) {
-          return {
-            found: true as const,
-            variantId: variant.id,
-            productName: product.name,
-            productSlug: product.slug,
-            sku: variant.sku ?? trimmed,
-            optionsText: variant.options_text || undefined,
-            displayPrice: variant.price?.display_amount ?? undefined,
-            purchasable: variant.purchasable ?? false,
-          };
-        }
-      }
+  // Require exact case-insensitive SKU identity after lookup
+  if (variant.sku.toLowerCase() !== trimmed.toLowerCase()) {
+    return { found: false as const };
+  }
 
-      return { found: false as const };
-    },
-    { found: false as const },
-  );
+  const isPurchasable =
+    variant.product_status === "active" &&
+    variant.active === true &&
+    (variant.quantity_on_hand > 0 || variant.backorderable === true);
+
+  const displayPrice = `$${(variant.price_in_cents / 100).toFixed(2)}`;
+
+  return {
+    found: true as const,
+    variantId: variant.id,
+    productName: variant.product_name,
+    productSlug: variant.product_slug,
+    sku: variant.sku,
+    optionsText: variant.size_option
+      ? `Size: UK/India ${variant.size_option}`
+      : undefined,
+    displayPrice,
+    purchasable: isPurchasable,
+  };
 }

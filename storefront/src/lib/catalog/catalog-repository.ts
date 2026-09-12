@@ -636,3 +636,63 @@ export async function findCatalogVariantByIdOrSku(
   }
   return null;
 }
+
+export interface CatalogVariantSearchResult {
+  variantId: string;
+  productName: string;
+  productSlug: string;
+  optionsText?: string;
+  sku: string;
+  displayPrice?: string;
+  purchasable: boolean;
+}
+
+/**
+ * Fast in-memory variant search against the prepared public catalog snapshot.
+ * Searches product name, product slug, product base SKU, variant SKU, and options text.
+ * Warm lookups execute with 0 additional database queries.
+ */
+export async function searchCatalogVariants(
+  query: string,
+  limit = 8,
+): Promise<CatalogVariantSearchResult[]> {
+  const trimmed = query.trim().toLowerCase();
+  if (trimmed.length < 2) return [];
+
+  const { products } = await getPublicCatalogSnapshot();
+  const results: CatalogVariantSearchResult[] = [];
+
+  for (const product of products) {
+    const prodMatches =
+      product.name.toLowerCase().includes(trimmed) ||
+      product.slug.toLowerCase().includes(trimmed) ||
+      (product.sku ? product.sku.toLowerCase().includes(trimmed) : false);
+
+    for (const variant of product.variants) {
+      if (!variant.sku) continue;
+
+      const varMatches =
+        prodMatches ||
+        variant.sku.toLowerCase().includes(trimmed) ||
+        variant.options_text.toLowerCase().includes(trimmed);
+
+      if (varMatches) {
+        results.push({
+          variantId: variant.id,
+          productName: product.name,
+          productSlug: product.slug,
+          optionsText: variant.options_text || undefined,
+          sku: variant.sku,
+          displayPrice: variant.price.display_amount || undefined,
+          purchasable: variant.purchasable,
+        });
+
+        if (results.length >= limit) {
+          return results;
+        }
+      }
+    }
+  }
+
+  return results;
+}
