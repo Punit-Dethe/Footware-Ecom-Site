@@ -1,11 +1,24 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockGetCart } = vi.hoisted(() => ({
+const { mockGetCart, mockPlaceOrderFromCart, mockGetCompletedOrder } = vi.hoisted(() => ({
   mockGetCart: vi.fn(),
+  mockPlaceOrderFromCart: vi.fn(),
+  mockGetCompletedOrder: vi.fn(),
 }));
 
 vi.mock("@/lib/data/cart", () => ({
   getCart: mockGetCart,
+  verifyAuthSession: vi.fn().mockResolvedValue({ status: "anonymous" }),
+}));
+
+vi.mock("@/lib/db/order", () => ({
+  placeOrderFromCart: mockPlaceOrderFromCart,
+}));
+
+vi.mock("@/lib/data/checkout", () => ({
+  resolveSurfaceForCart: vi.fn().mockResolvedValue("dtc"),
+  resolveSurfaceForCartVerified: vi.fn().mockResolvedValue("dtc"),
+  getCompletedOrder: mockGetCompletedOrder,
 }));
 
 const mockClient = {
@@ -54,6 +67,27 @@ const mockSession = {
   status: "pending",
   external_data: { client_secret: "pi_secret_123" },
 };
+
+const mockDbOrder = {
+  id: "33333333-3333-3333-3333-333333333333",
+  user_id: null,
+  source_cart_id: "cart-1",
+  order_number: "MRZ-TEST123456",
+  status: "complete",
+  currency: "USD",
+  total_in_cents: 5000,
+  item_total_in_cents: 5000,
+  tax_total_in_cents: 0,
+  shipping_total_in_cents: 0,
+  discount_total_in_cents: 0,
+  shipping_address: null,
+  billing_address: null,
+  checkout_email: "guest@example.com",
+  completed_at: new Date(),
+  created_at: new Date(),
+  updated_at: new Date(),
+};
+const mockDbItems: any[] = [];
 
 const mockOrder = {
   id: "cart-1",
@@ -147,42 +181,26 @@ describe("payment server actions", () => {
   });
 
   describe("completeCheckoutOrder", () => {
-    it("returns success with order", async () => {
-      mockClient.carts.complete.mockResolvedValue(mockOrder);
+    it("returns success with placed order", async () => {
+      mockPlaceOrderFromCart.mockResolvedValue({
+        order: mockDbOrder,
+        items: mockDbItems,
+      });
 
       const result = await completeCheckoutOrder("cart-1");
 
-      expect(mockClient.carts.complete).toHaveBeenCalledWith("cart-1", {
-        spreeToken: "order-token-123",
-        token: undefined,
+      expect(mockPlaceOrderFromCart).toHaveBeenCalledWith({
+        cartId: "cart-1",
+        surface: "dtc",
+        verifiedUserId: null,
+        guestTokenHash: expect.any(String),
       });
-      expect(result).toEqual({ success: true, order: mockOrder });
+      expect(result.success).toBe(true);
+      expect((result as any).order.number).toBe("MRZ-TEST123456");
     });
 
-    it("treats 403 as success (order already completed)", async () => {
-      const spreeError = Object.assign(new Error("Not authorized"), {
-        status: 403,
-      });
-      mockClient.carts.complete.mockRejectedValue(spreeError);
-
-      const result = await completeCheckoutOrder("cart-1");
-
-      expect(result).toEqual({ success: true, order: null });
-    });
-
-    it("treats 422 as success (state_lock_version conflict)", async () => {
-      const spreeError = Object.assign(new Error("Unprocessable Content"), {
-        status: 422,
-      });
-      mockClient.carts.complete.mockRejectedValue(spreeError);
-
-      const result = await completeCheckoutOrder("cart-1");
-
-      expect(result).toEqual({ success: true, order: null });
-    });
-
-    it("returns error on non-403 failure", async () => {
-      mockClient.carts.complete.mockRejectedValue(
+    it("returns error on failure", async () => {
+      mockPlaceOrderFromCart.mockRejectedValue(
         new Error("Payment required"),
       );
 
@@ -192,7 +210,7 @@ describe("payment server actions", () => {
     });
 
     it("returns fallback message for non-Error throws", async () => {
-      mockClient.carts.complete.mockRejectedValue("unexpected");
+      mockPlaceOrderFromCart.mockRejectedValue("unexpected");
 
       const result = await completeCheckoutOrder("cart-1");
 
@@ -228,7 +246,7 @@ describe("payment server actions", () => {
         order: { id: "cart-1", current_step: "complete" },
       });
       expect(mockClient.carts.paymentSessions.complete).not.toHaveBeenCalled();
-      expect(mockClient.carts.complete).not.toHaveBeenCalled();
+      expect(mockPlaceOrderFromCart).not.toHaveBeenCalled();
     });
 
     it("completes payment session then completes the order", async () => {
@@ -240,16 +258,16 @@ describe("payment server actions", () => {
         id: "session-1",
         status: "completed",
       });
-      mockClient.carts.complete.mockResolvedValue(mockOrder);
+      mockPlaceOrderFromCart.mockResolvedValue({
+        order: mockDbOrder,
+        items: mockDbItems,
+      });
 
       const result = await confirmPaymentAndCompleteCart("cart-1", "session-1");
 
       expect(mockClient.carts.paymentSessions.complete).toHaveBeenCalled();
-      expect(mockClient.carts.complete).toHaveBeenCalledWith("cart-1", {
-        spreeToken: "order-token-123",
-        token: undefined,
-      });
-      expect(result).toEqual({ success: true, order: mockOrder });
+      expect(mockPlaceOrderFromCart).toHaveBeenCalled();
+      expect(result.success).toBe(true);
     });
 
     it("returns error when payment session fails", async () => {
@@ -268,7 +286,7 @@ describe("payment server actions", () => {
         success: false,
         error: "Payment was not successful. Please try again.",
       });
-      expect(mockClient.carts.complete).not.toHaveBeenCalled();
+      expect(mockPlaceOrderFromCart).not.toHaveBeenCalled();
     });
 
     it("skips session completion when no session ID provided", async () => {
@@ -276,33 +294,34 @@ describe("payment server actions", () => {
         id: "cart-1",
         current_step: "payment",
       });
-      mockClient.carts.complete.mockResolvedValue(mockOrder);
+      mockPlaceOrderFromCart.mockResolvedValue({
+        order: mockDbOrder,
+        items: mockDbItems,
+      });
 
       const result = await confirmPaymentAndCompleteCart("cart-1");
 
       expect(mockClient.carts.paymentSessions.complete).not.toHaveBeenCalled();
-      expect(mockClient.carts.complete).toHaveBeenCalledWith("cart-1", {
-        spreeToken: "order-token-123",
-        token: undefined,
-      });
-      expect(result).toEqual({ success: true, order: mockOrder });
+      expect(mockPlaceOrderFromCart).toHaveBeenCalled();
+      expect(result.success).toBe(true);
     });
 
     it("returns success when cart is not found (already completed by webhook)", async () => {
       mockGetCart.mockResolvedValue(null);
+      mockGetCompletedOrder.mockResolvedValue(mockOrder);
 
       const result = await confirmPaymentAndCompleteCart("cart-1", "session-1");
 
-      expect(mockClient.carts.complete).not.toHaveBeenCalled();
-      expect(result).toEqual({ success: true, order: null });
+      expect(mockPlaceOrderFromCart).not.toHaveBeenCalled();
+      expect(result).toEqual({ success: true, order: mockOrder });
     });
 
-    it("returns error when complete throws non-403 error", async () => {
+    it("returns error when complete throws error", async () => {
       mockGetCart.mockResolvedValue({
         id: "cart-1",
         current_step: "payment",
       });
-      mockClient.carts.complete.mockRejectedValue(
+      mockPlaceOrderFromCart.mockRejectedValue(
         new Error("Order cannot be completed"),
       );
 
@@ -312,21 +331,6 @@ describe("payment server actions", () => {
         success: false,
         error: "Order cannot be completed",
       });
-    });
-
-    it("treats 403 from complete as success (order already completed)", async () => {
-      mockGetCart.mockResolvedValue({
-        id: "cart-1",
-        current_step: "payment",
-      });
-      const spreeError = Object.assign(new Error("Not authorized"), {
-        status: 403,
-      });
-      mockClient.carts.complete.mockRejectedValue(spreeError);
-
-      const result = await confirmPaymentAndCompleteCart("cart-1");
-
-      expect(result).toEqual({ success: true, order: null });
     });
 
     it("returns error when getCart throws an unexpected database error", async () => {
