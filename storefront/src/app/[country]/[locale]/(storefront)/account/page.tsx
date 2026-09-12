@@ -27,6 +27,7 @@ import {
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
+import { useRouteSync } from "@/components/auth/AuthRouteSync";
 import { resolveAccountRedirect } from "@/lib/utils/account-redirect";
 import { extractBasePath } from "@/lib/utils/path";
 
@@ -37,6 +38,8 @@ export default function AccountPage() {
   const basePath = extractBasePath(pathname);
   const t = useTranslations("account");
   const { login, isAuthenticated, loading: authLoading } = useAuth();
+  const { isSyncing } = useRouteSync();
+  const verifying = authLoading || isSyncing;
 
   // Get redirect URL from query params (e.g., from checkout)
   const redirectUrl = resolveAccountRedirect(
@@ -67,8 +70,8 @@ export default function AccountPage() {
     setLoading(false);
   };
 
-  // Show loading state while auth is initializing
-  if (authLoading) {
+  // Show loading state while auth is initializing or verifying
+  if (authLoading || verifying) {
     return (
       <div className="max-w-md mx-auto px-4 sm:px-6 lg:px-8 py-16">
         <div className="animate-pulse space-y-4">

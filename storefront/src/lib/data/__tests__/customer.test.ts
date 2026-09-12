@@ -1,69 +1,48 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mockClient = {
+const mockSupabase = {
   auth: {
-    login: vi.fn(),
-    logout: vi.fn(),
-  },
-  customers: {
-    create: vi.fn(),
-  },
-  customer: {
-    get: vi.fn(),
-    update: vi.fn(),
-  },
-  carts: {
-    associate: vi.fn(),
+    signInWithPassword: vi.fn(),
+    signUp: vi.fn(),
+    signOut: vi.fn(),
+    getClaims: vi.fn(),
+    resetPasswordForEmail: vi.fn(),
+    updateUser: vi.fn(),
   },
 };
 
+vi.mock("@/lib/supabase/server", () => ({
+  createClient: vi.fn(async () => mockSupabase),
+}));
+
+const mockEnsureProfile = vi.fn();
+const mockGetProfile = vi.fn();
+const mockUpdateProfile = vi.fn();
+
+vi.mock("@/lib/db/profile", () => ({
+  ensureProfile: (user: unknown) => mockEnsureProfile(user),
+  getProfile: (id: string) => mockGetProfile(id),
+  updateProfile: (id: string, data: unknown) => mockUpdateProfile(id, data),
+}));
+
 vi.mock("@/lib/spree", () => ({
-  getClient: () => mockClient,
-  withAuthRefresh: vi.fn(
-    async (fn: (options: { token: string }) => Promise<unknown>) => {
-      return fn({ token: "jwt-token" });
-    },
-  ),
-  ensureFreshSession: vi.fn().mockResolvedValue("valid"),
-  isAuthError: (error: unknown) =>
-    !!error &&
-    typeof error === "object" &&
-    "status" in error &&
-    ((error as { status?: number }).status === 401 ||
-      (error as { status?: number }).status === 403),
-  getAccessToken: vi.fn().mockResolvedValue("jwt-token"),
-  setAccessToken: vi.fn(),
-  clearAccessToken: vi.fn(),
   clearAuthCookies: vi.fn(),
-  getRefreshToken: vi.fn().mockResolvedValue(undefined),
-  setRefreshToken: vi.fn(),
-  clearRefreshToken: vi.fn(),
-  getCartToken: vi.fn().mockResolvedValue(undefined),
-  getCartId: vi.fn().mockResolvedValue(undefined),
-  clearCartCookies: vi.fn(),
   clearAllCartCookies: vi.fn(),
   cacheTagSuffix: (surface: string) =>
     surface === "wholesale" ? "-wholesale" : "",
   SURFACES: ["dtc", "wholesale"] as const,
 }));
 
-vi.mock("@spree/sdk", () => ({
-  SpreeError: class SpreeError extends Error {
-    code: string;
-    status: number;
-    constructor(
-      response: { error: { code: string; message: string } },
-      status: number,
-    ) {
-      super(response.error.message);
-      this.code = response.error.code;
-      this.status = status;
-    }
-  },
-}));
-
 vi.mock("next/cache", () => ({
   updateTag: vi.fn(),
+}));
+
+vi.mock("next/headers", () => ({
+  headers: vi.fn(async () => new Headers()),
+}));
+
+vi.mock("@/lib/store", () => ({
+  getStoreUrl: vi.fn(() => "http://localhost:3001"),
 }));
 
 import {
@@ -71,325 +50,576 @@ import {
   login,
   logout,
   register,
+  requestPasswordReset,
+  resetPassword,
   syncSession,
   updateCustomer,
 } from "@/lib/data/customer";
 
-const mockUser = {
+const mockDbProfile = {
   id: "user-1",
-  email: "test@example.com",
   first_name: "Test",
   last_name: "User",
+  phone: "555-1234",
+  role: "customer" as const,
 };
 
-describe("customer server actions", () => {
+describe("customer server actions (Supabase Auth)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   describe("getCustomer", () => {
-    it("fetches current customer via SDK", async () => {
-      mockClient.customer.get.mockResolvedValue(mockUser);
-
-      const result = await getCustomer();
-
-      expect(mockClient.customer.get).toHaveBeenCalledWith({
-        token: "jwt-token",
+    it("fetches current user via Supabase getClaims and PostgreSQL profiles", async () => {
+      mockSupabase.auth.getClaims.mockResolvedValue({
+        data: {
+          claims: {
+            sub: "user-1",
+            email: "test@example.com",
+          },
+        },
+        error: null,
       });
-      expect(result).toBe(mockUser);
+      mockGetProfile.mockResolvedValue(mockDbProfile);
+
+      const result = await getCustomer();
+
+      expect(mockSupabase.auth.getClaims).toHaveBeenCalledTimes(1);
+      expect(mockGetProfile).toHaveBeenCalledWith("user-1");
+      expect(result).toEqual({
+        id: "user-1",
+        email: "test@example.com",
+        first_name: "Test",
+        last_name: "User",
+        phone: "555-1234",
+        role: "customer",
+      });
     });
 
-    it("clears tokens on 401 auth failure", async () => {
-      const { SpreeError } = await import("@spree/sdk");
-      const { withAuthRefresh } = await import("@/lib/spree");
-      (withAuthRefresh as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
-        new SpreeError(
-          { error: { code: "unauthorized", message: "Unauthorized" } },
-          401,
-        ),
-      );
+    it("idempotently heals missing profile record for genuine verified user", async () => {
+      mockSupabase.auth.getClaims.mockResolvedValue({
+        data: {
+          claims: {
+            sub: "user-2",
+            email: "healed@example.com",
+            user_metadata: { first_name: "Healed", last_name: "Guy" },
+          },
+        },
+        error: null,
+      });
+      mockGetProfile.mockResolvedValue(null);
+      mockEnsureProfile.mockResolvedValue({
+        id: "user-2",
+        first_name: "Healed",
+        last_name: "Guy",
+        phone: null,
+        role: "customer",
+      });
+
+      const result = await getCustomer();
+
+      expect(mockEnsureProfile).toHaveBeenCalledWith({
+        id: "user-2",
+        first_name: "Healed",
+        last_name: "Guy",
+        phone: null,
+      });
+      expect(result?.role).toBe("customer");
+    });
+
+    it("returns null when claims are missing or error (anonymous user)", async () => {
+      mockSupabase.auth.getClaims.mockResolvedValue({
+        data: null,
+        error: new Error("Expired session"),
+      });
 
       const result = await getCustomer();
 
       expect(result).toBeNull();
-      const { clearAuthCookies } = await import("@/lib/spree");
-      expect(clearAuthCookies).toHaveBeenCalled();
     });
 
-    it("does not clear tokens on transient errors", async () => {
-      const { withAuthRefresh } = await import("@/lib/spree");
-      (withAuthRefresh as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
-        new Error("Network error"),
-      );
+    it("throws error when verified identity experiences transient database failure", async () => {
+      mockSupabase.auth.getClaims.mockResolvedValue({
+        data: {
+          claims: {
+            sub: "user-1",
+            email: "test@example.com",
+          },
+        },
+        error: null,
+      });
+      mockGetProfile.mockRejectedValue(new Error("Database connection timeout"));
 
-      const result = await getCustomer();
+      await expect(getCustomer()).rejects.toThrow("Database connection timeout");
+    });
 
-      expect(result).toBeNull();
-      const { clearAuthCookies } = await import("@/lib/spree");
-      expect(clearAuthCookies).not.toHaveBeenCalled();
+    it("throws error when getClaims encounters unexpected transport/5xx failure, NOT anonymous", async () => {
+      mockSupabase.auth.getClaims.mockResolvedValue({
+        data: null,
+        error: { name: "AuthRetryableFetchError", message: "fetch failed", status: 503 },
+      });
+
+      await expect(getCustomer()).rejects.toMatchObject({ status: 503 });
     });
   });
 
   describe("syncSession", () => {
-    it("returns the customer without a refresh flag for a live session", async () => {
-      const { ensureFreshSession } = await import("@/lib/spree");
-      (ensureFreshSession as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
-        "valid",
-      );
-      mockClient.customer.get.mockResolvedValue(mockUser);
-
-      const result = await syncSession();
-
-      expect(result).toEqual({ customer: mockUser, refreshed: false });
-    });
-
-    it("flags a transparent refresh so the client can re-render", async () => {
-      const { ensureFreshSession } = await import("@/lib/spree");
-      (ensureFreshSession as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
-        "refreshed",
-      );
-      mockClient.customer.get.mockResolvedValue(mockUser);
-
-      const result = await syncSession();
-
-      expect(result).toEqual({ customer: mockUser, refreshed: true });
-    });
-
-    it("reports no customer for an expired session and skips the fetch", async () => {
-      const { ensureFreshSession } = await import("@/lib/spree");
-      (ensureFreshSession as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
-        "expired",
-      );
-
-      const result = await syncSession();
-
-      expect(result).toEqual({ customer: null, refreshed: false });
-      expect(mockClient.customer.get).not.toHaveBeenCalled();
-    });
-
-    it("reports no customer when anonymous", async () => {
-      const { ensureFreshSession } = await import("@/lib/spree");
-      (ensureFreshSession as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
-        "anonymous",
-      );
-
-      const result = await syncSession();
-
-      expect(result).toEqual({ customer: null, refreshed: false });
-      expect(mockClient.customer.get).not.toHaveBeenCalled();
-    });
-
-    it("marks the session stale on a transient fetch failure, preserving it", async () => {
-      const { ensureFreshSession, clearAuthCookies } = await import(
-        "@/lib/spree"
-      );
-      (ensureFreshSession as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
-        "valid",
-      );
-      mockClient.customer.get.mockRejectedValueOnce(new Error("Network error"));
-
-      const result = await syncSession();
-
-      expect(result).toEqual({
-        customer: null,
-        refreshed: false,
-        stale: true,
+    it("returns customer and stale: false on successful lookup", async () => {
+      mockSupabase.auth.getClaims.mockResolvedValue({
+        data: {
+          claims: {
+            sub: "user-1",
+            email: "test@example.com",
+          },
+        },
+        error: null,
       });
-      // A transient failure must not clear the session.
-      expect(clearAuthCookies).not.toHaveBeenCalled();
-    });
-
-    it("preserves the session without fetching when the refresh is transiently stale", async () => {
-      const { ensureFreshSession, clearAuthCookies } = await import(
-        "@/lib/spree"
-      );
-      (ensureFreshSession as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
-        "stale",
-      );
+      mockGetProfile.mockResolvedValue(mockDbProfile);
 
       const result = await syncSession();
 
-      expect(result).toEqual({
-        customer: null,
-        refreshed: false,
-        stale: true,
+      expect(result.customer?.email).toBe("test@example.com");
+      expect(result.stale).toBe(false);
+    });
+
+    it("returns stale: true when verified session encounters transient database outage", async () => {
+      mockSupabase.auth.getClaims.mockResolvedValue({
+        data: {
+          claims: {
+            sub: "user-1",
+            email: "test@example.com",
+          },
+        },
+        error: null,
       });
-      expect(mockClient.customer.get).not.toHaveBeenCalled();
-      expect(clearAuthCookies).not.toHaveBeenCalled();
-    });
-
-    it("keeps the refresh signal when a rotation is followed by a transient fetch failure", async () => {
-      const { ensureFreshSession } = await import("@/lib/spree");
-      (ensureFreshSession as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
-        "refreshed",
-      );
-      mockClient.customer.get.mockRejectedValueOnce(new Error("Network error"));
+      mockGetProfile.mockRejectedValue(new Error("Postgres connection failure"));
 
       const result = await syncSession();
 
-      expect(result).toEqual({
-        customer: null,
-        refreshed: true,
-        stale: true,
+      expect(result.customer).toBeNull();
+      expect(result.stale).toBe(true);
+    });
+
+    it("returns stale: true when getClaims encounters unexpected transport failure", async () => {
+      mockSupabase.auth.getClaims.mockResolvedValue({
+        data: null,
+        error: { name: "AuthRetryableFetchError", message: "fetch failed", status: 503 },
       });
-    });
-
-    it("logs out (no stale flag) when the fetch returns an auth error", async () => {
-      const { SpreeError } = await import("@spree/sdk");
-      const { ensureFreshSession, clearAuthCookies } = await import(
-        "@/lib/spree"
-      );
-      (ensureFreshSession as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
-        "valid",
-      );
-      mockClient.customer.get.mockRejectedValueOnce(
-        new SpreeError(
-          { error: { code: "unauthorized", message: "Unauthorized" } },
-          401,
-        ),
-      );
 
       const result = await syncSession();
 
-      expect(result).toEqual({ customer: null, refreshed: false });
-      expect(clearAuthCookies).toHaveBeenCalled();
+      expect(result.customer).toBeNull();
+      expect(result.stale).toBe(true);
     });
   });
 
   describe("login", () => {
-    it("logs in and returns user", async () => {
-      mockClient.auth.login.mockResolvedValue({
-        token: "jwt",
-        refresh_token: "rt",
-        user: mockUser,
+    it("logs in with email and password via Supabase and ensures profile", async () => {
+      mockSupabase.auth.signInWithPassword.mockResolvedValue({
+        data: {
+          user: {
+            id: "user-1",
+            email: "test@example.com",
+            user_metadata: { first_name: "Test", last_name: "User" },
+          },
+        },
+        error: null,
       });
+      mockEnsureProfile.mockResolvedValue(mockDbProfile);
 
-      const result = await login("test@example.com", "password123");
+      const result = await login("test@example.com", "secret123");
 
-      expect(mockClient.auth.login).toHaveBeenCalledWith({
+      expect(mockSupabase.auth.signInWithPassword).toHaveBeenCalledWith({
         email: "test@example.com",
-        password: "password123",
+        password: "secret123",
       });
-      expect(result).toEqual({ success: true, user: mockUser });
+      expect(mockEnsureProfile).toHaveBeenCalled();
+      expect(result.success).toBe(true);
+      expect(result.user?.email).toBe("test@example.com");
+      expect(result.user?.role).toBe("customer");
+    });
+
+    it("returns generic error on failed login to prevent credential disclosure", async () => {
+      mockSupabase.auth.signInWithPassword.mockResolvedValue({
+        data: { user: null },
+        error: new Error("Invalid login credentials"),
+      });
+
+      const result = await login("test@example.com", "wrong-password");
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("Invalid email or password");
     });
   });
 
   describe("register", () => {
-    it("creates account and returns user", async () => {
-      mockClient.customers.create.mockResolvedValue({
-        token: "jwt",
-        refresh_token: "rt",
-        user: mockUser,
+    it("rejects mismatched password confirmation server-side", async () => {
+      const result = await register({
+        email: "new@example.com",
+        password: "password123",
+        password_confirmation: "different123",
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("Passwords do not match");
+      expect(mockSupabase.auth.signUp).not.toHaveBeenCalled();
+    });
+
+    it("rejects password shorter than 6 characters server-side", async () => {
+      const result = await register({
+        email: "new@example.com",
+        password: "123",
+        password_confirmation: "123",
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("Password must be at least 6 characters");
+      expect(mockSupabase.auth.signUp).not.toHaveBeenCalled();
+    });
+
+    it("signup with session -> returns authenticated AppUser and creates profile", async () => {
+      mockSupabase.auth.signUp.mockResolvedValue({
+        data: {
+          user: { id: "user-session", email: "session@example.com" },
+          session: { access_token: "tok", refresh_token: "ref" },
+        },
+        error: null,
+      });
+      mockEnsureProfile.mockResolvedValue({
+        id: "user-session",
+        first_name: "First",
+        last_name: "Last",
+        phone: null,
+        role: "customer",
       });
 
       const result = await register({
-        email: "test@example.com",
-        password: "pass",
-        password_confirmation: "pass",
-        first_name: "Test",
+        email: "session@example.com",
+        password: "securepassword",
+        password_confirmation: "securepassword",
+        first_name: "First",
+        last_name: "Last",
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.requires_confirmation).toBe(false);
+      expect(result.user?.id).toBe("user-session");
+      expect(result.user?.email).toBe("session@example.com");
+      expect(mockEnsureProfile).toHaveBeenCalled();
+    });
+
+    it("signup without session -> NOT authenticated, requires_confirmation = true, no profile created", async () => {
+      mockSupabase.auth.signUp.mockResolvedValue({
+        data: {
+          user: { id: "user-unconfirmed", email: "unconfirmed@example.com" },
+          session: null, // confirmation pending
+        },
+        error: null,
+      });
+
+      const result = await register({
+        email: "unconfirmed@example.com",
+        password: "securepassword",
+        password_confirmation: "securepassword",
+        first_name: "Unconfirmed",
         last_name: "User",
       });
 
-      expect(mockClient.customers.create).toHaveBeenCalledWith({
-        email: "test@example.com",
-        password: "pass",
-        password_confirmation: "pass",
-        first_name: "Test",
-        last_name: "User",
+      expect(result.success).toBe(true);
+      expect(result.requires_confirmation).toBe(true);
+      expect(result.user).toBeUndefined();
+      expect(mockEnsureProfile).not.toHaveBeenCalled();
+    });
+
+    it("existing-user obfuscated response -> NOT authenticated, requires_confirmation = true", async () => {
+      // Supabase returns a fake or obfuscated user object with null session
+      mockSupabase.auth.signUp.mockResolvedValue({
+        data: {
+          user: { id: "existing-obfuscated-id", email: "existing@example.com" },
+          session: null,
+        },
+        error: null,
       });
-      expect(result).toEqual({ success: true, user: mockUser });
+
+      const result = await register({
+        email: "existing@example.com",
+        password: "somepassword",
+        password_confirmation: "somepassword",
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.requires_confirmation).toBe(true);
+      expect(result.user).toBeUndefined();
+      expect(mockEnsureProfile).not.toHaveBeenCalled();
+    });
+
+    it("sanitizes metadata and prevents role/admin escalation", async () => {
+      mockSupabase.auth.signUp.mockResolvedValue({
+        data: {
+          user: { id: "user-new", email: "new@example.com" },
+          session: null,
+        },
+        error: null,
+      });
+
+      await register({
+        email: "new@example.com",
+        password: "securepassword",
+        password_confirmation: "securepassword",
+        first_name: "Shopper",
+        last_name: "One",
+        metadata: {
+          company: "Mirza Ltd",
+          role: "admin", // Attacker attempt to escalate
+          is_admin: true,
+          wholesale_approved: true,
+        },
+      });
+
+      expect(mockSupabase.auth.signUp).toHaveBeenCalledWith({
+        email: "new@example.com",
+        password: "securepassword",
+        options: {
+          data: {
+            first_name: "Shopper",
+            last_name: "One",
+            company: "Mirza Ltd",
+            // Notice: role, is_admin, wholesale_approved are stripped!
+          },
+        },
+      });
     });
   });
 
   describe("logout", () => {
-    it("clears cookies", async () => {
+    it("signs out via Supabase and clears legacy auth cookies defensively", async () => {
+      mockSupabase.auth.signOut.mockResolvedValue({ error: null });
+
       await logout();
 
-      const { clearAccessToken, clearRefreshToken, clearAllCartCookies } =
-        await import("@/lib/spree");
-      expect(clearAccessToken).toHaveBeenCalled();
-      expect(clearRefreshToken).toHaveBeenCalled();
-      // Logout must clear every surface's cart, not just DTC.
-      expect(clearAllCartCookies).toHaveBeenCalled();
+      expect(mockSupabase.auth.signOut).toHaveBeenCalledTimes(1);
+    });
+  });
+  describe("requestPasswordReset", () => {
+    it("invokes resetPasswordForEmail with sanitized email using canonical SiteURL model", async () => {
+      mockSupabase.auth.resetPasswordForEmail.mockResolvedValue({
+        data: {},
+        error: null,
+      });
+
+      // Caller attempts to pass external attacker URL
+      const result = await requestPasswordReset(
+        "user@example.com",
+        "https://attacker.example/reset" as unknown as string,
+      );
+
+      expect(result.success).toBe(true);
+      // Origin is strictly governed by Supabase SiteURL; external redirect is rejected/ignored
+      expect(mockSupabase.auth.resetPasswordForEmail).toHaveBeenCalledWith(
+        "user@example.com",
+      );
     });
 
-    it("invalidates cart and checkout caches for every surface", async () => {
-      const { updateTag } = await import("next/cache");
-      await logout();
+    it("returns generic success message to prevent user enumeration", async () => {
+      mockSupabase.auth.resetPasswordForEmail.mockResolvedValue({
+        data: {},
+        error: null,
+      });
 
-      // Both surfaces, both tags — a cart-only clear would leave the previous
-      // buyer's checkout (address/delivery) state cached after logout.
-      expect(updateTag).toHaveBeenCalledWith("cart");
-      expect(updateTag).toHaveBeenCalledWith("cart-wholesale");
-      expect(updateTag).toHaveBeenCalledWith("checkout");
-      expect(updateTag).toHaveBeenCalledWith("checkout-wholesale");
+      const result = await requestPasswordReset("unknown@example.com");
+
+      expect(result.success).toBe(true);
+      expect(result.message).toContain("If an account exists");
+    });
+  });
+
+  describe("resetPassword", () => {
+    it("denies password update when no verified claims exist", async () => {
+      mockSupabase.auth.getClaims.mockResolvedValue({
+        data: null,
+        error: new Error("No session"),
+      });
+
+      const result = await resetPassword("newpass123", "newpass123");
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("Unauthorized or expired password reset session");
+      expect(mockSupabase.auth.updateUser).not.toHaveBeenCalled();
+    });
+
+    it("server-side validates confirmation and calls updateUser when session is verified", async () => {
+      mockSupabase.auth.getClaims.mockResolvedValue({
+        data: {
+          claims: {
+            sub: "user-recovery",
+            email: "user@example.com",
+          },
+        },
+        error: null,
+      });
+      mockSupabase.auth.updateUser.mockResolvedValue({
+        data: { user: {} },
+        error: null,
+      });
+
+      const result = await resetPassword("newpass123", "newpass123");
+
+      expect(result.success).toBe(true);
+      expect(mockSupabase.auth.updateUser).toHaveBeenCalledWith({
+        password: "newpass123",
+      });
+    });
+
+    it("rejects mismatched confirmation", async () => {
+      const result = await resetPassword("pass1", "pass2");
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("Passwords do not match");
     });
   });
 
   describe("updateCustomer", () => {
-    it("returns success with customer", async () => {
-      mockClient.customer.update.mockResolvedValue(mockUser);
-
-      const result = await updateCustomer({ first_name: "Updated" });
-
-      expect(mockClient.customer.update).toHaveBeenCalledWith(
-        { first_name: "Updated" },
-        { token: "jwt-token" },
-      );
-      expect(result).toEqual({ success: true, customer: mockUser });
-    });
-
-    it("forwards current_password when changing email", async () => {
-      mockClient.customer.update.mockResolvedValue(mockUser);
+    it("email unchanged -> no password reauth, calls updateProfile", async () => {
+      mockSupabase.auth.getClaims.mockResolvedValue({
+        data: {
+          claims: {
+            sub: "user-1",
+            email: "current@example.com",
+          },
+        },
+        error: null,
+      });
+      mockUpdateProfile.mockResolvedValue({
+        ...mockDbProfile,
+        first_name: "Updated",
+      });
 
       const result = await updateCustomer({
-        email: "new@example.com",
-        current_password: "secret",
+        first_name: "Updated",
+        last_name: "User",
+        email: "current@example.com",
       });
 
-      expect(mockClient.customer.update).toHaveBeenCalledWith(
-        { email: "new@example.com", current_password: "secret" },
-        { token: "jwt-token" },
-      );
-      expect(result).toEqual({ success: true, customer: mockUser });
-    });
-
-    it("returns error on failure", async () => {
-      mockClient.customer.update.mockRejectedValue(new Error("Email taken"));
-
-      const result = await updateCustomer({ email: "taken@example.com" });
-
-      expect(result).toEqual({
-        success: false,
-        error: "Email taken",
+      expect(result.success).toBe(true);
+      expect(mockSupabase.auth.signInWithPassword).not.toHaveBeenCalled();
+      expect(mockSupabase.auth.updateUser).not.toHaveBeenCalled();
+      expect(mockUpdateProfile).toHaveBeenCalledWith("user-1", {
+        first_name: "Updated",
+        last_name: "User",
       });
     });
 
-    it("surfaces invalid current password error", async () => {
-      mockClient.customer.update.mockRejectedValue(
-        new Error("Current password is invalid or missing"),
-      );
+    it("email changed + missing password -> fails", async () => {
+      mockSupabase.auth.getClaims.mockResolvedValue({
+        data: {
+          claims: {
+            sub: "user-1",
+            email: "current@example.com",
+          },
+        },
+        error: null,
+      });
 
       const result = await updateCustomer({
-        email: "new@example.com",
-        current_password: "wrong",
+        email: "newemail@example.com",
       });
 
-      expect(result).toEqual({
-        success: false,
-        error: "Current password is invalid or missing",
-      });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error).toContain("Current password is required");
+      }
+      expect(mockSupabase.auth.signInWithPassword).not.toHaveBeenCalled();
     });
 
-    it("returns fallback message for non-Error throws", async () => {
-      mockClient.customer.update.mockRejectedValue("unexpected");
-
-      const result = await updateCustomer({ first_name: "Test" });
-
-      expect(result).toEqual({
-        success: false,
-        error: "Update failed",
+    it("email changed + wrong password -> fails with invalid password error", async () => {
+      mockSupabase.auth.getClaims.mockResolvedValue({
+        data: {
+          claims: {
+            sub: "user-1",
+            email: "current@example.com",
+          },
+        },
+        error: null,
       });
+      mockSupabase.auth.signInWithPassword.mockResolvedValue({
+        data: {},
+        error: new Error("Invalid login credentials"),
+      });
+
+      const result = await updateCustomer({
+        email: "newemail@example.com",
+        current_password: "wrongpassword",
+      });
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error).toBe("Invalid current password");
+      }
+      expect(mockSupabase.auth.updateUser).not.toHaveBeenCalled();
+    });
+
+    it("email changed + correct password -> calls signInWithPassword and updateUser, email remains current until confirmed", async () => {
+      mockSupabase.auth.getClaims.mockResolvedValue({
+        data: {
+          claims: {
+            sub: "user-1",
+            email: "current@example.com",
+          },
+        },
+        error: null,
+      });
+      mockSupabase.auth.signInWithPassword.mockResolvedValue({
+        data: { user: { id: "user-1" } },
+        error: null,
+      });
+      mockSupabase.auth.updateUser.mockResolvedValue({
+        data: { user: {} },
+        error: null,
+      });
+      mockUpdateProfile.mockResolvedValue(mockDbProfile);
+
+      const result = await updateCustomer({
+        email: "newemail@example.com",
+        current_password: "correctpassword",
+      });
+
+      expect(result.success).toBe(true);
+      expect(mockSupabase.auth.signInWithPassword).toHaveBeenCalledWith({
+        email: "current@example.com",
+        password: "correctpassword",
+      });
+      expect(mockSupabase.auth.updateUser).toHaveBeenCalledWith({
+        email: "newemail@example.com",
+      });
+      // Returned customer email remains currentEmail until email confirmation link is verified
+      if (result.success) {
+        expect(result.customer.email).toBe("current@example.com");
+      }
+    });
+
+    it("role cannot change through profile update", async () => {
+      mockSupabase.auth.getClaims.mockResolvedValue({
+        data: {
+          claims: {
+            sub: "user-1",
+            email: "current@example.com",
+          },
+        },
+        error: null,
+      });
+      mockUpdateProfile.mockResolvedValue({
+        ...mockDbProfile,
+        role: "customer",
+      });
+
+      const result = await updateCustomer({
+        first_name: "Name",
+        // Even if caller tries to pass role, updateCustomer interface ignores it
+      } as Parameters<typeof updateCustomer>[0]);
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.customer.role).toBe("customer");
+      }
     });
   });
 });

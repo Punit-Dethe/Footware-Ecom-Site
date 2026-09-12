@@ -12,6 +12,7 @@ import {
   useState,
 } from "react";
 import {
+  type AppUser,
   login as loginAction,
   logout as logoutAction,
   register as registerAction,
@@ -23,7 +24,8 @@ export interface User {
   email: string;
   first_name?: string | null;
   last_name?: string | null;
-  role?: string | null;
+  phone?: string | null;
+  role: "customer" | "admin";
 }
 
 interface AuthContextType {
@@ -32,7 +34,7 @@ interface AuthContextType {
   login: (
     email: string,
     password: string,
-  ) => Promise<{ success: boolean; error?: string }>;
+  ) => Promise<{ success: boolean; user?: AppUser; error?: string }>;
   register: (params: {
     email: string;
     password: string;
@@ -41,7 +43,12 @@ interface AuthContextType {
     last_name?: string;
     phone?: string;
     metadata?: Record<string, unknown>;
-  }) => Promise<{ success: boolean; error?: string }>;
+  }) => Promise<{
+    success: boolean;
+    user?: AppUser;
+    requires_confirmation?: boolean;
+    error?: string;
+  }>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   isAuthenticated: boolean;
@@ -49,78 +56,137 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-function toUser(customer: User & { role?: string | null }): User {
+/**
+ * Checks whether the current route requires active authentication synchronization.
+ * Public catalog routes (homepage, PLP, PDP, policies, etc.) return false.
+ */
+export function isAuthSensitivePath(pathname: string | null): boolean {
+  if (!pathname) return false;
+  const match = pathname.match(
+    /^\/[a-z]{2}\/[a-z]{2,3}(?:-[a-z0-9]{2,8})*(\/.*)?$/i,
+  );
+  const normalized = (match ? match[1] || "/" : pathname).replace(/\/+$/, "") || "/";
+
+  return (
+    normalized === "/account" ||
+    normalized.startsWith("/account/") ||
+    normalized === "/checkout" ||
+    normalized.startsWith("/checkout/") ||
+    normalized === "/wholesale" ||
+    normalized.startsWith("/wholesale/") ||
+    normalized.startsWith("/auth/")
+  );
+}
+
+function getClientPathname(): string {
+  if (typeof window !== "undefined") {
+    return window.location.pathname;
+  }
+  return "";
+}
+
+function toUser(customer: User): User {
   return {
     id: customer.id,
     email: customer.email,
     first_name: customer.first_name,
     last_name: customer.last_name,
-    role:
-      customer.role ||
-      (customer.email?.includes("admin") ? "admin" : "customer"),
+    phone: customer.phone,
+    // Role is strictly sourced from public.profiles.role; no email heuristics.
+    role: customer.role === "admin" ? "admin" : "customer",
   };
 }
 
-export function AuthProvider({ children }: { children: ReactNode }) {
+export function AuthProvider({
+  children,
+  initialPathname,
+}: {
+  children: ReactNode;
+  initialPathname?: string;
+}) {
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
-
-  // Fetch current user from server, refreshing an expired JWT when possible.
-  // A transparent refresh persists a new token via a Server Action (cookie
-  // writes aren't allowed during a Server Component render), so re-render the
-  // server components afterwards to replace any data they fetched with the
-  // stale session.
-  const refreshUser = useCallback(async () => {
-    try {
-      const { customer, refreshed, stale } = await syncSession();
-      // A transparent token rotation may have happened even when the follow-up
-      // fetch came back stale — re-render server components so they pick up the
-      // renewed session either way.
-      if (refreshed) {
-        router.refresh();
-      }
-      // A transient fetch failure returns `stale` — keep the current session
-      // rather than flashing the user to logged-out on a blip.
-      if (stale) return;
-      setUser(customer ? toUser(customer) : null);
-    } catch {
-      // Unexpected failure — leave the existing session untouched.
-    }
-  }, [router]);
-
-  // Timestamp of the last session sync, used to throttle focus-driven re-syncs.
+  const inFlightSyncRef = useRef<Promise<void> | null>(null);
   const lastSyncRef = useRef(0);
 
-  // Initialize auth state
   useEffect(() => {
-    const initAuth = async () => {
-      lastSyncRef.current = Date.now();
-      await refreshUser();
-      setLoading(false);
-    };
-    initAuth();
-  }, [refreshUser]);
+    lastSyncRef.current = Date.now();
+  }, []);
 
-  // Re-sync the session when the tab regains focus after being idle. The JWT
-  // can expire while the tab is backgrounded; refreshing on return renews it
-  // (or treats the session as logged out) without a manual reload. Throttled
-  // so ordinary focus churn doesn't hit the server on every event.
+  const refreshUser = useCallback(async () => {
+    if (inFlightSyncRef.current) {
+      return inFlightSyncRef.current;
+    }
+    const syncPromise = (async () => {
+      setLoading(true);
+      try {
+        lastSyncRef.current = Date.now();
+        const { customer, refreshed, stale } = await syncSession();
+        if (refreshed) {
+          router.refresh();
+        }
+        if (stale) return;
+        setUser(customer ? toUser(customer) : null);
+      } catch {
+        // Leave existing session untouched on unexpected error
+      } finally {
+        setLoading(false);
+        inFlightSyncRef.current = null;
+      }
+    })();
+    inFlightSyncRef.current = syncPromise;
+    return syncPromise;
+  }, [router]);
+
+  // Route-aware initial auth check: 0 overhead on public catalog routes
   useEffect(() => {
+    let active = true;
+
+    const initAuth = async () => {
+      const currentPath = initialPathname ?? getClientPathname();
+      if (!isAuthSensitivePath(currentPath)) {
+        if (active) {
+          setLoading(false);
+        }
+        return;
+      }
+
+      await refreshUser();
+      if (active) {
+        setLoading(false);
+      }
+    };
+
+    initAuth();
+
+    return () => {
+      active = false;
+    };
+  }, [initialPathname, refreshUser]);
+
+  // Re-sync session when tab regains focus ONLY while on an auth-sensitive surface
+  useEffect(() => {
+    const currentPath = initialPathname ?? getClientPathname();
+    if (!isAuthSensitivePath(currentPath)) return;
+
     const RESYNC_THROTTLE_MS = 30_000;
     const maybeResync = () => {
+      const pathNow = initialPathname ?? getClientPathname();
+      if (!isAuthSensitivePath(pathNow)) return;
       if (document.visibilityState !== "visible") return;
       if (Date.now() - lastSyncRef.current < RESYNC_THROTTLE_MS) return;
       lastSyncRef.current = Date.now();
       void refreshUser();
     };
+
     document.addEventListener("visibilitychange", maybeResync);
     window.addEventListener("focus", maybeResync);
     return () => {
       document.removeEventListener("visibilitychange", maybeResync);
       window.removeEventListener("focus", maybeResync);
     };
-  }, [refreshUser]);
+  }, [initialPathname, refreshUser]);
 
   // Login
   const login = useCallback(

@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
+import { AuthRouteSync } from "@/components/auth/AuthRouteSync";
 import { isWholesaleEnabled } from "@/lib/spree";
 
 interface WholesaleLayoutProps {
@@ -19,7 +20,11 @@ interface WholesaleLayoutProps {
 export default function WholesaleLayout({ children }: WholesaleLayoutProps) {
   if (!isWholesaleEnabled()) notFound();
 
-  return <div className="min-h-screen bg-slate-50">{children}</div>;
+  return (
+    <div className="min-h-screen bg-slate-50">
+      <AuthRouteSync>{children}</AuthRouteSync>
+    </div>
+  );
 }
 
 export async function generateMetadata({

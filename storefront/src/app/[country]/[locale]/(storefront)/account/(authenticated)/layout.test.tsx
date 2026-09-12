@@ -1,8 +1,10 @@
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { REQUEST_PATHNAME_HEADER, REQUEST_SEARCH_HEADER } from "@/i18n/routing";
+import type { AppUser } from "@/lib/data/customer";
 
 const mocks = vi.hoisted(() => ({
+  customer: null as AppUser | null,
   accessToken: undefined as string | undefined,
   refreshToken: undefined as string | undefined,
   headers: vi.fn(),
@@ -13,6 +15,9 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("next/headers", () => ({ headers: mocks.headers }));
 vi.mock("next/navigation", () => ({ redirect: mocks.redirect }));
+vi.mock("@/lib/data/customer", () => ({
+  getCustomer: vi.fn(() => Promise.resolve(mocks.customer)),
+}));
 vi.mock("@/lib/spree", () => ({
   getAccessToken: () => Promise.resolve(mocks.accessToken),
   getRefreshToken: () => Promise.resolve(mocks.refreshToken),
@@ -43,6 +48,7 @@ function renderLayout() {
 describe("AuthenticatedAccountLayoutContent", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.customer = null;
     mocks.accessToken = undefined;
     mocks.refreshToken = undefined;
     mocks.headers.mockResolvedValue(
@@ -60,8 +66,23 @@ describe("AuthenticatedAccountLayoutContent", () => {
     expect(mocks.redirect).toHaveBeenCalledOnce();
   });
 
-  it("renders the protected route when an access token is present", async () => {
-    mocks.accessToken = "access-token";
+  it("redirects when legacy tokens exist but no verified Supabase customer is found", async () => {
+    mocks.accessToken = "legacy-access-token";
+    mocks.refreshToken = "legacy-refresh-token";
+    mocks.customer = null;
+
+    await expect(renderLayout()).rejects.toThrow(
+      "redirect:/us/en/account?redirect=%2Fus%2Fen%2Faccount%2Forders%3Fstate%3Dcomplete",
+    );
+    expect(mocks.redirect).toHaveBeenCalledOnce();
+  });
+
+  it("renders the protected route when a verified Supabase customer is present", async () => {
+    mocks.customer = {
+      id: "user-123",
+      email: "user@example.com",
+      role: "customer",
+    };
 
     render(await renderLayout());
 
@@ -70,14 +91,7 @@ describe("AuthenticatedAccountLayoutContent", () => {
       "data-login-href",
       "/us/en/account?redirect=%2Fus%2Fen%2Faccount%2Forders%3Fstate%3Dcomplete",
     );
-  });
-
-  it("allows a refresh-only session to recover before client verification", async () => {
-    mocks.refreshToken = "refresh-token";
-
-    render(await renderLayout());
-
-    expect(screen.getByText("Protected account content")).toBeInTheDocument();
     expect(mocks.redirect).not.toHaveBeenCalled();
   });
 });
+

@@ -36,9 +36,7 @@ export default function ForgotPasswordPage() {
     setSubmitting(true);
 
     try {
-      const origin = window.location.origin;
-      const redirectUrl = `${origin}${basePath}/account/reset-password`;
-      const result = await requestPasswordReset(email, redirectUrl);
+      const result = await requestPasswordReset(email, basePath);
       if (result?.message) {
         setSubmitted(true);
       } else {

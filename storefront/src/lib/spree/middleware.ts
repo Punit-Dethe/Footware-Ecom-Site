@@ -6,13 +6,27 @@ import {
   negotiateLocale,
 } from "@/i18n/normalize";
 import { REQUEST_PATHNAME_HEADER, REQUEST_SEARCH_HEADER } from "@/i18n/routing";
-import { resolveRouteCachePolicy } from "@/lib/cache/cache-policy";
+import { CACHE_POLICIES, resolveRouteCachePolicy } from "@/lib/cache/cache-policy";
+import { verifyProxySession } from "@/lib/supabase/proxy";
 import { buildAccountLoginHref } from "@/lib/utils/account-redirect";
+
+/**
+ * Copies cookies set on the Supabase proxy response onto a target response (including redirects).
+ * Ensures cookie rotation/clearing is preserved across redirects and locale context composition.
+ */
+function copySupabaseResponseCookies(
+  source: NextResponse,
+  target: NextResponse,
+): void {
+  for (const cookie of source.cookies.getAll()) {
+    target.cookies.set(cookie);
+  }
+}
 
 const COUNTRY_COOKIE = "spree_country";
 const LOCALE_COOKIE = "spree_locale";
-const ACCESS_TOKEN_COOKIE = "_spree_jwt";
-const REFRESH_TOKEN_COOKIE = "_spree_refresh_token";
+const LEGACY_ACCESS_TOKEN_COOKIE = "_spree_jwt";
+const LEGACY_REFRESH_TOKEN_COOKIE = "_spree_refresh_token";
 const COOKIE_MAX_AGE = 365 * 24 * 60 * 60;
 
 const HAS_COUNTRY_LOCALE =
@@ -39,6 +53,20 @@ const PUBLIC_ACCOUNT_PATHS = new Set([
   "/account/forgot-password",
   "/account/reset-password",
 ]);
+
+function isAuthConsumingRoute(pathname: string, localizedPrefix: string): boolean {
+  const localizedPath = pathname.slice(localizedPrefix.length);
+  const normalizedPath = localizedPath.replace(/\/+$/, "") || "/";
+
+  return (
+    normalizedPath === "/account" ||
+    normalizedPath.startsWith("/account/") ||
+    normalizedPath === "/checkout" ||
+    normalizedPath.startsWith("/checkout/") ||
+    normalizedPath === "/wholesale" ||
+    normalizedPath.startsWith("/wholesale/")
+  );
+}
 
 function isProtectedAccountPath(pathname: string, localizedPrefix: string) {
   const localizedPath = pathname.slice(localizedPrefix.length);
@@ -67,6 +95,24 @@ function setLocaleCookies(
     path: "/",
     maxAge: COOKIE_MAX_AGE,
   });
+}
+
+function clearLegacySpreeCookies(
+  response: NextResponse,
+  request?: NextRequest,
+): void {
+  response.cookies.set(LEGACY_ACCESS_TOKEN_COOKIE, "", {
+    maxAge: -1,
+    path: "/",
+  });
+  response.cookies.set(LEGACY_REFRESH_TOKEN_COOKIE, "", {
+    maxAge: -1,
+    path: "/",
+  });
+  if (request) {
+    request.cookies.delete(LEGACY_ACCESS_TOKEN_COOKIE);
+    request.cookies.delete(LEGACY_REFRESH_TOKEN_COOKIE);
+  }
 }
 
 function nextWithLocaleContext(
@@ -106,10 +152,12 @@ function nextWithLocaleContext(
  * - Detecting locale from cookies → accept-language → default
  * - Syncing spree_country / spree_locale cookies with URL segments so
  *   server-side data fetching (via `getLocaleOptions()`) uses the correct market
+ * - Guarding protected account routes via Supabase verified claims
+ * - Ensuring token refresh responses are not publicly cached
  */
 export function createSpreeMiddleware(
   config: SpreeMiddlewareConfig = {},
-): (request: NextRequest) => NextResponse {
+): (request: NextRequest) => Promise<NextResponse> {
   const defaultCountry = config.defaultCountry ?? "us";
   const supportedLocales = config.supportedLocales ?? [];
   const configuredDefaultLocale = config.defaultLocale ?? "en";
@@ -122,18 +170,15 @@ export function createSpreeMiddleware(
   const staticRoutes = config.staticRoutes ?? [
     "/_next",
     "/api",
+    "/auth",
     "/dev",
     "/favicon.ico",
   ];
-  const accessTokenCookieName =
-    config.accessTokenCookieName ?? ACCESS_TOKEN_COOKIE;
-  const refreshTokenCookieName =
-    config.refreshTokenCookieName ?? REFRESH_TOKEN_COOKIE;
 
-  return function middleware(request: NextRequest) {
+  return async function middleware(request: NextRequest): Promise<NextResponse> {
     const { pathname } = request.nextUrl;
 
-    // Skip static routes
+    // Skip static routes (including global auth callbacks /auth/...)
     if (staticRoutes.some((route) => pathname.startsWith(route))) {
       return NextResponse.next();
     }
@@ -174,23 +219,86 @@ export function createSpreeMiddleware(
         return response;
       }
 
-      if (
-        isProtectedAccountPath(pathname, canonicalPrefix) &&
-        !request.cookies.get(accessTokenCookieName)?.value &&
-        !request.cookies.get(refreshTokenCookieName)?.value
-      ) {
-        const loginHref = buildAccountLoginHref(
-          canonicalPrefix,
-          `${pathname}${request.nextUrl.search}`,
-        );
-        const response = NextResponse.redirect(
-          new URL(loginHref, request.nextUrl),
-        );
-        setLocaleCookies(response, country, locale);
+      if (isAuthConsumingRoute(pathname, canonicalPrefix)) {
+        // 1. Run session verification/refresh FIRST so request.cookies are mutated before downstream response construction
+        const authResult = await verifyProxySession(request);
+
+        // Fail closed on transient auth service failure for protected account routes
+        if (
+          authResult.transientFailure &&
+          isProtectedAccountPath(pathname, canonicalPrefix)
+        ) {
+          return new NextResponse("Authentication service temporarily unavailable", {
+            status: 503,
+            headers: {
+              "Cache-Control": CACHE_POLICIES.PRIVATE_SESSION,
+            },
+          });
+        }
+
+        // 2. Protected account children strictly require a verified user
+        if (
+          isProtectedAccountPath(pathname, canonicalPrefix) &&
+          !authResult.userId
+        ) {
+          const loginHref = buildAccountLoginHref(
+            canonicalPrefix,
+            `${pathname}${request.nextUrl.search}`,
+          );
+          const redirectResponse = NextResponse.redirect(
+            new URL(loginHref, request.nextUrl),
+          );
+          setLocaleCookies(redirectResponse, country, locale);
+          clearLegacySpreeCookies(redirectResponse);
+          // Preserve any Supabase cookie rotation/clearing on redirect
+          copySupabaseResponseCookies(authResult.response, redirectResponse);
+          return redirectResponse;
+        }
+
+        // 3. Request cookies are now current. Construct final localized response from updated request
+        const response = nextWithLocaleContext(request, country, locale);
+        copySupabaseResponseCookies(authResult.response, response);
+
+        if (
+          request.cookies.has(LEGACY_ACCESS_TOKEN_COOKIE) ||
+          request.cookies.has(LEGACY_REFRESH_TOKEN_COOKIE)
+        ) {
+          clearLegacySpreeCookies(response, request);
+        }
+
+        // Cache-Control invariants:
+        // - Any response where Supabase wrote/rotated cookies: PRIVATE_SESSION
+        // - Account routes: PRIVATE_SESSION
+        // - Checkout routes: PRIVATE_SESSION
+        // - Authenticated wholesale: PRIVATE_SESSION
+        // - Anonymous wholesale with no cookie rotation: public catalog policy preserved
+        const isAccount = pathname.startsWith(`${canonicalPrefix}/account`);
+        const isCheckout = pathname.startsWith(`${canonicalPrefix}/checkout`);
+        const isAuthWholesale =
+          pathname.startsWith(`${canonicalPrefix}/wholesale`) &&
+          Boolean(authResult.userId);
+
+        if (
+          authResult.cookiesRefreshed ||
+          isAccount ||
+          isCheckout ||
+          isAuthWholesale
+        ) {
+          response.headers.set("Cache-Control", CACHE_POLICIES.PRIVATE_SESSION);
+        }
+
         return response;
       }
 
-      return nextWithLocaleContext(request, country, locale);
+      // Public catalog routes: bypass auth verification completely (0 auth overhead)
+      const response = nextWithLocaleContext(request, country, locale);
+      if (
+        request.cookies.has(LEGACY_ACCESS_TOKEN_COOKIE) ||
+        request.cookies.has(LEGACY_REFRESH_TOKEN_COOKIE)
+      ) {
+        clearLegacySpreeCookies(response, request);
+      }
+      return response;
     }
 
     // Detect country: cookie → geo headers → default
