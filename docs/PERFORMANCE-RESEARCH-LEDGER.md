@@ -3,7 +3,7 @@
 > Current source of truth for performance decisions. Keep entries short. Historical experiment write-ups remain in `docs/PERFORMANCE.md`, but results measured before the serverless migration are not the current baseline.
 
 **Audit baseline:** `38481f2335141d9eec4095242e9c3567b459aba6`  
-**Architecture:** Next.js 16 / React 19 on Vercel, same-app Spree-compatible BFF retained for API compatibility, static TypeScript catalog (38 products), pre-generated product assets.  
+**Architecture:** Next.js 16 / React 19 on Vercel, same-app Spree-compatible BFF retained for API compatibility, static TypeScript catalog (38 products), pre-generated product assets. B1 persistence foundation is complete on clean Supabase/Postgres; B2 real-auth migration is under audit and is not yet part of the accepted performance baseline.  
 **Research method:** one meaningful variable per experiment; benchmark before/after; keep, simplify, or revert from measured evidence.
 
 ## Decision rule
@@ -191,7 +191,7 @@ For user-visible latency, prefer a change when it produces a repeatable visible 
 | O41 | Mobile `content-visibility:auto` | KEEP / VERIFY | Low priority. |
 | O42 | React Compiler + `memo(ProductCard)` | TEST LOW PRIORITY | Not current bottleneck. |
 | O43 | Whole PDP `ProductDetails` client boundary | LATER | P1 shows route/data, not post-render hydration, is the immediate dominant delay. |
-| O44 | In-memory serverless BFF cart `Map` | SIMPLIFY / CORRECTNESS RISK | Persistence issue for real deployment; outside current PDP performance focus. |
+| O44 | In-memory serverless BFF cart `Map` | MIGRATE IN B3 / CORRECTNESS RISK | Runtime cart state is still in-memory and ephemeral. B1 added persistent `carts`/`cart_items` schema only; B3 owns wiring the shopper cart to durable storage. |
 | O45 | Legacy Spree cart orchestration | LATER CLEANUP | S8 removed the measured refresh/polling waste; broader cart rewrite is not justified by current latency evidence. |
 | O46 | `router.refresh()` after cart mutation | RESOLVED: REMOVED | R011 cuts mutation bytes ~19–32% with no correctness loss. |
 | O47 | Re-fetch cart on pathname change | RESOLVED: REMOVED | R011 drops ordinary navigation cart reads to zero. |
@@ -202,19 +202,21 @@ For user-visible latency, prefer a change when it produces a repeatable visible 
 | O52 | Old benchmark JSON | HISTORICAL ONLY | Pre-serverless baseline. |
 | O53 | HTTP-only harness | KEEP AS SERVER TOOL | Not a substitute for visible browser milestones. |
 | O54 | Stale Render redirects | CLEANUP | Repository hygiene only. |
-| O55 | Stale architecture docs | UPDATE | Documentation should match active architecture. |
-| O56 | Payment/checkout/wholesale surface | SCOPE CLEANUP | Prune only with bundle/runtime or project-scope evidence. |
+| O55 | Stale architecture docs | UPDATE AS MIGRATION LANDS | This ledger now records the B1/B2 phase boundary; broader repository docs should be reconciled as legacy Spree/Render paths are actually removed. |
+| O56 | Payment/checkout/wholesale surface | KEEP FUNCTIONAL / PERF WITH EVIDENCE | The product is intended to become a real store. Do not prune commerce/account/order surfaces merely because they were outside earlier performance experiments; payment gateway and fulfillment remain deliberately deferred. |
 | O57 | Exact PDP hero intent prewarm | RESOLVED: KEEP STRONG | R012 starts the exact responsive Next Image candidate ~0.47–1.16 s earlier, reuses it 60/60 with zero duplicate bytes, and collapses title-to-hero lag to ~2 ms. |
-| O58 | Public DTC PDP product resolution through request/cache/SDK machinery | TEST NEXT / P2 | P1 leaves ~0.48–0.83 s median cold title latency and up to ~1.1 s observed response time. Audit whether local static product data can bypass locale/auth/remote-cache/SDK work. |
+| O58 | Public DTC PDP product resolution through request/cache/SDK machinery | PAUSED / P2 AFTER B2 | P1 leaves ~0.48–0.83 s median cold title latency and up to ~1.1 s observed response time. Resume once B2 auth is accepted so P2 benchmarks the stable public PDP request path rather than transitional auth/SDK behavior. |
 
 ## Current execution queue
 
-1. **P2 — Cold public DTC PDP route/data path:** trace the exact server request graph and compare the current generic `getCachedProduct/getProduct/use cache: remote/SDK` path against a direct local static DTC product resolution while preserving wholesale/private behavior. Keep P1 enabled and explicitly control for its desktop route-timing anomaly.
-2. **P3 — PDP perceptual polish only after P2:** feed the real generated product LQIP/dominant colour into the PDP hero if a visible placeholder gap remains. Do not confuse this with network latency reduction.
-3. **Later:** PDP client-boundary/hydration work only if post-P2 traces show JavaScript/hydration is the next dominant delay; otherwise move to the next measured UX bottleneck.
+1. **Architecture stabilization gate — B1 complete, B2 under audit:** B1 persistence/TLS infrastructure is accepted and production-connected. B2 replaces demo/Spree authentication with Supabase Auth while preserving a hard public-route performance invariant (anonymous homepage/PLP/PDP must not gain auth/profile work). These phases are architecture/correctness work, not R-series performance experiments.
+2. **P2 — Cold public DTC PDP route/data path, after B2 acceptance:** trace the exact server request graph and compare the stable generic `getCachedProduct/getProduct/use cache: remote/SDK` path against a direct local static DTC product resolution while preserving wholesale/private behavior. Keep P1 enabled and explicitly control for its desktop route-timing anomaly.
+3. **P3 — PDP perceptual polish only after P2:** feed the real generated product LQIP/dominant colour into the PDP hero if a visible placeholder gap remains. Do not confuse this with network latency reduction.
+4. **Later:** PDP client-boundary/hydration work only if post-P2 traces show JavaScript/hydration is the next dominant delay; otherwise move to the next measured UX bottleneck.
 
 ## Measurement notes / known facts
 
+- B1/B2 backend migration work does not receive an R-number unless it becomes a controlled performance experiment. During B2, the relevant regression guard is zero added Supabase auth/profile work on anonymous homepage/PLP/PDP loads.
 - R012 changes the PDP image problem from a serial waterfall into parallel work: exact hero preload begins on intent and is reused by the eventual Next `<Image>` with zero duplicate requests. The remaining dominant user-visible delay is cold route/data resolution.
 - R012 desktop immediate-click/title timing was noisy and sometimes worse; P2 must retain a baseline control and report whether high-priority image prewarm competes with the RSC on near-zero-dwell clicks.
 - R011 removes redundant cart refresh/polling: mutation responses are authoritative client state; routine navigation no longer performs cart reads.
