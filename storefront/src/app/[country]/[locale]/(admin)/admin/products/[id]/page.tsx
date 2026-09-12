@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { connection } from "next/server";
+import { requireAdmin } from "@/lib/auth/admin";
 import { getAdminProduct, listAdminCategories } from "@/lib/db/admin-catalog";
 import { ProductEditForm } from "@/components/admin/ProductEditForm";
 
@@ -12,6 +13,7 @@ export default async function ProductDetailPage({
   params,
 }: ProductDetailPageProps) {
   await connection();
+  await requireAdmin();
   const { country, locale, id } = await params;
 
   const [product, categories] = await Promise.all([

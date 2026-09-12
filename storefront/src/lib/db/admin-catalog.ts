@@ -99,12 +99,138 @@ export class CatalogValidationError extends Error {
   }
 }
 
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const SLUG_REGEX = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+export function isValidUuid(id: unknown): id is string {
+  return typeof id === "string" && UUID_REGEX.test(id);
+}
+
+export function validateUuid(id: unknown, fieldName: string): string {
+  if (typeof id !== "string" || !UUID_REGEX.test(id)) {
+    throw new CatalogValidationError(
+      `Invalid UUID format for ${fieldName}`,
+      fieldName,
+    );
+  }
+  return id;
+}
+
+export function validateSlug(slug: unknown, fieldName: string = "slug"): string {
+  if (
+    typeof slug !== "string" ||
+    slug.length < 1 ||
+    slug.length > 255 ||
+    !SLUG_REGEX.test(slug)
+  ) {
+    throw new CatalogValidationError(
+      `Invalid slug for ${fieldName}. Must be lowercase alphanumeric characters separated by single hyphens, up to 255 characters.`,
+      fieldName,
+    );
+  }
+  return slug;
+}
+
+export function validateStatus(
+  status: unknown,
+  fieldName: string = "status",
+): "draft" | "active" | "archived" {
+  if (status !== "draft" && status !== "active" && status !== "archived") {
+    throw new CatalogValidationError(
+      `Invalid status for ${fieldName}. Must be 'draft', 'active', or 'archived'.`,
+      fieldName,
+    );
+  }
+  return status;
+}
+
+export function validateStringLength(
+  val: unknown,
+  fieldName: string,
+  max: number,
+  required: boolean = false,
+): string | null {
+  if (val == null || val === "") {
+    if (required) {
+      throw new CatalogValidationError(`${fieldName} is required`, fieldName);
+    }
+    return null;
+  }
+  if (typeof val !== "string") {
+    throw new CatalogValidationError(`${fieldName} must be a string`, fieldName);
+  }
+  const trimmed = val.trim();
+  if (required && !trimmed) {
+    throw new CatalogValidationError(`${fieldName} cannot be empty`, fieldName);
+  }
+  if (trimmed.length > max) {
+    throw new CatalogValidationError(
+      `${fieldName} exceeds maximum length of ${max} characters`,
+      fieldName,
+    );
+  }
+  return trimmed;
+}
+
+export function validateInteger(
+  val: unknown,
+  fieldName: string,
+  { min = 0, allowNull = false } = {},
+): number | null {
+  if (val == null && allowNull) return null;
+  if (
+    typeof val !== "number" ||
+    !Number.isFinite(val) ||
+    !Number.isInteger(val) ||
+    val < min
+  ) {
+    throw new CatalogValidationError(
+      `Invalid value for ${fieldName}. Must be an integer >= ${min}.`,
+      fieldName,
+    );
+  }
+  return val;
+}
+
+export function validateBoolean(val: unknown, fieldName: string): boolean {
+  if (typeof val !== "boolean") {
+    throw new CatalogValidationError(
+      `Invalid value for ${fieldName}. Must be a boolean (true or false).`,
+      fieldName,
+    );
+  }
+  return val;
+}
+
 /**
  * Lists all products in the database regardless of status (draft, active, archived).
  * Single bounded query that aggregates variant statistics and category names without N+1.
  */
 export async function listAdminProducts(): Promise<AdminProductSummary[]> {
   const sql = `
+    WITH variant_stats AS (
+      SELECT
+        product_id,
+        COUNT(id)::int AS variant_count,
+        MIN(price_in_cents) AS min_price_in_cents,
+        MAX(price_in_cents) AS max_price_in_cents,
+        COALESCE(SUM(quantity_on_hand), 0)::int AS total_stock
+      FROM public.variants
+      GROUP BY product_id
+    ),
+    cat_agg AS (
+      SELECT
+        pc.product_id,
+        COALESCE(
+          json_agg(jsonb_build_object('id', c.id, 'name', c.name, 'slug', c.slug) ORDER BY c.name)
+          FILTER (WHERE c.id IS NOT NULL),
+          '[]'::json
+        ) AS categories
+      FROM public.product_categories pc
+      JOIN public.categories c ON c.id = pc.category_id
+      GROUP BY pc.product_id
+    )
     SELECT
       p.id,
       p.name,
@@ -113,20 +239,14 @@ export async function listAdminProducts(): Promise<AdminProductSummary[]> {
       p.status,
       p.created_at,
       p.updated_at,
-      COUNT(v.id)::int AS variant_count,
-      MIN(v.price_in_cents) AS min_price_in_cents,
-      MAX(v.price_in_cents) AS max_price_in_cents,
-      COALESCE(SUM(v.quantity_on_hand), 0)::int AS total_stock,
-      COALESCE(
-        json_agg(DISTINCT jsonb_build_object('id', c.id, 'name', c.name, 'slug', c.slug))
-        FILTER (WHERE c.id IS NOT NULL),
-        '[]'::json
-      ) AS categories
+      COALESCE(vs.variant_count, 0)::int AS variant_count,
+      vs.min_price_in_cents,
+      vs.max_price_in_cents,
+      COALESCE(vs.total_stock, 0)::int AS total_stock,
+      COALESCE(ca.categories, '[]'::json) AS categories
     FROM public.products p
-    LEFT JOIN public.variants v ON v.product_id = p.id
-    LEFT JOIN public.product_categories pc ON pc.product_id = p.id
-    LEFT JOIN public.categories c ON c.id = pc.category_id
-    GROUP BY p.id
+    LEFT JOIN variant_stats vs ON vs.product_id = p.id
+    LEFT JOIN cat_agg ca ON ca.product_id = p.id
     ORDER BY p.updated_at DESC;
   `;
 
@@ -167,6 +287,10 @@ export async function listAdminProducts(): Promise<AdminProductSummary[]> {
 export async function getAdminProduct(
   id: string,
 ): Promise<AdminProductDetail | null> {
+  if (!isValidUuid(id)) {
+    return null;
+  }
+
   const prodRes = await query<{
     id: string;
     name: string;
@@ -267,14 +391,19 @@ export async function getAdminProduct(
 export async function createAdminProduct(
   input: SaveProductInput,
 ): Promise<string> {
-  const name = input.name?.trim();
-  if (!name) {
-    throw new CatalogValidationError("Product name is required", "name");
-  }
+  const name = validateStringLength(input.name, "name", 255, true)!;
+  const rawSlug = (input.slug || name.toLowerCase().replace(/[^a-z0-9]+/g, "-")).replace(/^-|-$/g, "");
+  const slug = validateSlug(rawSlug, "slug");
+  const sku = validateStringLength(input.sku, "sku", 100);
+  const status = input.status ? validateStatus(input.status, "status") : "draft";
+  const metaTitle = validateStringLength(input.metaTitle, "metaTitle", 255);
+  const metaDescription = typeof input.metaDescription === "string" ? input.metaDescription.trim() || null : null;
+  const metaKeywords = typeof input.metaKeywords === "string" ? input.metaKeywords.trim() || null : null;
 
-  const slug = (input.slug || name.toLowerCase().replace(/[^a-z0-9]+/g, "-")).replace(/^-|-$/g, "");
-  if (!slug) {
-    throw new CatalogValidationError("Valid product slug is required", "slug");
+  if (input.categoryIds && input.categoryIds.length > 0) {
+    for (let i = 0; i < input.categoryIds.length; i++) {
+      validateUuid(input.categoryIds[i], `categoryIds[${i}]`);
+    }
   }
 
   const productId = crypto.randomUUID();
@@ -287,17 +416,18 @@ export async function createAdminProduct(
           id, name, slug, sku, description, description_html,
           status, meta_title, meta_description, meta_keywords,
           created_at, updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, 'draft', $7, $8, $9, NOW(), NOW());`,
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW());`,
         [
           productId,
           name,
           slug,
-          input.sku?.trim() || null,
+          sku,
           safeDesc.description || null,
           safeDesc.description_html || null,
-          input.metaTitle?.trim() || null,
-          input.metaDescription?.trim() || null,
-          input.metaKeywords?.trim() || null,
+          status,
+          metaTitle,
+          metaDescription,
+          metaKeywords,
         ],
       );
     } catch (err: any) {
@@ -330,6 +460,21 @@ export async function saveAdminProduct(
   productId: string,
   input: SaveProductInput,
 ): Promise<AdminProductDetail> {
+  validateUuid(productId, "productId");
+  const name = validateStringLength(input.name, "name", 255, true)!;
+  const slug = validateSlug(input.slug?.trim().toLowerCase(), "slug");
+  const sku = validateStringLength(input.sku, "sku", 100);
+  const targetStatus = input.status ? validateStatus(input.status, "status") : undefined;
+  const metaTitle = validateStringLength(input.metaTitle, "metaTitle", 255);
+  const metaDescription = typeof input.metaDescription === "string" ? input.metaDescription.trim() || null : null;
+  const metaKeywords = typeof input.metaKeywords === "string" ? input.metaKeywords.trim() || null : null;
+
+  if (input.categoryIds) {
+    for (let i = 0; i < input.categoryIds.length; i++) {
+      validateUuid(input.categoryIds[i], `categoryIds[${i}]`);
+    }
+  }
+
   return transaction(async (client) => {
     // 1. Verify target product exists
     const existing = await client.query<{ id: string; status: string }>(
@@ -340,18 +485,8 @@ export async function saveAdminProduct(
       throw new CatalogValidationError(`Product ${productId} not found`);
     }
 
-    const name = input.name?.trim();
-    if (!name) {
-      throw new CatalogValidationError("Product name is required", "name");
-    }
-
-    const slug = input.slug?.trim().toLowerCase();
-    if (!slug) {
-      throw new CatalogValidationError("Product slug is required", "slug");
-    }
-
     const safeDesc = formatSafeDescription(input.description);
-    const targetStatus = input.status || (existing.rows[0].status as "draft" | "active" | "archived");
+    const finalStatus = targetStatus || (existing.rows[0].status as "draft" | "active" | "archived");
 
     // 2. Update product row
     try {
@@ -371,13 +506,13 @@ export async function saveAdminProduct(
         [
           name,
           slug,
-          input.sku?.trim() || null,
+          sku,
           safeDesc.description || null,
           safeDesc.description_html || null,
-          targetStatus,
-          input.metaTitle?.trim() || null,
-          input.metaDescription?.trim() || null,
-          input.metaKeywords?.trim() || null,
+          finalStatus,
+          metaTitle,
+          metaDescription,
+          metaKeywords,
           productId,
         ],
       );
@@ -439,18 +574,40 @@ async function syncVariants(
     existingRes.rows.map((r) => [r.id, r.sku]),
   );
 
+  const defaultCount = variantsInput.filter((v) => v.isDefault).length;
+  if (defaultCount > 1) {
+    throw new CatalogValidationError(
+      "Multiple default variants specified. At most one default variant is allowed.",
+      "variants",
+    );
+  }
+
+  // If a default variant is submitted, clear existing defaults first inside the transaction
+  // to avoid order-dependent violations of idx_variants_product_default (e.g. old default updated after new default)
+  if (defaultCount === 1) {
+    await client.query(
+      `UPDATE public.variants SET is_default = false WHERE product_id = $1 AND is_default = true;`,
+      [productId],
+    );
+  }
+
   const seenSkus = new Set<string>();
 
   for (let i = 0; i < variantsInput.length; i++) {
     const v = variantsInput[i];
-    const trimmedSku = v.sku?.trim();
-
-    if (!trimmedSku) {
-      throw new CatalogValidationError(
-        `Variant #${i + 1} requires a valid SKU`,
-        `variants[${i}].sku`,
-      );
+    if (v.id) {
+      validateUuid(v.id, `variants[${i}].id`);
     }
+
+    const trimmedSku = validateStringLength(v.sku, `variants[${i}].sku`, 100, true)!;
+    const sizeOption = validateStringLength(v.sizeOption, `variants[${i}].sizeOption`, 50);
+    const priceInCents = validateInteger(v.priceInCents, `variants[${i}].priceInCents`, { min: 0 })!;
+    const compareAtPriceInCents = validateInteger(v.compareAtPriceInCents, `variants[${i}].compareAtPriceInCents`, { min: 0, allowNull: true });
+    const quantityOnHand = validateInteger(v.quantityOnHand, `variants[${i}].quantityOnHand`, { min: 0 })!;
+    const position = v.position != null ? validateInteger(v.position, `variants[${i}].position`, { min: 0 })! : i;
+    const backorderable = validateBoolean(v.backorderable, `variants[${i}].backorderable`);
+    const isDefault = validateBoolean(v.isDefault, `variants[${i}].isDefault`);
+    const active = validateBoolean(v.active, `variants[${i}].active`);
 
     const lowerSku = trimmedSku.toLowerCase();
     if (seenSkus.has(lowerSku)) {
@@ -494,14 +651,14 @@ async function syncVariants(
              updated_at = NOW()
            WHERE id = $9 AND product_id = $10;`,
           [
-            v.sizeOption?.trim() || null,
-            v.priceInCents,
-            v.compareAtPriceInCents != null ? v.compareAtPriceInCents : null,
-            v.quantityOnHand,
-            v.backorderable,
-            v.position != null ? v.position : i,
-            v.isDefault,
-            v.active,
+            sizeOption,
+            priceInCents,
+            compareAtPriceInCents,
+            quantityOnHand,
+            backorderable,
+            position,
+            isDefault,
+            active,
             v.id,
             productId,
           ],
@@ -524,14 +681,14 @@ async function syncVariants(
             newVariantId,
             productId,
             trimmedSku,
-            v.sizeOption?.trim() || null,
-            v.priceInCents,
-            v.compareAtPriceInCents != null ? v.compareAtPriceInCents : null,
-            v.quantityOnHand,
-            v.backorderable,
-            v.position != null ? v.position : i,
-            v.isDefault,
-            v.active,
+            sizeOption,
+            priceInCents,
+            compareAtPriceInCents,
+            quantityOnHand,
+            backorderable,
+            position,
+            isDefault,
+            active,
           ],
         );
       } catch (err: any) {
@@ -659,6 +816,7 @@ async function validatePublishInvariants(
  * Archives an active or draft product. Variants remain intact.
  */
 export async function archiveAdminProduct(productId: string): Promise<void> {
+  validateUuid(productId, "productId");
   const res = await query(
     `UPDATE public.products SET status = 'archived', updated_at = NOW() WHERE id = $1 RETURNING id;`,
     [productId],
@@ -672,6 +830,7 @@ export async function archiveAdminProduct(productId: string): Promise<void> {
  * Restores an archived product back to draft status.
  */
 export async function restoreAdminProduct(productId: string): Promise<void> {
+  validateUuid(productId, "productId");
   const res = await query(
     `UPDATE public.products SET status = 'draft', updated_at = NOW() WHERE id = $1 RETURNING id;`,
     [productId],
@@ -725,6 +884,10 @@ export async function listAdminCategories(): Promise<AdminCategoryRecord[]> {
 export async function getAdminCategory(
   id: string,
 ): Promise<AdminCategoryRecord | null> {
+  if (!isValidUuid(id)) {
+    return null;
+  }
+
   const res = await query<{
     id: string;
     name: string;
@@ -772,14 +935,21 @@ export async function createAdminCategory(data: {
   parentId?: string | null;
   position?: number;
 }): Promise<string> {
-  const name = data.name?.trim();
-  if (!name) {
-    throw new CatalogValidationError("Category name is required", "name");
-  }
+  const name = validateStringLength(data.name, "name", 255, true)!;
+  const rawSlug = (data.slug || name.toLowerCase().replace(/[^a-z0-9]+/g, "-")).replace(/^-|-$/g, "");
+  const slug = validateSlug(rawSlug, "slug");
+  const position = data.position != null ? validateInteger(data.position, "position", { min: 0 })! : 0;
 
-  const slug = (data.slug || name.toLowerCase().replace(/[^a-z0-9]+/g, "-")).replace(/^-|-$/g, "");
-  if (!slug) {
-    throw new CatalogValidationError("Valid category slug is required", "slug");
+  // If parentId is specified, verify parent exists
+  if (data.parentId) {
+    validateUuid(data.parentId, "parentId");
+    const parentCheck = await query<{ id: string }>(
+      `SELECT id FROM public.categories WHERE id = $1;`,
+      [data.parentId],
+    );
+    if (parentCheck.rows.length === 0) {
+      throw new CatalogValidationError("Parent category does not exist", "parentId");
+    }
   }
 
   const categoryId = crypto.randomUUID();
@@ -794,7 +964,7 @@ export async function createAdminCategory(data: {
         slug,
         data.description?.trim() || null,
         data.parentId || null,
-        data.position != null ? data.position : 0,
+        position,
       ],
     );
     return categoryId;
@@ -814,19 +984,49 @@ export async function updateAdminCategory(
     position?: number;
   },
 ): Promise<void> {
-  const name = data.name?.trim();
-  if (!name) {
-    throw new CatalogValidationError("Category name is required", "name");
-  }
+  validateUuid(id, "categoryId");
+  const name = validateStringLength(data.name, "name", 255, true)!;
+  const slug = validateSlug(data.slug?.trim().toLowerCase(), "slug");
+  const position = data.position != null ? validateInteger(data.position, "position", { min: 0 })! : 0;
 
-  const slug = data.slug?.trim().toLowerCase();
-  if (!slug) {
-    throw new CatalogValidationError("Valid category slug is required", "slug");
-  }
-
-  // Prevent parent cycle
+  // Prevent self parent cycle
   if (data.parentId === id) {
     throw new CatalogValidationError("Category cannot be its own parent", "parentId");
+  }
+
+  // If parentId is specified, verify parent exists and verify no transitive cycles
+  if (data.parentId) {
+    validateUuid(data.parentId, "parentId");
+    const parentCheck = await query<{ id: string }>(
+      `SELECT id FROM public.categories WHERE id = $1;`,
+      [data.parentId],
+    );
+    if (parentCheck.rows.length === 0) {
+      throw new CatalogValidationError("Parent category does not exist", "parentId");
+    }
+
+    // Check transitive cycle: if 'id' is in the ancestor chain of 'data.parentId'
+    const cycleCheck = await query<{ id: string }>(
+      `WITH RECURSIVE ancestors AS (
+         SELECT id, parent_id, 1 AS depth
+         FROM public.categories
+         WHERE id = $1
+         UNION ALL
+         SELECT c.id, c.parent_id, a.depth + 1
+         FROM public.categories c
+         JOIN ancestors a ON c.id = a.parent_id
+         WHERE a.depth < 50
+       )
+       SELECT id FROM ancestors WHERE id = $2 LIMIT 1;`,
+      [data.parentId, id],
+    );
+
+    if (cycleCheck.rows.length > 0) {
+      throw new CatalogValidationError(
+        "Cannot set category parent: cycle detected in category hierarchy",
+        "parentId",
+      );
+    }
   }
 
   try {
@@ -844,7 +1044,7 @@ export async function updateAdminCategory(
         slug,
         data.description?.trim() || null,
         data.parentId || null,
-        data.position != null ? data.position : 0,
+        position,
         id,
       ],
     );
@@ -858,9 +1058,36 @@ export async function updateAdminCategory(
 
 /**
  * Safely deletes a category ONLY if it has 0 associated products and 0 child categories.
+ * Uses atomic conditional DELETE to prevent check-then-delete race conditions.
  */
 export async function deleteAdminCategoryIfSafe(id: string): Promise<void> {
-  // 1. Check associated products
+  validateUuid(id, "categoryId");
+  const deleteRes = await query<{ id: string }>(
+    `DELETE FROM public.categories
+     WHERE id = $1
+       AND NOT EXISTS (
+         SELECT 1 FROM public.product_categories WHERE category_id = $1
+       )
+       AND NOT EXISTS (
+         SELECT 1 FROM public.categories WHERE parent_id = $1
+       )
+     RETURNING id;`,
+    [id],
+  );
+
+  if (deleteRes.rows.length > 0) {
+    return;
+  }
+
+  // If 0 rows deleted, determine exact cause for user feedback:
+  const existsRes = await query<{ id: string }>(
+    `SELECT id FROM public.categories WHERE id = $1;`,
+    [id],
+  );
+  if (existsRes.rows.length === 0) {
+    throw new CatalogValidationError(`Category ${id} not found`);
+  }
+
   const prodRes = await query<{ count: string }>(
     `SELECT COUNT(*)::int AS count FROM public.product_categories WHERE category_id = $1;`,
     [id],
@@ -872,7 +1099,6 @@ export async function deleteAdminCategoryIfSafe(id: string): Promise<void> {
     );
   }
 
-  // 2. Check child categories
   const childRes = await query<{ count: string }>(
     `SELECT COUNT(*)::int AS count FROM public.categories WHERE parent_id = $1;`,
     [id],
@@ -884,13 +1110,7 @@ export async function deleteAdminCategoryIfSafe(id: string): Promise<void> {
     );
   }
 
-  const deleteRes = await query(
-    `DELETE FROM public.categories WHERE id = $1 RETURNING id;`,
-    [id],
-  );
-  if (deleteRes.rows.length === 0) {
-    throw new CatalogValidationError(`Category ${id} not found`);
-  }
+  throw new CatalogValidationError("Cannot delete category: Category is not eligible for deletion.");
 }
 
 function handleConstraintViolation(err: any): never {

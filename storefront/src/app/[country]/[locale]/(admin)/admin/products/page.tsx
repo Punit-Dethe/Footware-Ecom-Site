@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { connection } from "next/server";
+import { requireAdmin } from "@/lib/auth/admin";
 import { listAdminProducts } from "@/lib/db/admin-catalog";
 
 interface AdminProductsPageProps {
@@ -10,6 +11,7 @@ export default async function AdminProductsPage({
   params,
 }: AdminProductsPageProps) {
   await connection();
+  await requireAdmin();
   const { country, locale } = await params;
   const products = await listAdminProducts();
   const basePath = `/${country}/${locale}/admin`;

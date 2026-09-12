@@ -197,24 +197,41 @@ export function adaptRawCatalogToPublicSnapshot(
       .filter((c): c is CatalogCategory => c != null);
 
     const manifest = typedManifest[p.slug];
+    const placeholderUrl = "/placeholder.svg";
     const primaryUrl =
       manifest?.variants?.["640"]?.webp ||
       manifest?.mainUrl ||
-      `/products/${p.slug}/card-lg-640.webp`;
-    const originalUrl = manifest?.variants?.["1600"]?.webp || primaryUrl;
-    const thumbUrl = manifest?.variants?.["320"]?.webp || primaryUrl;
+      placeholderUrl;
+    const originalUrl =
+      manifest?.variants?.["1600"]?.webp ||
+      manifest?.mainUrl ||
+      placeholderUrl;
+    const thumbUrl =
+      manifest?.variants?.["320"]?.webp ||
+      manifest?.mainUrl ||
+      placeholderUrl;
 
     const variants: CatalogVariant[] = dbVariants.map((v, sIdx) => {
       const cents = v.price_in_cents;
       const compareCents =
         v.compare_at_price_in_cents != null
           ? v.compare_at_price_in_cents
-          : Math.round(cents * 1.15);
+          : undefined;
       const amountStr = (cents / 100).toFixed(2);
-      const compareStr = (compareCents / 100).toFixed(2);
       const displayAmount = `$${amountStr}`;
-      const displayCompareAmount = `$${compareStr}`;
       const isAvailable = (v.quantity_on_hand > 0 || v.backorderable) && v.active;
+
+      const variantPrice: CatalogVariant["price"] = {
+        amount: amountStr,
+        currency: v.currency || "USD",
+        display_amount: displayAmount,
+        amount_in_cents: cents,
+      };
+
+      if (compareCents != null) {
+        variantPrice.compare_at_amount_in_cents = compareCents;
+        variantPrice.display_compare_at_amount = `$${(compareCents / 100).toFixed(2)}`;
+      }
 
       return {
         id: v.id,
@@ -224,14 +241,7 @@ export function adaptRawCatalogToPublicSnapshot(
         in_stock: isAvailable,
         purchasable: isAvailable,
         track_inventory: true,
-        price: {
-          amount: amountStr,
-          currency: v.currency || "USD",
-          display_amount: displayAmount,
-          amount_in_cents: cents,
-          compare_at_amount_in_cents: compareCents,
-          display_compare_at_amount: displayCompareAmount,
-        },
+        price: variantPrice,
         original_price: {
           amount: amountStr,
           currency: v.currency || "USD",
@@ -321,12 +331,13 @@ export function adaptRawCatalogToPublicSnapshot(
         currency: defaultPrice.currency,
         display_amount: defaultPrice.display_amount,
         amount_in_cents: defaultPrice.amount_in_cents,
-        compare_at_amount:
-          defaultPrice.compare_at_amount_in_cents != null
-            ? (defaultPrice.compare_at_amount_in_cents / 100).toFixed(2)
-            : undefined,
-        compare_at_amount_in_cents: defaultPrice.compare_at_amount_in_cents,
-        display_compare_at_amount: defaultPrice.display_compare_at_amount,
+        ...(defaultPrice.compare_at_amount_in_cents != null
+          ? {
+              compare_at_amount: (defaultPrice.compare_at_amount_in_cents / 100).toFixed(2),
+              compare_at_amount_in_cents: defaultPrice.compare_at_amount_in_cents,
+              display_compare_at_amount: defaultPrice.display_compare_at_amount,
+            }
+          : {}),
       },
       original_price: defaultOriginalPrice,
       categories: prodCategories,
@@ -526,15 +537,12 @@ export async function getCatalogFilters(params?: {
 }) {
   const { products, categories } = await getPublicCatalogSnapshot();
 
-  const officeCount = products.filter((p) =>
-    p.categories.some((c) => c.slug === "office-wear"),
-  ).length;
-  const traditionalCount = products.filter((p) =>
-    p.categories.some((c) => c.slug === "traditional"),
-  ).length;
-
+  // 1. Categories: dynamically count active public products belonging to each category
   const categoryOptions = categories.map((cat) => {
-    const count = cat.slug === "office-wear" ? officeCount : traditionalCount;
+    const count = products.filter((p) =>
+      p.categories.some((c) => c.id === cat.id || c.slug === cat.slug),
+    ).length;
+
     return {
       id: cat.id,
       name: cat.name,
@@ -554,6 +562,52 @@ export async function getCatalogFilters(params?: {
     };
   });
 
+  // 2. Sizes: collect all distinct sizes from active variants across public products
+  const sizeMap = new Map<string, number>();
+  for (const p of products) {
+    const productSizes = new Set<string>();
+    for (const v of p.variants) {
+      for (const ov of v.option_values) {
+        if (ov.option_type_name === "size" && ov.name) {
+          productSizes.add(ov.name);
+        }
+      }
+    }
+    for (const s of productSizes) {
+      sizeMap.set(s, (sizeMap.get(s) || 0) + 1);
+    }
+  }
+
+  const sortedSizes = Array.from(sizeMap.keys()).sort((a, b) => {
+    const numA = Number(a);
+    const numB = Number(b);
+    if (!Number.isNaN(numA) && !Number.isNaN(numB)) {
+      return numA - numB;
+    }
+    return a.localeCompare(b);
+  });
+
+  const sizeOptions = sortedSizes.map((size) => ({
+    id: `opt_sz_${size}`,
+    name: size,
+    label: `UK/India ${size}`,
+    count: sizeMap.get(size) || 0,
+  }));
+
+  // 3. Price: derive actual min and max prices from public products
+  const pricesInCents = products
+    .map((p) => p.price.amount_in_cents)
+    .filter((c) => c != null && c > 0);
+  const minPrice =
+    pricesInCents.length > 0 ? Math.floor(Math.min(...pricesInCents) / 100) : 0;
+  const maxPrice =
+    pricesInCents.length > 0 ? Math.ceil(Math.max(...pricesInCents) / 100) : 0;
+
+  // 4. Availability: count actual public in-stock / purchasable products
+  const inStockCount = products.filter(
+    (p) => p.purchasable && p.in_stock,
+  ).length;
+
   const filters = [
     {
       id: "categories",
@@ -568,26 +622,21 @@ export async function getCatalogFilters(params?: {
       name: "Size",
       type: "option",
       kind: "button",
-      options: [
-        { id: "opt_sz_7", name: "7", label: "UK/India 7", count: products.length },
-        { id: "opt_sz_8", name: "8", label: "UK/India 8", count: products.length },
-        { id: "opt_sz_9", name: "9", label: "UK/India 9", count: products.length },
-        { id: "opt_sz_10", name: "10", label: "UK/India 10", count: products.length },
-      ],
+      options: sizeOptions,
     },
     {
       id: "price",
       name: "Price Range",
       type: "price_range",
-      min: 180,
-      max: 340,
+      min: minPrice,
+      max: maxPrice,
       currency: "USD",
     },
     {
       id: "availability",
       name: "Availability",
       type: "availability",
-      options: [{ id: "in_stock", name: "In Stock", count: products.length }],
+      options: [{ id: "in_stock", name: "In Stock", count: inStockCount }],
     },
   ];
 

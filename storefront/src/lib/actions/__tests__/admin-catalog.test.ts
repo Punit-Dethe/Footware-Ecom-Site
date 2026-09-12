@@ -21,7 +21,12 @@ const mockCache = vi.hoisted(() => ({
 
 vi.mock("@/lib/auth/admin", () => ({
   requireAdmin: mockAuth.requireAdmin,
-  AdminAuthError: class AdminAuthError extends Error {},
+  AdminAuthError: class AdminAuthError extends Error {
+    constructor(message: string, public readonly code?: string) {
+      super(message);
+      this.name = "AdminAuthError";
+    }
+  },
 }));
 
 vi.mock("@/lib/db/admin-catalog", () => ({
@@ -137,6 +142,37 @@ describe("Admin Catalog Server Actions", () => {
       expect(res.success).toBe(false);
       expect(res.error).toBe("An unexpected system error occurred. Changes were not saved.");
       expect(res.error).not.toContain("FATAL");
+      expect(mockCache.updateTag).not.toHaveBeenCalled();
+    });
+
+    it("does not leak auth infrastructure outage details to client actions", async () => {
+      const { AdminAuthError } = await import("@/lib/auth/admin");
+      mockAuth.requireAdmin.mockRejectedValue(
+        new AdminAuthError(
+          "Auth service infrastructure outage: fetch failed: ECONNREFUSED postgres.internal:5432",
+          "INFRASTRUCTURE_ERROR",
+        ),
+      );
+
+      const res = await createProductAction({ name: "Shoe", slug: "shoe" });
+      expect(res.success).toBe(false);
+      expect(res.error).toBe("Authorization service is temporarily unavailable.");
+      expect(res.error).not.toContain("ECONNREFUSED");
+      expect(res.error).not.toContain("postgres.internal");
+      expect(mockDal.createAdminProduct).not.toHaveBeenCalled();
+      expect(mockCache.updateTag).not.toHaveBeenCalled();
+    });
+
+    it("returns generic admin authorization required for forbidden errors without leaking details", async () => {
+      const { AdminAuthError } = await import("@/lib/auth/admin");
+      mockAuth.requireAdmin.mockRejectedValue(
+        new AdminAuthError("User is not an authorized administrator.", "FORBIDDEN"),
+      );
+
+      const res = await saveProductAction("prod-1", { name: "Shoe", slug: "shoe" });
+      expect(res.success).toBe(false);
+      expect(res.error).toBe("Admin authorization required.");
+      expect(mockDal.saveAdminProduct).not.toHaveBeenCalled();
       expect(mockCache.updateTag).not.toHaveBeenCalled();
     });
   });

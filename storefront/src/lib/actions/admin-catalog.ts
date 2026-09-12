@@ -206,9 +206,16 @@ function handleActionError(err: any): ActionState<any> {
     err?.name === "AdminAuthError" ||
     err?.message?.includes("Admin authorization required")
   ) {
+    if (err.code === "INFRASTRUCTURE_ERROR") {
+      console.error("[admin-action] Auth infrastructure error:", err);
+      return {
+        success: false,
+        error: "Authorization service is temporarily unavailable.",
+      };
+    }
     return {
       success: false,
-      error: err.message || "Admin authorization required.",
+      error: "Admin authorization required.",
     };
   }
 
