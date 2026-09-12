@@ -662,6 +662,56 @@ describe("Database Order Repository", () => {
         }),
       ).rejects.toThrow("Cannot place order: variant 'SKU-OOS' is out of stock");
     });
+
+    it("rejects order placement if variant_id does not match variant_sku (integrity mismatch)", async () => {
+      mockTransaction.mockImplementation(async (cb) => {
+        const fakeClient = {
+          query: vi.fn(async (sql: string) => {
+            if (sql.includes("FROM public.carts")) {
+              return {
+                rows: [{ id: "cart-1", user_id: "user-1", surface: "dtc", status: "active" }],
+              };
+            }
+            if (sql.includes("FROM public.orders WHERE source_cart_id")) {
+              return { rows: [] };
+            }
+            if (sql.includes("FROM public.cart_items")) {
+              return {
+                rows: [
+                  {
+                    cart_item_id: "ci-1",
+                    cart_id: "cart-1",
+                    variant_id: "var-1",
+                    variant_sku: "SKU-WRONG",
+                    quantity: 1,
+                    db_variant_id: "var-1",
+                    db_variant_sku: "SKU-CORRECT",
+                    price_in_cents: 8000,
+                    variant_active: true,
+                    quantity_on_hand: 10,
+                    backorderable: true,
+                    product_id: "prod-1",
+                    product_name: "Derby",
+                    product_slug: "office-footwear-01",
+                    product_status: "active",
+                  },
+                ],
+              };
+            }
+            return { rows: [] };
+          }),
+        };
+        return cb(fakeClient);
+      });
+
+      await expect(
+        placeOrderFromCart({
+          cartId: "cart-1",
+          surface: "dtc",
+          verifiedUserId: "user-1",
+        }),
+      ).rejects.toThrow("recorded SKU 'SKU-WRONG'");
+    });
   });
 
   describe("listOrdersForUser", () => {

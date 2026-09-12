@@ -143,7 +143,7 @@ export async function getVariantByIdOrSku(
               p.meta_title, p.meta_description, p.meta_keywords
        FROM public.variants v
        JOIN public.products p ON p.id = v.product_id
-       WHERE v.id = $1 OR v.sku = $1
+       WHERE v.id = $1::uuid
        LIMIT 1;`
     : `SELECT v.id, v.product_id, v.sku, v.size_option, v.price_in_cents,
               v.compare_at_price_in_cents, v.currency, v.quantity_on_hand,

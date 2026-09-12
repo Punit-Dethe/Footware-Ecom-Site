@@ -10,7 +10,7 @@ import {
   queryProducts,
 } from "@/lib/catalog/catalog-repository";
 
-async function cachedListCategories(
+export async function cachedListCategories(
   _params: CategoryListParams | undefined,
   _options: { locale?: string; country?: string },
 ) {
@@ -39,7 +39,7 @@ export async function cachedGetCategory(
 ) {
   "use cache: remote";
   cacheLife("tenMinutes");
-  cacheTag("category");
+  cacheTag("catalog-public", "category");
   const local = await getCategoryByPermalinkOrId(idOrPermalink);
   if (local) {
     return local as unknown as ReturnType<
@@ -62,7 +62,7 @@ export async function getCategory(
  * all function arguments (categoryId, params, locale, country, userToken).
  * Guest users pass undefined so the cache entry is shared.
  */
-async function cachedListCategoryProducts(
+export async function cachedListCategoryProducts(
   categoryId: string,
   params: ProductListParams | undefined,
   _options: { locale?: string; country?: string },
@@ -70,7 +70,7 @@ async function cachedListCategoryProducts(
 ) {
   "use cache: remote";
   cacheLife("tenMinutes");
-  cacheTag("products", `category-products:${categoryId}`);
+  cacheTag("catalog-public", "products", `category-products:${categoryId}`);
 
   const raw = (params || {}) as Record<string, any>;
   const page = Number(raw.page) || 1;

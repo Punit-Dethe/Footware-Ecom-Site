@@ -146,19 +146,38 @@ async function adaptDbCartToSpreeCart(
     adaptedItems = items.map((item) => {
       let match: { product: CatalogProduct; variant: CatalogVariant } | null =
         null;
-      for (const p of products) {
-        const v = p.variants.find(
-          (vItem) =>
-            (item.variant_id && vItem.id === item.variant_id) ||
-            vItem.sku === item.variant_sku,
-        );
-        if (v) {
-          match = { product: p, variant: v };
-          break;
+
+      if (item.variant_id) {
+        for (const p of products) {
+          const v = p.variants.find((vItem) => vItem.id === item.variant_id);
+          if (v) {
+            match = { product: p, variant: v };
+            break;
+          }
+        }
+      } else {
+        for (const p of products) {
+          const v = p.variants.find((vItem) => vItem.sku === item.variant_sku);
+          if (v) {
+            match = { product: p, variant: v };
+            break;
+          }
         }
       }
 
-      if (!match?.variant.in_stock || !match.variant.purchasable) {
+      if (!match) {
+        throw new Error(
+          `Cart item references unavailable catalog variant: ${item.variant_sku || item.variant_id}`,
+        );
+      }
+
+      if (item.variant_sku && match.variant.sku !== item.variant_sku) {
+        throw new Error(
+          `Cart item integrity error: variant_id '${item.variant_id}' resolves to SKU '${match.variant.sku}', but item records SKU '${item.variant_sku}'`,
+        );
+      }
+
+      if (!match.variant.in_stock || !match.variant.purchasable) {
         throw new Error(
           `Cart item references unavailable catalog variant: ${item.variant_sku || item.variant_id}`,
         );

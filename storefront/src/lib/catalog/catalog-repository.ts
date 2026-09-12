@@ -152,7 +152,7 @@ const typedManifest = manifestData as Record<
 /**
  * Pure adapter converting raw database catalog rows into compatibility DTO shapes.
  */
-function adaptRawCatalogToPublicSnapshot(
+export function adaptRawCatalogToPublicSnapshot(
   raw: PublicCatalogRawData,
 ): PublicCatalogSnapshot {
   // 1. Adapt Categories
@@ -192,20 +192,9 @@ function adaptRawCatalogToPublicSnapshot(
   const products: CatalogProduct[] = raw.products.map((p) => {
     const dbVariants = variantsByProductId.get(p.id) || [];
     const catIds = categoryIdsByProductId.get(p.id) || [];
-    let prodCategories = catIds
+    const prodCategories = catIds
       .map((id) => categoryMap.get(id))
       .filter((c): c is CatalogCategory => c != null);
-
-    // Fallback category association by slug prefix if join is empty
-    if (prodCategories.length === 0) {
-      const isOffice = p.slug.startsWith("office-");
-      const matchedCat = categories.find((c) =>
-        isOffice ? c.slug === "office-wear" : c.slug === "traditional",
-      );
-      if (matchedCat) {
-        prodCategories = [matchedCat];
-      }
-    }
 
     const manifest = typedManifest[p.slug];
     const primaryUrl =
@@ -269,8 +258,20 @@ function adaptRawCatalogToPublicSnapshot(
       };
     });
 
-    const defaultVariant =
-      variants.find((v) => v.is_master) || variants[0] || ({} as CatalogVariant);
+    if (variants.length === 0) {
+      throw new Error(
+        `Catalog integrity error: Active product '${p.slug}' (${p.id}) has no active variants`,
+      );
+    }
+
+    const defaultVariants = variants.filter((v) => v.is_master);
+    if (defaultVariants.length !== 1) {
+      throw new Error(
+        `Catalog integrity error: Active product '${p.slug}' (${p.id}) must have exactly one default variant, found ${defaultVariants.length}`,
+      );
+    }
+
+    const defaultVariant = defaultVariants[0];
 
     const primaryMedia: CatalogMedia = {
       id: `med_${p.slug.replace(/-/g, "_")}_1`,
@@ -289,21 +290,9 @@ function adaptRawCatalogToPublicSnapshot(
     const hasStock =
       p.status === "active" && variants.some((v) => v.in_stock && v.purchasable);
 
-    const defaultPrice = defaultVariant.price || {
-      amount: "0.00",
-      currency: "USD",
-      display_amount: "$0.00",
-      amount_in_cents: 0,
-      compare_at_amount_in_cents: 0,
-      display_compare_at_amount: "$0.00",
-    };
-
-    const defaultOriginalPrice = defaultVariant.original_price || {
-      amount: "0.00",
-      currency: "USD",
-      display_amount: "$0.00",
-      amount_in_cents: 0,
-    };
+    const defaultPrice = defaultVariant.price;
+    const defaultOriginalPrice =
+      defaultVariant.original_price || defaultVariant.price;
 
     return {
       id: p.id,

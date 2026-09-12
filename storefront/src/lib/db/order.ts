@@ -208,8 +208,8 @@ export async function placeOrderFromCart(params: {
          p.slug AS product_slug,
          p.status AS product_status
        FROM public.cart_items ci
-       LEFT JOIN public.variants v ON v.id = ci.variant_id OR v.sku = ci.variant_sku
-       LEFT JOIN public.products p ON p.id = v.product_id
+       JOIN public.variants v ON v.id = ci.variant_id
+       JOIN public.products p ON p.id = v.product_id
        WHERE ci.cart_id = $1
        FOR UPDATE OF ci;`,
       [cartId],
@@ -233,12 +233,21 @@ export async function placeOrderFromCart(params: {
     }> = [];
 
     for (const row of cartItemsRes.rows) {
-      const sku = (row.db_variant_sku || row.variant_sku) as string;
+      const dbSku = row.db_variant_sku as string;
+      const recordedSku = row.variant_sku as string;
       const quantity = Number(row.quantity);
 
       if (!row.db_variant_id || !row.product_id) {
-        throw new Error(`Cannot place order: unknown catalog variant SKU '${sku}'`);
+        throw new Error(`Cannot place order: unknown catalog variant SKU '${recordedSku || row.variant_id}'`);
       }
+
+      if (recordedSku && dbSku !== recordedSku) {
+        throw new Error(
+          `Cannot place order: cart item variant_id '${row.variant_id}' has SKU '${dbSku}', but cart item recorded SKU '${recordedSku}'`,
+        );
+      }
+
+      const sku = dbSku;
 
       if (row.product_status !== "active" || !row.variant_active) {
         throw new Error(`Cannot place order: variant '${sku}' is no longer active`);

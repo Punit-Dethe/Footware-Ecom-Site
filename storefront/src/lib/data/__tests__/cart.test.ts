@@ -329,6 +329,22 @@ describe("B3 Persistent Cart — Server Actions & Data Layer", () => {
       expect(mockSpreeClient.carts.get).not.toHaveBeenCalled();
     });
 
+    it("fails closed with integrity error when cart item variant_id does not match variant_sku", async () => {
+      mockSpree.getCartToken.mockResolvedValue(rawBearerToken);
+      mockDb.findActiveGuestCart.mockResolvedValue(mockDbCart);
+      mockDb.loadCartItems.mockResolvedValue([
+        {
+          id: "item-1",
+          cart_id: "cart-uuid-1",
+          variant_id: "var_office_footwear_01_8", // Resolves to MIRZA-OFF-001-8
+          variant_sku: "MIRZA-OFF-002-9", // Deliberate mismatch
+          quantity: 1,
+        },
+      ]);
+
+      await expect(getCart()).rejects.toThrow(/Cart item integrity error/);
+    });
+
     it("auth verification infrastructure failure throws and fails closed without falling back to Spree or treating user as guest", async () => {
       mockCookies._store.set("sb-mock-auth-token", "token-xyz");
       mockSpree.getCartToken.mockResolvedValue(rawBearerToken);

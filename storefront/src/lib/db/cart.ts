@@ -361,12 +361,13 @@ export async function claimOrMergeGuestCart(
 
     for (const item of guestItemsRes.rows) {
       await client.query(
-        `INSERT INTO public.cart_items (cart_id, variant_sku, quantity, created_at, updated_at)
-         VALUES ($1, $2, $3, NOW(), NOW())
+        `INSERT INTO public.cart_items (cart_id, variant_id, variant_sku, quantity, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, NOW(), NOW())
          ON CONFLICT (cart_id, variant_sku) DO UPDATE
-         SET quantity = public.cart_items.quantity + EXCLUDED.quantity,
+         SET variant_id = EXCLUDED.variant_id,
+             quantity = public.cart_items.quantity + EXCLUDED.quantity,
              updated_at = NOW();`,
-        [userCart.id, item.variant_sku, item.quantity],
+        [userCart.id, item.variant_id, item.variant_sku, item.quantity],
       );
     }
 

@@ -1,13 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockQuery = vi.fn();
+const mockTransaction = vi.fn();
 
 vi.mock("../index", () => ({
   query: (text: string, params?: unknown[]) => mockQuery(text, params),
-  transaction: vi.fn(),
+  transaction: (cb: any) => mockTransaction(cb),
 }));
 
-import { updateAuthorizedCartCheckoutData } from "../cart";
+import { claimOrMergeGuestCart, updateAuthorizedCartCheckoutData } from "../cart";
 
 describe("Database Cart Repository - updateAuthorizedCartCheckoutData", () => {
   beforeEach(() => {
@@ -151,5 +152,168 @@ describe("Database Cart Repository - updateAuthorizedCartCheckoutData", () => {
         data: { checkout_email: "user@example.com" },
       }),
     ).rejects.toThrow("PostgreSQL connection timeout");
+  });
+});
+
+describe("Database Cart Repository - claimOrMergeGuestCart", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("Case A: guest cart exists, user cart does not -> claims guest cart directly", async () => {
+    mockTransaction.mockImplementation(async (cb) => {
+      const fakeClient = {
+        query: vi
+          .fn()
+          .mockResolvedValueOnce({
+            // 1. Lock guest cart
+            rows: [
+              {
+                id: "guest-cart-1",
+                user_id: null,
+                guest_token_hash: "hash-guest",
+                surface: "dtc",
+                currency: "USD",
+                status: "active",
+                created_at: new Date(),
+                updated_at: new Date(),
+              },
+            ],
+          })
+          .mockResolvedValueOnce({
+            // 2. Lock user cart (none)
+            rows: [],
+          })
+          .mockResolvedValueOnce({
+            // 3. Claim guest cart
+            rows: [
+              {
+                id: "guest-cart-1",
+                user_id: "user-1",
+                guest_token_hash: null,
+                surface: "dtc",
+                currency: "USD",
+                status: "active",
+                created_at: new Date(),
+                updated_at: new Date(),
+              },
+            ],
+          }),
+      };
+      return cb(fakeClient);
+    });
+
+    const res = await claimOrMergeGuestCart("user-1", "hash-guest", "dtc");
+    expect(res.id).toBe("guest-cart-1");
+    expect(res.user_id).toBe("user-1");
+    expect(res.guest_token_hash).toBeNull();
+  });
+
+  it("Case B: user cart exists, guest cart does not -> returns user cart", async () => {
+    mockTransaction.mockImplementation(async (cb) => {
+      const fakeClient = {
+        query: vi
+          .fn()
+          .mockResolvedValueOnce({
+            // 1. Lock guest cart (none)
+            rows: [],
+          })
+          .mockResolvedValueOnce({
+            // 2. Lock user cart
+            rows: [
+              {
+                id: "user-cart-1",
+                user_id: "user-1",
+                guest_token_hash: null,
+                surface: "dtc",
+                currency: "USD",
+                status: "active",
+                created_at: new Date(),
+                updated_at: new Date(),
+              },
+            ],
+          }),
+      };
+      return cb(fakeClient);
+    });
+
+    const res = await claimOrMergeGuestCart("user-1", "hash-guest", "dtc");
+    expect(res.id).toBe("user-cart-1");
+    expect(res.user_id).toBe("user-1");
+  });
+
+  it("Case C: both exist -> merges items into user cart with variant_id and abandons guest cart", async () => {
+    const executedQueries: any[] = [];
+    mockTransaction.mockImplementation(async (cb) => {
+      const fakeClient = {
+        query: vi.fn(async (sql: string, params?: any[]) => {
+          executedQueries.push({ sql, params });
+          if (sql.includes("WHERE guest_token_hash = $1")) {
+            return {
+              rows: [
+                {
+                  id: "guest-cart-1",
+                  user_id: null,
+                  guest_token_hash: "hash-guest",
+                  surface: "dtc",
+                  currency: "USD",
+                  status: "active",
+                },
+              ],
+            };
+          }
+          if (sql.includes("WHERE user_id = $1")) {
+            return {
+              rows: [
+                {
+                  id: "user-cart-1",
+                  user_id: "user-1",
+                  guest_token_hash: null,
+                  surface: "dtc",
+                  currency: "USD",
+                  status: "active",
+                },
+              ],
+            };
+          }
+          if (sql.includes("FROM public.cart_items") && sql.includes("cart_id = $1")) {
+            return {
+              rows: [
+                {
+                  id: "item-1",
+                  cart_id: "guest-cart-1",
+                  variant_id: "var-uuid-99",
+                  variant_sku: "MIRZA-OFF-001-8",
+                  quantity: 2,
+                },
+              ],
+            };
+          }
+          return { rowCount: 1, rows: [] };
+        }),
+      };
+      return cb(fakeClient);
+    });
+
+    const res = await claimOrMergeGuestCart("user-1", "hash-guest", "dtc");
+    expect(res.id).toBe("user-cart-1");
+
+    // Verify INSERT statement merges both variant_id and variant_sku, with conflict resolution
+    const insertCall = executedQueries.find((q) =>
+      q.sql.includes("INSERT INTO public.cart_items"),
+    );
+    expect(insertCall).toBeDefined();
+    expect(insertCall.sql).toContain("variant_id");
+    expect(insertCall.sql).toContain("variant_sku");
+    expect(insertCall.sql).toContain("SET variant_id = EXCLUDED.variant_id");
+    expect(insertCall.sql).toContain("quantity = public.cart_items.quantity + EXCLUDED.quantity");
+    expect(insertCall.params).toEqual(["user-cart-1", "var-uuid-99", "MIRZA-OFF-001-8", 2]);
+
+    // Verify guest cart was marked abandoned
+    const abandonCall = executedQueries.find((q) =>
+      q.sql.includes("status = 'abandoned'"),
+    );
+    expect(abandonCall).toBeDefined();
+    expect(abandonCall.params[0]).toBe("guest-cart-1");
   });
 });
