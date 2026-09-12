@@ -1,10 +1,10 @@
 # Engineering Continuity Log
 
-> Durable handoff/state document for the Mirza Footwear storefront migration and performance work.
+> Durable handoff/state document for the Mirza Footwear storefront migration and performance program.
 >
-> **Purpose:** preserve project state, architecture decisions, rationale, accepted audit findings, temporary compromises, performance invariants, exact SHAs, and the immediate next action so a new engineering/audit chat can continue without reconstructing this work from conversation history.
+> **Purpose:** preserve current architecture, exact phase state, accepted audit findings, temporary compatibility choices, performance invariants, important SHAs, and the immediate next action so a new engineering/audit chat can continue without reconstructing this work from conversation history.
 >
-> **Update rule:** update this file whenever a backend phase is accepted/merged, an audit changes the plan, a temporary compatibility decision is introduced/removed, or the immediate next action changes. Keep exact SHAs and status current. Do not turn this into a raw activity transcript.
+> **Update rule:** update this file whenever a backend phase is accepted/merged, an audit changes the plan, a temporary compatibility decision is introduced/removed, or the immediate next action changes. Keep it concise enough to scan but complete enough to resume work.
 
 ---
 
@@ -16,29 +16,29 @@
 
 **Production storefront:** `https://storefront-three-tau.vercel.app`
 
-### Canonical state before this documentation commit
+### Canonical application state before this documentation commit
 
-B3 production-closeout `main`:
-
-```text
-ce14189d879d19a05a2a3775a0fbd3c7f1ecb6fe
-```
-
-That merge contains B3.2 fix commit:
+B4 production merge `main`:
 
 ```text
-b0638658882ca63e46c75ef84bce178d8934dfc4
+410823430d585c093c41433707f6089f5149abfe
 ```
 
-B3/B3.1/B3.2 are **COMPLETE**.
+Accepted B4 branch tip:
+
+```text
+e472c3ee999a7987c2838e8ef8e8c794dbf29a41
+```
+
+B1 through B4 are **COMPLETE**.
 
 Immediate next implementation phase:
 
 ```text
-B4 — Profiles + Addresses
+B5 — Orders + Order History
 ```
 
-Before starting B4, fetch current `origin/main` because this continuity document itself adds a docs-only commit after `ce14189...`.
+This continuity-log update itself creates a docs-only commit after `41082343...`; always fetch current `origin/main` before creating B5.
 
 ---
 
@@ -58,7 +58,7 @@ Supabase Auth + managed PostgreSQL
 Object/media storage where needed
 ```
 
-Runtime/hosting direction:
+Runtime direction:
 
 - Next.js / React storefront on Vercel
 - Supabase managed Postgres
@@ -79,7 +79,7 @@ The real store needs:
 - cart
 - auth
 - customer profile
-- addresses
+- saved addresses
 - orders and order history
 - admin for products/categories/variants/prices/stock/descriptions/images
 - basic admin visibility into users/orders as needed
@@ -94,9 +94,9 @@ Deferred unless separately scheduled:
 
 ---
 
-## 3. Why migration is incremental
+## 3. Migration operating model
 
-A strong coding agent could rewrite much of the stack faster in one pass. The project intentionally trades wall-clock speed for confidence because:
+A strong coding agent could rewrite much of the stack faster in one pass. The project intentionally trades some wall-clock speed for confidence because:
 
 1. identity/cart/order ownership bugs matter in a real store;
 2. substantial storefront performance work already exists and can be silently regressed by backend migration.
@@ -110,12 +110,19 @@ plan
 → independent code audit
 → bounded closure pass if needed
 → merge
-→ production verification
+→ targeted production verification
 ```
 
-This has already paid for itself. Initial B3 was reported complete, but audit found a real legacy Spree cart-read fallback that could recurse through the same compatibility BFF and weaken the new authorization boundary. B3.1 removed it before merge. Production verification then found a Next.js Route Handler `updateTag()` crash; B3.2 removed the dead invalidation path and added a regression test.
+Do not repeat huge unrelated test matrices merely as ritual. Scrutiny should be strongest where identity, ownership, persistence, caching, or public performance can change.
 
-Rule: apply heavy scrutiny where identity, ownership, persistence, caching, or public performance can be affected; do not repeat unrelated tests merely as ritual.
+Browser verification policy:
+
+```text
+1. direct Node/fetch/SQL checks first
+2. scripted headless Playwright only when actual browser behavior is required
+3. traces/screenshots only on failure
+4. visual LLM-driven Chrome only for exceptional visual/interaction diagnosis
+```
 
 ---
 
@@ -145,7 +152,7 @@ Pooler host:
 aws-0-ap-south-1.pooler.supabase.com:6543
 ```
 
-Relevant env var names:
+Relevant env names:
 
 ```text
 NEXT_PUBLIC_SUPABASE_URL
@@ -201,13 +208,11 @@ Important B1 decisions:
 - `rejectUnauthorized: true`
 - serverless `pg` pool intentionally small
 
-Representative B1 main lineage included:
+Representative lineage:
 
 ```text
 b24cadec3e385f312fc97ef6cbfc66980b3dad4b
 ```
-
-B1 is closed.
 
 ---
 
@@ -228,14 +233,14 @@ B2 merge commit:
 Capabilities:
 
 - signup
-- email confirmation flow
+- email confirmation
 - login
 - verified current user/session
 - refresh/rotation
 - logout
 - forgot/reset password
-- basic profile identity
 - protected account routing
+- first-party profile identity
 
 Role authority is strictly:
 
@@ -243,7 +248,7 @@ Role authority is strictly:
 public.profiles.role
 ```
 
-Never infer admin from email strings, client metadata, signup metadata, demo tokens, or legacy Spree JWTs.
+Never infer admin from email, client metadata, signup metadata, demo tokens, or legacy Spree JWTs.
 
 Fresh anonymous public pages must remain:
 
@@ -277,7 +282,7 @@ B3.1 security/authorization closure:
 ddcfdf61d9323d04c89c3e205b3ec8fa601e2f3c
 ```
 
-Initial B3 merge into main:
+Initial merge:
 
 ```text
 0e67a2ac3fb5c99ae4164cdf93809dde15810a17
@@ -289,7 +294,7 @@ B3.2 production Route Handler fix:
 b0638658882ca63e46c75ef84bce178d8934dfc4
 ```
 
-Final B3.2 merge/main before this docs commit:
+Final B3 merge before continuity-doc commit:
 
 ```text
 ce14189d879d19a05a2a3775a0fbd3c7f1ecb6fe
@@ -301,67 +306,30 @@ ce14189d879d19a05a2a3775a0fbd3c7f1ecb6fe
 storefront/supabase/migrations/20260912153000_persistent_carts.sql
 ```
 
-Key schema behavior:
+Key behavior:
 
 - `carts.surface` supports `dtc | wholesale`
 - one active authenticated cart per `(user_id, surface)`
 - `cart_items.variant_sku` is the temporary stable catalog bridge
-- `variant_id` is nullable until B6 database-catalog migration
+- `variant_id` remains nullable until B6
 - unique `(cart_id, variant_sku)`
 - RLS remains enabled
 - browser roles remain denied direct table access
 
-### Why SKU bridge exists
-
-Current authoritative public catalog is still static TypeScript with string variant IDs, while future DB `variants.id` is UUID. B3 intentionally did not pull B6 into the cart phase.
-
-During B3:
-
-```text
-cart storage identity = stable SKU
-product/price/presentation = current static catalog
-```
-
-B6 can later reconnect rows to real variant UUIDs.
-
-### Guest security model
+### Security / ownership model
 
 Guest carts use:
 
-- cryptographically random 256-bit bearer token
+- random 256-bit bearer token
 - raw bearer only in secure HttpOnly cookie
-- SHA-256 hash stored in `guest_token_hash`
-- cart UUID is never authorization by itself
+- SHA-256 hash stored in DB
+- cart UUID alone is never authorization
 
-Guest access requires active cart + correct surface + matching bearer hash.
+Authenticated ownership uses verified Supabase `claims.sub` + surface.
 
-The raw token must never be stored in DB, logged, or serialized in cart DTO/RSC/JSON.
+Guest→user merge is transactional and per-surface.
 
-### Authenticated ownership / login merge
-
-Authenticated ownership uses verified Supabase `claims.sub` plus surface.
-
-Logout intentionally clears browser access but leaves the user cart active in PostgreSQL. Same user can recover it on later login; another user must not inherit it.
-
-Guest→user behavior is per-surface:
-
-- guest only → claim same cart ID, set `user_id`, clear guest hash
-- user only → keep user cart
-- both → merge quantities by SKU, abandon guest cart, clear guest hash
-
-Concurrency is guarded by the partial unique user/surface index plus `ON CONFLICT`.
-
-### B3.1 findings that must stay fixed
-
-B3.1 removed:
-
-- legacy Spree cart-read fallback / same-app recursion path
-- auth transport failure becoming anonymous
-- compatibility mutations ignoring URL cart ID
-- unknown persisted SKU becoming a `$0` item
-- duplicate active user-cart race
-
-Accepted semantics:
+Accepted failure semantics:
 
 ```text
 no auth cookie           → anonymous, 0 remote auth calls
@@ -373,33 +341,32 @@ cart UUID alone          → denied
 unknown persisted SKU    → error; never $0/substitute/delete silently
 ```
 
-### B3.2 production finding
+### Important audit findings already closed
 
-Production verification found `updateTag()` was executed from cart functions that were also invoked by App Router Route Handlers. Next.js allows `updateTag()` only from Server Actions, causing `POST /api/v3/store/carts` to fail in production.
+B3.1 removed:
 
-Audit found no active cache consumers for the cart/checkout tags used by `cart.ts`, so B3.2 removed those dead invalidations rather than adding unnecessary cache machinery.
+- legacy Spree cart-read fallback / same-app recursion
+- auth infrastructure failures becoming anonymous
+- compatibility mutation URL cart-ID bypass
+- unknown SKU `$0` fallback
+- concurrent duplicate user-cart race
 
-B3.2 also added a Route Handler integration regression test that uses the real `cart.ts` module while mocking only lower-level DB/cookie/auth dependencies.
+B3.2 fixed production Route Handler crashes caused by dead `updateTag()` calls reachable outside Server Actions. Audit found no real cache consumers for those cart tags, so the invalidations were removed instead of replaced.
 
-### B3 final validation reported
+Final validation baseline after B3.2:
 
 ```text
-42 suites passed
-362 tests passed
-typecheck PASS
-lint PASS (4 baseline warnings)
-build PASS
-104/104 generated pages
+42 suites
+362 tests
+104 pages
 ```
-
-Production guest create/add/read/update/remove passed. Guest→user claim/merge passed. Security checks for foreign UUID, UUID-only, wrong token, and raw-token response passed.
 
 ### S8 cart UX invariant
 
 Preserve:
 
 - one initial CartProvider hydration
-- zero reads on ordinary navigation
+- zero cart reads on ordinary navigation
 - mutation response updates React state directly
 - no `router.refresh()` cascade after cart mutation
 - no pathname cart polling
@@ -407,14 +374,157 @@ Preserve:
 
 ---
 
-## 8. Backend roadmap
+## 8. B4 — Profiles + Addresses — COMPLETE
+
+### Lineage
+
+B4 initial implementation:
+
+```text
+f7689737450ab0da02a7b132fc361ea71662fab7
+```
+
+B4.1 audit closure:
+
+```text
+e472c3ee999a7987c2838e8ef8e8c794dbf29a41
+```
+
+Production merge:
+
+```text
+410823430d585c093c41433707f6089f5149abfe
+```
+
+B4 branch was merged cleanly with `7de6bdd4...` as merge base.
+
+### Profile ownership
+
+Identity/email remain Supabase Auth-owned.
+
+`public.profiles` owns:
+
+```text
+first_name
+last_name
+phone
+role
+```
+
+`role` remains immutable to ordinary customer updates.
+
+Email mutation remains Supabase Auth-controlled with current-password reauthentication.
+
+B4 added phone update support to the first-party profile path.
+
+### Saved-address backend
+
+Saved addresses are now first-party PostgreSQL only:
+
+```text
+public.addresses
+```
+
+Repository:
+
+```text
+storefront/src/lib/db/address.ts
+```
+
+Compatibility adapter:
+
+```text
+storefront/src/lib/data/address-adapter.ts
+```
+
+Spree customer-address calls remaining:
+
+```text
+0
+```
+
+No Spree fallback and no dual-write.
+
+Every address read/update/delete binds ownership in SQL with the verified Supabase `claims.sub`; address UUID alone is not authorization.
+
+### Forward migration
+
+```text
+storefront/supabase/migrations/20260912180000_addresses_state_abbr.sql
+```
+
+Adds:
+
+- `public.addresses.state_abbr`
+- `idx_addresses_user_defaults`
+- reasserted RLS/revocation
+
+### Address compatibility behavior
+
+Database state stores the normalized display state plus optional abbreviation.
+
+The adapter preserves the current UI's Spree-shaped address contract, including derived fields such as:
+
+```text
+full_name
+country_name
+state_name
+state_abbr
+state_text
+```
+
+This is a transitional adapter, not evidence that Spree remains the address backend.
+
+### B4.1 audit findings already closed
+
+Initial B4 broadly wrapped address reads in `withFallback()`, which could turn Supabase/PostgreSQL outages into a fake empty-address state. B4.1 removed that behavior.
+
+Accepted read semantics:
+
+```text
+no auth cookie           → list {data: []}, single null, 0 auth calls
+normal invalid session   → list {data: []}, single null
+auth infrastructure fail → throw / fail closed
+PostgreSQL failure       → throw / fail closed
+foreign address          → null/denied via ownership SQL
+```
+
+B4.1 also aligned auth-cookie detection with the hardened B3 behavior so Supabase chunked cookies such as `...-auth-token.0` are recognized before verified `getClaims()` is attempted.
+
+### B4 production validation
+
+Reported and accepted:
+
+```text
+44 suites passed
+400 tests passed
+typecheck PASS
+lint PASS (4 pre-existing warnings)
+build PASS
+104/104 pages
+```
+
+Production checks passed for:
+
+- profile name update
+- phone update
+- immutable role
+- Supabase-owned email mutation
+- address create/list/reload/update/delete
+- cross-user address isolation
+- B3 cart sanity
+- homepage/PLP/PDP: 0 address/profile calls
+
+---
+
+## 9. Backend roadmap
 
 ```text
 B1  persistence foundation              COMPLETE
 B2  real auth                           COMPLETE
 B3  persistent carts                    COMPLETE
-B4  profiles + addresses                NEXT
-B5  orders + order history
+B4  profiles + addresses                COMPLETE
+B5  orders + order history              NEXT
 B6  authoritative catalog + admin/read model
 B7  media management/publishing
 B8  remove fake Spree SDK/BFF after parity
@@ -422,37 +532,38 @@ B9  remove Render/Rails legacy
 B10 cleanup / dead compatibility / naming / stale config
 ```
 
-### B4 — Profiles + Addresses
-
-Expected to be comparatively straightforward account-domain CRUD.
-
-Use existing B1 `profiles` and `addresses` tables and B2 verified identity. Preserve current auth/cache/public-page behavior. Do not pull B5 orders or B6 catalog into B4.
-
 ### B5 — Orders + Order History
 
-Create real durable customer order/history behavior using existing B1 order tables. Payments/fulfillment remain deferred unless separately scheduled.
+Next phase.
+
+Goal: make durable orders and customer order history first-party using the existing B1 `orders` / `order_items` schema, while keeping payments and fulfillment explicitly out of scope unless a required compatibility seam must remain temporarily.
+
+Important concerns for B5:
+
+- verified ownership for customer order reads
+- durable immutable purchase snapshots
+- guest-vs-authenticated order access semantics
+- transition from active cart to converted/placed order
+- idempotent order placement / duplicate-submit protection
+- order number generation
+- preserving checkout compatibility without pretending payment/shipping integration is complete
+- no public catalog regression
+
+Before issuing implementation instructions, audit the current `orders.ts`, checkout completion path, order-placed page, fake BFF order routes, and B1 order schema.
 
 ### B6 — Authoritative Catalog + Admin
 
-This is the next large architectural phase.
+This is the next large architectural phase after B5.
 
 It moves products/variants/categories/prices/inventory metadata from static TypeScript into PostgreSQL and adds first-party admin/read-model behavior.
 
 Performance constraint: current static lookups are extremely cheap. Do not naïvely add live DB queries to every anonymous render. Preferred direction is operational Postgres + server-only writes/admin + prepared/cacheable public read model while preserving PPR and existing public caching.
 
-B6 is where `variant_sku` can be reconciled/backfilled to real DB variant UUIDs.
-
-### B7–B10
-
-B7: media management/publishing.
-
-B8/B9: remove compatibility Spree SDK/BFF and Render/Rails only after parity.
-
-B10: dead compatibility, naming, stale config, cleanup.
+B6 is also where the B3 `variant_sku` bridge can reconnect to real DB variant UUIDs.
 
 ---
 
-## 9. Performance program
+## 10. Performance program
 
 Detailed measured evidence lives in:
 
@@ -469,7 +580,7 @@ Accepted high-level sequence through P1/R012:
 - R004 fix featured-products PPR stream abort — KEEP correctness
 - R005 static native ProductCarousel — KEEP STRONG
 - R006 direct images — REVERT; Next Image wins
-- R007 render all 38 immediately — REJECT mobile regression
+- R007 render all products immediately — REJECT mobile regression
 - R008 12 initial + one deferred remainder request — KEEP STRONG
 - R009 remove public category `connection()` — KEEP
 - R010 remove Speculation Rules — KEEP
@@ -482,19 +593,19 @@ Accepted P1 SHA:
 7173c5d440d977a1dc0ec771c1fccd8a8b7a0ab
 ```
 
-P2 = cold public PDP route/data path. It remains paused/reassessable around the backend/catalog migration. Do not invent an R-number for B1/B2/B3 architecture work.
+P2 = cold public PDP route/data path. It remains paused/reassessable around the backend/catalog migration.
 
-Only create an R-series entry for a controlled performance hypothesis with before/after evidence and a keep/revert/simplify decision.
+Do not invent R-numbers for B1–B5 architecture work. Only create an R-series entry for a controlled performance hypothesis with before/after evidence and a keep/revert/simplify decision.
 
 ---
 
-## 10. Public storefront regression guards
+## 11. Public storefront regression guards
 
 For fresh anonymous homepage/PLP/PDP preserve:
 
 ```text
 - no unnecessary auth request
-- no profile query
+- no profile/address/order query
 - no empty cart DB row created merely by reading
 - PPR/cacheability where present
 - optimized Next Image behavior
@@ -512,7 +623,7 @@ Do not assume moving data into Postgres is automatically faster than static cata
 
 ---
 
-## 11. Known unrelated baseline
+## 12. Known unrelated baseline
 
 Lighthouse CI has a pre-existing cart SEO assertion:
 
@@ -526,56 +637,20 @@ It predates B3. Do not misclassify the identical result as a backend regression 
 
 ---
 
-## 12. Executor / audit rules
-
-### Implementation
-
-- one backend phase at a time
-- branch from verified current `origin/main`
-- no silent scope expansion
-- no force push/rebase of accepted history unless explicitly requested
-- no hidden production patch during verification; report unexpected bugs
-
-### Audit
-
-Do not accept `COMPLETE` summaries blindly. For security/architecture work inspect the actual pushed SHA and verify the important claims.
-
-Especially check:
-
-- branch lineage / merge-base
-- authorization source
-- fallback paths bypassing new architecture
-- cache policy changes
-- accidental public auth/database calls
-- cookie/token exposure
-- ownership/path-ID checks
-- concurrency assumptions
-- whether the old fake implementation still remains as a second source of truth
-
-Do not over-test unrelated systems.
-
-### Browser verification policy
-
-Prefer token-efficient deterministic automation:
-
-```text
-1. direct Node/fetch/SQL checks
-2. scripted headless Playwright only when browser behavior is required
-3. traces/screenshots only on failure
-4. visual LLM-driven browser control only for exceptional visual/interaction diagnosis
-```
-
-Do not spend model context repeatedly observing Chrome when a deterministic script can assert the same behavior.
-
----
-
 ## 13. Temporary compatibility decisions
 
 ### Spree types / BFF
 
 Some UI/data code still uses `@spree/sdk` types and Spree-shaped DTOs. This is compatibility, not backend ownership.
 
-After B3, PostgreSQL is the active cart source of truth.
+Current first-party ownership already includes:
+
+```text
+auth      → Supabase Auth
+profiles  → PostgreSQL
+addresses → PostgreSQL
+carts     → PostgreSQL
+```
 
 ### Legacy-named cart cookies
 
@@ -583,43 +658,25 @@ Some `_spree_*` cart names remain temporarily. Do not infer backend ownership fr
 
 ### Static catalog
 
-Static TypeScript catalog remains authoritative until B6. Do not migrate it opportunistically in B4/B5.
+Static TypeScript catalog remains authoritative until B6. Do not migrate it opportunistically in B5.
 
 ### Checkout
 
-Checkout still has transitional Spree-shaped/legacy paths. B3 does not make payments, fulfillment, discounts, gift cards, or shipping production-ready.
+Checkout still contains transitional Spree-shaped/legacy payment, fulfillment, discount, gift-card, and shipping paths. B5 must not claim those are production-ready merely because orders become first-party.
 
 ---
 
-## 14. Migration/performance hindsight
+## 14. Security / operations note
 
-A cleaner greenfield sequence might have been:
+During B3 production verification, an external executor transcript printed sensitive credential material into its command/log history.
 
-```text
-find suitable optimized open-source commerce base
-→ establish final backend
-→ perform deep performance work once
-```
+Do not copy those values into this document or future prompts.
 
-Instead, this project optimized a transitional storefront and then migrated the backend while preserving those gains. That duplicated some effort, but it also produced detailed empirical knowledge of PPR, image delivery, prefetch, pagination, cart synchronization, cache interactions, and actual latency bottlenecks.
-
-Current strategy:
-
-> finish backend migration without regressing accepted user-facing performance, then establish a fresh final-architecture performance baseline and optimize only what remains measurable.
+Any exposed database/password or deployment-bypass credential should be rotated before treating the environment as launch-ready. Future verification scripts should read secrets from environment/config without echoing them.
 
 ---
 
-## 15. Security/operations note
-
-During B3 production verification, an external executor transcript printed sensitive production credential material into its own command/log history. Do not copy those values into this document or future prompts.
-
-Rotate any exposed database/password or deployment-bypass credential before treating the environment as launch-ready, and keep future scripts reading secrets from environment/config without echoing them.
-
-This is operational hygiene, not a B3 architecture failure.
-
----
-
-## 16. Continuation checklist for a new chat
+## 15. Continuation checklist for a new chat
 
 Read, in order:
 
@@ -633,17 +690,33 @@ Then verify this snapshot is still current.
 Current continuation:
 
 ```text
-1. Fetch current origin/main (it includes this docs commit after ce14189...).
-2. B3 is COMPLETE.
-3. Rotate any credentials exposed by B3 verification logs if not already rotated.
-4. Start B4 — Profiles + Addresses on a fresh branch from verified main.
-5. Preserve B2/B3 authorization and public-performance invariants.
-6. Do not start B5/B6 until B4 is audited and accepted.
+1. Fetch current origin/main; this docs update advances main after 41082343....
+2. B1–B4 are COMPLETE.
+3. Audit current order/checkout/order-history implementation before writing B5.
+4. Start B5 — Orders + Order History from verified current main.
+5. Preserve B2/B3/B4 ownership and public-performance invariants.
+6. Do not start B6 until B5 is audited, merged, and production-verified.
 ```
 
 ---
 
-## 17. Rolling change log
+## 16. Rolling change log
+
+### 2026-09-12 — B4 complete
+
+Recorded:
+
+- B4 implementation `f768973...`
+- B4.1 audit closure `e472c3ee...`
+- B4 production merge `41082343...`
+- PostgreSQL-only saved addresses
+- state-abbreviation forward migration
+- SQL ownership isolation
+- profile phone support
+- fail-closed address read semantics
+- chunked Supabase auth-cookie recognition
+- 44 suites / 400 tests / 104 pages
+- B5 is next
 
 ### 2026-09-12 — B3 complete
 
@@ -653,12 +726,10 @@ Recorded:
 - production merge `0e67a2ac...`
 - production-only Route Handler `updateTag()` bug
 - B3.2 fix `b063865...`
-- final B3 merge/main `ce14189...`
-- 42 suites / 362 tests / 104 pages
+- final B3 merge `ce14189...`
 - persistent guest/auth cart verification
-- browser automation policy: deterministic HTTP/headless scripts first
-- B4 is next
+- deterministic browser automation policy
 
 ### 2026-09-12 — Initial continuity log
 
-The first version was created on `docs/engineering-continuity-log` while B3 merge/production closeout was in flight. This main-branch version supersedes that snapshot.
+The first version was created on `docs/engineering-continuity-log` while B3 merge/production closeout was in flight. The main-branch log supersedes that snapshot.
