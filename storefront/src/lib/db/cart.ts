@@ -361,20 +361,44 @@ export async function claimOrMergeGuestCart(
   });
 }
 
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
  * Updates checkout state (shipping/billing address snapshots, checkout email)
- * on a persistent cart.
+ * on a persistent cart with strict database-level authorization.
+ *
+ * Authorization is bound directly into the SQL query:
+ * - cart id
+ * - surface
+ * - status = 'active'
+ * - authenticated owner (user_id = $authUserId) OR matching guest bearer (guest_token_hash = $guestTokenHash)
  */
-export async function updateCartCheckoutData(
-  cartId: string,
+export async function updateAuthorizedCartCheckoutData(params: {
+  cartId: string;
+  surface: CartSurface;
+  auth: {
+    userId?: string | null;
+    guestTokenHash?: string | null;
+  };
   data: {
     shipping_address?: Record<string, unknown> | null;
     billing_address?: Record<string, unknown> | null;
     checkout_email?: string | null;
-  },
-): Promise<boolean> {
+  };
+}): Promise<boolean> {
+  const { cartId, surface, auth, data } = params;
+
+  if (!UUID_REGEX.test(cartId)) {
+    return false;
+  }
+
+  if (!auth.userId && !auth.guestTokenHash) {
+    return false;
+  }
+
   const sets: string[] = ["updated_at = NOW()"];
-  const values: unknown[] = [cartId];
+  const values: unknown[] = [cartId, surface];
 
   if (data.shipping_address !== undefined) {
     values.push(data.shipping_address ? JSON.stringify(data.shipping_address) : null);
@@ -389,10 +413,22 @@ export async function updateCartCheckoutData(
     sets.push(`checkout_email = $${values.length}`);
   }
 
+  let authClause: string;
+  if (auth.userId) {
+    values.push(auth.userId);
+    authClause = `user_id = $${values.length}`;
+  } else {
+    values.push(auth.guestTokenHash);
+    authClause = `guest_token_hash = $${values.length}`;
+  }
+
   const res = await query(
     `UPDATE public.carts
      SET ${sets.join(", ")}
-     WHERE id = $1;`,
+     WHERE id = $1
+       AND surface = $2
+       AND status = 'active'
+       AND ${authClause};`,
     values,
   );
 

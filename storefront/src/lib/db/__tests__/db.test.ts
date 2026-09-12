@@ -312,6 +312,18 @@ describe("Database Module & Configuration", () => {
       expect(sql).not.toMatch(/CREATE TABLE (?:public\.)?password_reset/i);
       expect(sql).not.toMatch(/CREATE TABLE (?:public\.)?inventory\b/i);
     });
+
+    it("verifies source_cart_id NOT NULL forward migration exists and enforces constraint", () => {
+      const b5MigrationPath = path.resolve(
+        process.cwd(),
+        "supabase/migrations/20260912220000_orders_source_cart_id_not_null.sql",
+      );
+      expect(fs.existsSync(b5MigrationPath)).toBe(true);
+      const migrationSql = fs.readFileSync(b5MigrationPath, "utf-8");
+      expect(migrationSql).toMatch(
+        /ALTER\s+TABLE\s+public\.orders\s+ALTER\s+COLUMN\s+source_cart_id\s+SET\s+NOT\s+NULL;/i,
+      );
+    });
   });
 
   describe("DB Verification Scripts & Security Regressions", () => {

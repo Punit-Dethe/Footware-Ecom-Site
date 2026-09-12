@@ -1,14 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockGetCart, mockGetOrderBySourceCartAuthorized, mockUpdateCartCheckoutData } = vi.hoisted(() => ({
+const {
+  mockGetCart,
+  mockGetOrderBySourceCartAuthorized,
+  mockUpdateAuthorizedCartCheckoutData,
+  mockVerifyAuthSession,
+  mockGetCartToken,
+} = vi.hoisted(() => ({
   mockGetCart: vi.fn(),
   mockGetOrderBySourceCartAuthorized: vi.fn(),
-  mockUpdateCartCheckoutData: vi.fn().mockResolvedValue(true),
+  mockUpdateAuthorizedCartCheckoutData: vi.fn().mockResolvedValue(true),
+  mockVerifyAuthSession: vi.fn().mockResolvedValue({ status: "anonymous" }),
+  mockGetCartToken: vi.fn().mockResolvedValue("order-token-123"),
 }));
 
 vi.mock("@/lib/data/cart", () => ({
   getCart: mockGetCart,
-  verifyAuthSession: vi.fn().mockResolvedValue({ status: "anonymous" }),
+  verifyAuthSession: mockVerifyAuthSession,
 }));
 
 vi.mock("@/lib/db/order", () => ({
@@ -17,7 +25,7 @@ vi.mock("@/lib/db/order", () => ({
 
 vi.mock("@/lib/db/cart", () => ({
   findCartById: vi.fn().mockResolvedValue(null),
-  updateCartCheckoutData: mockUpdateCartCheckoutData,
+  updateAuthorizedCartCheckoutData: mockUpdateAuthorizedCartCheckoutData,
 }));
 
 const mockClient = {
@@ -39,7 +47,7 @@ vi.mock("@/lib/spree", () => ({
   cacheTagSuffix: () => "",
   DEFAULT_SURFACE: "dtc",
   isWholesaleEnabled: vi.fn().mockReturnValue(false),
-  getCartToken: vi.fn().mockResolvedValue("order-token-123"),
+  getCartToken: mockGetCartToken,
   // DTC cart only; the wholesale cart cookie is absent so poison/surface
   // checks resolve to DTC.
   getCartId: vi.fn((surface = "dtc") =>
@@ -142,6 +150,7 @@ describe("checkout server actions", () => {
       expect(mockGetOrderBySourceCartAuthorized).toHaveBeenCalledWith("order-1", {
         userId: null,
         guestTokenHash: expect.any(String),
+        surface: "dtc",
       });
       expect(result).not.toBeNull();
       expect(result?.number).toBe("MRZ-TEST123456");
@@ -158,12 +167,26 @@ describe("checkout server actions", () => {
   });
 
   describe("updateOrderAddresses", () => {
-    it("returns success with order", async () => {
+    it("returns success for authorized owner and persists checkout data", async () => {
       mockClient.carts.update.mockResolvedValue(mockOrder);
+      mockUpdateAuthorizedCartCheckoutData.mockResolvedValue(true);
       const addresses = { email: "test@example.com" };
 
       const result = await updateOrderAddresses("order-1", addresses);
 
+      expect(mockUpdateAuthorizedCartCheckoutData).toHaveBeenCalledWith({
+        cartId: "order-1",
+        surface: "dtc",
+        auth: {
+          userId: null,
+          guestTokenHash: expect.any(String),
+        },
+        data: {
+          shipping_address: undefined,
+          billing_address: undefined,
+          checkout_email: "test@example.com",
+        },
+      });
       expect(mockClient.carts.update).toHaveBeenCalledWith(
         "order-1",
         addresses,
@@ -175,8 +198,49 @@ describe("checkout server actions", () => {
       expect(result).toEqual({ success: true, cart: mockOrder });
     });
 
-    it("returns error on failure", async () => {
-      mockClient.carts.update.mockRejectedValue(new Error("Invalid address"));
+    it("denies update when anonymous with no guest token (UUID only)", async () => {
+      mockVerifyAuthSession.mockResolvedValueOnce({ status: "anonymous" });
+      mockGetCartToken.mockResolvedValueOnce(undefined);
+
+      const result = await updateOrderAddresses("order-1", { email: "test@example.com" });
+
+      expect(result).toEqual({
+        success: false,
+        error: "Unauthorized to update checkout addresses",
+      });
+      expect(mockUpdateAuthorizedCartCheckoutData).not.toHaveBeenCalled();
+      expect(mockClient.carts.update).not.toHaveBeenCalled();
+    });
+
+    it("denies update when first-party write fails authorization (foreign cart/converted/abandoned)", async () => {
+      mockUpdateAuthorizedCartCheckoutData.mockResolvedValueOnce(false);
+
+      const result = await updateOrderAddresses("order-1", { email: "test@example.com" });
+
+      expect(result).toEqual({
+        success: false,
+        error: "Failed to update cart checkout data: cart not found or unauthorized",
+      });
+      expect(mockClient.carts.update).not.toHaveBeenCalled();
+    });
+
+    it("fails action and propagates when first-party DB write throws", async () => {
+      mockUpdateAuthorizedCartCheckoutData.mockRejectedValueOnce(
+        new Error("Database connection error"),
+      );
+
+      const result = await updateOrderAddresses("order-1", { email: "test@example.com" });
+
+      expect(result).toEqual({
+        success: false,
+        error: "Database connection error",
+      });
+      expect(mockClient.carts.update).not.toHaveBeenCalled();
+    });
+
+    it("returns error when Spree cart update fails after successful DB update", async () => {
+      mockUpdateAuthorizedCartCheckoutData.mockResolvedValueOnce(true);
+      mockClient.carts.update.mockRejectedValueOnce(new Error("Invalid address"));
 
       const result = await updateOrderAddresses("order-1", {});
 
@@ -187,7 +251,8 @@ describe("checkout server actions", () => {
     });
 
     it("returns fallback message for non-Error throws", async () => {
-      mockClient.carts.update.mockRejectedValue("unexpected");
+      mockUpdateAuthorizedCartCheckoutData.mockResolvedValueOnce(true);
+      mockClient.carts.update.mockRejectedValueOnce("unexpected");
 
       const result = await updateOrderAddresses("order-1", {});
 

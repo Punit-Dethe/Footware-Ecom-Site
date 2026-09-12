@@ -14,7 +14,7 @@ import {
   requireCartId,
   type Surface,
 } from "@/lib/spree";
-import { findCartById, updateCartCheckoutData } from "@/lib/db/cart";
+import { findCartById, updateAuthorizedCartCheckoutData } from "@/lib/db/cart";
 import { getOrderBySourceCartAuthorized } from "@/lib/db/order";
 import { getCart, verifyAuthSession } from "./cart";
 import { adaptDbOrderToCart } from "./order-adapter";
@@ -117,7 +117,11 @@ export async function getCompletedOrder(cartId: string): Promise<Cart | null> {
     return null;
   }
 
-  const result = await getOrderBySourceCartAuthorized(cartId, { userId, guestTokenHash });
+  const result = await getOrderBySourceCartAuthorized(cartId, {
+    userId,
+    guestTokenHash,
+    surface,
+  });
   if (!result) return null;
 
   return adaptDbOrderToCart(result.order, result.items);
@@ -146,17 +150,40 @@ export async function updateOrderAddresses(
   },
 ) {
   return actionResult(async () => {
-    try {
-      await updateCartCheckoutData(cartId, {
+    const surface = await resolveSurfaceForCart(cartId);
+    const authSession = await verifyAuthSession();
+
+    let userId: string | null = null;
+    let guestTokenHash: string | null = null;
+
+    if (authSession.status === "authenticated") {
+      userId = authSession.userId;
+    } else {
+      const rawToken = await getCartToken(surface);
+      if (rawToken) {
+        guestTokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+      }
+    }
+
+    if (!userId && !guestTokenHash) {
+      throw new Error("Unauthorized to update checkout addresses");
+    }
+
+    const updated = await updateAuthorizedCartCheckoutData({
+      cartId,
+      surface,
+      auth: { userId, guestTokenHash },
+      data: {
         shipping_address: addresses.shipping_address as Record<string, unknown> | undefined,
         billing_address: addresses.billing_address as Record<string, unknown> | undefined,
         checkout_email: addresses.email,
-      });
-    } catch {
-      // Non-blocking in test / legacy contexts
+      },
+    });
+
+    if (!updated) {
+      throw new Error("Failed to update cart checkout data: cart not found or unauthorized");
     }
 
-    const surface = await resolveSurfaceForCart(cartId);
     const options = await getCartOptions(surface);
     const id = await requireCartId(surface);
     const cart = await getClientForSurface(surface).carts.update(

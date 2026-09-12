@@ -306,7 +306,7 @@ describe("payment server actions", () => {
       expect(result.success).toBe(true);
     });
 
-    it("returns success when cart is not found (already completed by webhook)", async () => {
+    it("returns success when cart is not found and authorized completed order exists", async () => {
       mockGetCart.mockResolvedValue(null);
       mockGetCompletedOrder.mockResolvedValue(mockOrder);
 
@@ -314,6 +314,32 @@ describe("payment server actions", () => {
 
       expect(mockPlaceOrderFromCart).not.toHaveBeenCalled();
       expect(result).toEqual({ success: true, order: mockOrder });
+    });
+
+    it("returns failure when missing cart and completed order is absent or unauthorized", async () => {
+      mockGetCart.mockResolvedValue(null);
+      mockGetCompletedOrder.mockResolvedValue(null);
+
+      const result = await confirmPaymentAndCompleteCart("cart-1", "session-1");
+
+      expect(result).toEqual({
+        success: false,
+        error: "Order not found or unauthorized.",
+      });
+      expect(mockPlaceOrderFromCart).not.toHaveBeenCalled();
+    });
+
+    it("propagates failure when completed-order lookup suffers an outage", async () => {
+      mockGetCart.mockResolvedValue(null);
+      mockGetCompletedOrder.mockRejectedValue(new Error("Database connection failure"));
+
+      const result = await confirmPaymentAndCompleteCart("cart-1", "session-1");
+
+      expect(result).toEqual({
+        success: false,
+        error: "Database connection failure",
+      });
+      expect(mockPlaceOrderFromCart).not.toHaveBeenCalled();
     });
 
     it("returns error when complete throws error", async () => {

@@ -148,6 +148,11 @@ export async function placeOrderFromCart(params: {
       throw new Error("Missing authentication or guest authorization credentials");
     }
 
+    // 2b. Surface verification
+    if (cart.surface !== surface) {
+      throw new Error(`Cart surface mismatch: cart belongs to '${cart.surface}', requested '${surface}'`);
+    }
+
     // 3. Idempotency check: does an order already exist for this source_cart_id?
     const existingOrderRes = await client.query<Record<string, unknown>>(
       `SELECT * FROM public.orders WHERE source_cart_id = $1;`,
@@ -164,6 +169,11 @@ export async function placeOrderFromCart(params: {
         order: existingOrder,
         items: existingItemsRes.rows.map(mapOrderItemRow),
       };
+    }
+
+    // 3b. Active status verification (only active carts can place new orders)
+    if (cart.status !== "active") {
+      throw new Error(`Cannot place order: cart status is '${cart.status}', must be 'active'`);
     }
 
     // 4. Load cart items
@@ -436,13 +446,13 @@ export async function getOrderForUser(
  */
 export async function getOrderBySourceCartAuthorized(
   cartId: string,
-  auth: { userId?: string | null; guestTokenHash?: string | null },
+  auth: { userId?: string | null; guestTokenHash?: string | null; surface?: CartSurface },
 ): Promise<{ order: DbOrder; items: DbOrderItem[] } | null> {
   if (!UUID_REGEX.test(cartId)) return null;
 
   // 1. Fetch order and source cart together
   const res = await query<Record<string, unknown>>(
-    `SELECT o.*, c.guest_token_hash as cart_guest_token_hash, c.user_id as cart_user_id
+    `SELECT o.*, c.guest_token_hash as cart_guest_token_hash, c.user_id as cart_user_id, c.surface as cart_surface
      FROM public.orders o
      JOIN public.carts c ON o.source_cart_id = c.id
      WHERE o.source_cart_id = $1;`,
@@ -451,6 +461,13 @@ export async function getOrderBySourceCartAuthorized(
 
   const row = res.rows[0];
   if (!row) return null;
+
+  // Surface isolation (defense-in-depth)
+  if (auth.surface) {
+    if (row.surface !== auth.surface || row.cart_surface !== auth.surface) {
+      return null;
+    }
+  }
 
   // 2. Authorize
   const orderUserId = row.user_id as string | null;

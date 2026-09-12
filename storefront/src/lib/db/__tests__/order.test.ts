@@ -82,6 +82,7 @@ describe("Database Order Repository", () => {
                 id: "11111111-1111-1111-1111-111111111111",
                 user_id: "user-other",
                 guest_token_hash: null,
+                surface: "dtc",
                 status: "active",
               },
             ],
@@ -97,6 +98,93 @@ describe("Database Order Repository", () => {
           verifiedUserId: "user-attacker",
         }),
       ).rejects.toThrow("Unauthorized to convert this cart");
+    });
+
+    it("denies order placement when cart surface does not match requested surface", async () => {
+      mockTransaction.mockImplementation(async (cb) => {
+        const fakeClient = {
+          query: vi.fn().mockResolvedValueOnce({
+            rows: [
+              {
+                id: "11111111-1111-1111-1111-111111111111",
+                user_id: "user-1",
+                guest_token_hash: null,
+                surface: "dtc",
+                status: "active",
+              },
+            ],
+          }),
+        };
+        return cb(fakeClient);
+      });
+
+      await expect(
+        placeOrderFromCart({
+          cartId: "11111111-1111-1111-1111-111111111111",
+          surface: "wholesale",
+          verifiedUserId: "user-1",
+        }),
+      ).rejects.toThrow("Cart surface mismatch: cart belongs to 'dtc', requested 'wholesale'");
+    });
+
+    it("denies order placement when cart status is abandoned and no order exists", async () => {
+      mockTransaction.mockImplementation(async (cb) => {
+        const fakeClient = {
+          query: vi
+            .fn()
+            .mockResolvedValueOnce({
+              rows: [
+                {
+                  id: "11111111-1111-1111-1111-111111111111",
+                  user_id: "user-1",
+                  guest_token_hash: null,
+                  surface: "dtc",
+                  status: "abandoned",
+                },
+              ],
+            })
+            .mockResolvedValueOnce({ rows: [] }), // existing order lookup returns empty
+        };
+        return cb(fakeClient);
+      });
+
+      await expect(
+        placeOrderFromCart({
+          cartId: "11111111-1111-1111-1111-111111111111",
+          surface: "dtc",
+          verifiedUserId: "user-1",
+        }),
+      ).rejects.toThrow("Cannot place order: cart status is 'abandoned', must be 'active'");
+    });
+
+    it("denies order placement when cart status is converted and no order exists", async () => {
+      mockTransaction.mockImplementation(async (cb) => {
+        const fakeClient = {
+          query: vi
+            .fn()
+            .mockResolvedValueOnce({
+              rows: [
+                {
+                  id: "11111111-1111-1111-1111-111111111111",
+                  user_id: "user-1",
+                  guest_token_hash: null,
+                  surface: "dtc",
+                  status: "converted",
+                },
+              ],
+            })
+            .mockResolvedValueOnce({ rows: [] }), // existing order lookup returns empty
+        };
+        return cb(fakeClient);
+      });
+
+      await expect(
+        placeOrderFromCart({
+          cartId: "11111111-1111-1111-1111-111111111111",
+          surface: "dtc",
+          verifiedUserId: "user-1",
+        }),
+      ).rejects.toThrow("Cannot place order: cart status is 'converted', must be 'active'");
     });
 
     it("returns existing order if source_cart_id was already converted (idempotent)", async () => {
@@ -130,6 +218,7 @@ describe("Database Order Repository", () => {
                   id: "11111111-1111-1111-1111-111111111111",
                   user_id: "user-1",
                   guest_token_hash: null,
+                  surface: "dtc",
                   status: "converted",
                 },
               ],
@@ -163,6 +252,7 @@ describe("Database Order Repository", () => {
                 {
                   id: "11111111-1111-1111-1111-111111111111",
                   user_id: "user-1",
+                  surface: "dtc",
                   status: "active",
                 },
               ],
@@ -192,6 +282,7 @@ describe("Database Order Repository", () => {
                 {
                   id: "11111111-1111-1111-1111-111111111111",
                   user_id: "user-1",
+                  surface: "dtc",
                   status: "active",
                 },
               ],
@@ -565,5 +656,30 @@ describe("Database Order Repository", () => {
       expect(res).not.toBeNull();
       expect(res?.order.order_number).toBe("MRZ-GUESTOK");
     });
+
+    it("denies guest/auth order when surface mismatch occurs", async () => {
+      mockQuery.mockResolvedValueOnce({
+        rows: [
+          {
+            id: "22222222-2222-2222-2222-222222222222",
+            user_id: "user-owner",
+            cart_user_id: "user-owner",
+            cart_guest_token_hash: null,
+            source_cart_id: "11111111-1111-1111-1111-111111111111",
+            surface: "dtc",
+            cart_surface: "dtc",
+            order_number: "MRZ-AUTHUSER",
+          },
+        ],
+      });
+
+      const res = await getOrderBySourceCartAuthorized(
+        "11111111-1111-1111-1111-111111111111",
+        { userId: "user-owner", surface: "wholesale" },
+      );
+
+      expect(res).toBeNull();
+    });
   });
 });
+

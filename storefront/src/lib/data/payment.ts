@@ -194,12 +194,16 @@ export async function confirmPaymentAndCompleteCart(
   try {
     const cart = await getCart(cartId, surface);
     if (!cart) {
-      // Cart not found — the order may already be completed (e.g. by webhook).
-      // Try fetching it as a completed order before giving up.
-      const completedOrder = await getCompletedOrder(cartId).catch(
-        () => null,
-      );
-      return { success: true, order: completedOrder };
+      // Cart not found — the order may already be completed (e.g. by webhook or offsite redirect).
+      // Verify against completed first-party order.
+      const completedOrder = await getCompletedOrder(cartId);
+      if (completedOrder) {
+        return { success: true, order: completedOrder };
+      }
+      return {
+        success: false,
+        error: "Order not found or unauthorized.",
+      };
     }
 
     if (cart.current_step === "complete") {
