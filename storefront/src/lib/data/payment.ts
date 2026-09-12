@@ -1,20 +1,24 @@
 "use server";
 
+import crypto from "node:crypto";
 import type { Order } from "@spree/sdk";
 import { updateTag } from "next/cache";
 import {
   cacheTagSuffix,
   getCartOptions,
+  getCartToken,
   getClientForSurface,
   requireCartId,
   type Surface,
 } from "@/lib/spree";
-import { getCart } from "./cart";
+import { placeOrderFromCart } from "@/lib/db/order";
+import { getCart, verifyAuthSession } from "./cart";
+import { adaptDbOrderToSpree } from "./order-adapter";
 import {
+  getCompletedOrder,
   resolveSurfaceForCart,
   resolveSurfaceForCartVerified,
 } from "./checkout";
-import { getOrder } from "./orders";
 import { actionResult } from "./utils";
 
 function checkoutTag(surface: Surface): string {
@@ -113,10 +117,9 @@ export async function completeCheckoutPaymentSession(
 /**
  * Completes the order. Treats 403 and 422 as success:
  * - 403 = cart already completed (e.g. webhook handler completed it)
- * - 422 = state_lock_version conflict (concurrent request)
- *
- * When the order was already completed (403/422), fetch it from the API
- * so the caller always gets the order data for caching on the thank-you page.
+/**
+ * Completes the order by placing it into PostgreSQL first-party orders table.
+ * Idempotent: returns existing order if source_cart_id was already converted.
  */
 export async function completeCheckoutOrder(
   cartId: string,
@@ -124,28 +127,34 @@ export async function completeCheckoutOrder(
 ) {
   const surface = knownSurface ?? (await resolveSurfaceForCart(cartId));
   try {
-    const options = await getCartOptions(surface);
-    const order: Order = await getClientForSurface(surface).carts.complete(
-      cartId,
-      options,
-    );
-    updateTag(checkoutTag(surface));
-    updateTag(cartTag(surface));
-    return { success: true as const, order };
-  } catch (error: unknown) {
-    if (error && typeof error === "object" && "status" in error) {
-      const status = (error as { status: number }).status;
-      if (status === 403 || status === 422) {
-        // Order already completed — try to fetch it so the thank-you page
-        // can cache and display it without a second round-trip.
-        const completedOrder = await getOrder(cartId, undefined, surface).catch(
-          () => null,
-        );
-        updateTag(checkoutTag(surface));
-        updateTag(cartTag(surface));
-        return { success: true as const, order: completedOrder };
+    const authSession = await verifyAuthSession();
+    let verifiedUserId: string | null = null;
+    let guestTokenHash: string | null = null;
+
+    if (authSession.status === "authenticated") {
+      verifiedUserId = authSession.userId;
+    } else {
+      const rawToken = await getCartToken(surface);
+      if (rawToken) {
+        guestTokenHash = crypto
+          .createHash("sha256")
+          .update(rawToken)
+          .digest("hex");
       }
     }
+
+    const { order, items } = await placeOrderFromCart({
+      cartId,
+      surface,
+      verifiedUserId,
+      guestTokenHash,
+    });
+
+    const adaptedOrder = adaptDbOrderToSpree(order, items);
+    updateTag(checkoutTag(surface));
+    updateTag(cartTag(surface));
+    return { success: true as const, order: adaptedOrder as unknown as Order };
+  } catch (error: unknown) {
     return {
       success: false as const,
       error:
@@ -185,12 +194,16 @@ export async function confirmPaymentAndCompleteCart(
   try {
     const cart = await getCart(cartId, surface);
     if (!cart) {
-      // Cart not found — the order may already be completed (e.g. by webhook).
-      // Try fetching it as a completed order before giving up.
-      const completedOrder = await getOrder(cartId, undefined, surface).catch(
-        () => null,
-      );
-      return { success: true, order: completedOrder };
+      // Cart not found — the order may already be completed (e.g. by webhook or offsite redirect).
+      // Verify against completed first-party order.
+      const completedOrder = await getCompletedOrder(cartId);
+      if (completedOrder) {
+        return { success: true, order: completedOrder };
+      }
+      return {
+        success: false,
+        error: "Order not found or unauthorized.",
+      };
     }
 
     if (cart.current_step === "complete") {

@@ -13,6 +13,7 @@ export interface DbCart {
   currency: string;
   shipping_address: Record<string, unknown> | null;
   billing_address: Record<string, unknown> | null;
+  checkout_email: string | null;
   status: CartStatus;
   created_at: Date;
   updated_at: Date;
@@ -37,6 +38,7 @@ function mapCartRow(row: Record<string, unknown>): DbCart {
     currency: (row.currency as string) || "USD",
     shipping_address: (row.shipping_address as Record<string, unknown>) ?? null,
     billing_address: (row.billing_address as Record<string, unknown>) ?? null,
+    checkout_email: (row.checkout_email as string) ?? null,
     status: row.status as CartStatus,
     created_at: new Date(row.created_at as string | number | Date),
     updated_at: new Date(row.updated_at as string | number | Date),
@@ -63,7 +65,7 @@ export async function findActiveGuestCart(
   surface: CartSurface,
 ): Promise<DbCart | null> {
   const res = await query<Record<string, unknown>>(
-    `SELECT id, user_id, guest_token_hash, surface, currency, shipping_address, billing_address, status, created_at, updated_at
+    `SELECT id, user_id, guest_token_hash, surface, currency, shipping_address, billing_address, checkout_email, status, created_at, updated_at
      FROM public.carts
      WHERE guest_token_hash = $1 AND surface = $2 AND status = 'active'
      LIMIT 1;`,
@@ -81,7 +83,7 @@ export async function findActiveUserCart(
   surface: CartSurface,
 ): Promise<DbCart | null> {
   const res = await query<Record<string, unknown>>(
-    `SELECT id, user_id, guest_token_hash, surface, currency, shipping_address, billing_address, status, created_at, updated_at
+    `SELECT id, user_id, guest_token_hash, surface, currency, shipping_address, billing_address, checkout_email, status, created_at, updated_at
      FROM public.carts
      WHERE user_id = $1 AND surface = $2 AND status = 'active'
      LIMIT 1;`,
@@ -96,7 +98,7 @@ export async function findActiveUserCart(
  */
 export async function findCartById(cartId: string): Promise<DbCart | null> {
   const res = await query<Record<string, unknown>>(
-    `SELECT id, user_id, guest_token_hash, surface, currency, shipping_address, billing_address, status, created_at, updated_at
+    `SELECT id, user_id, guest_token_hash, surface, currency, shipping_address, billing_address, checkout_email, status, created_at, updated_at
      FROM public.carts
      WHERE id = $1
      LIMIT 1;`,
@@ -119,7 +121,7 @@ export async function createGuestCart(
     `INSERT INTO public.carts (
        guest_token_hash, surface, currency, status, created_at, updated_at
      ) VALUES ($1, $2, $3, 'active', NOW(), NOW())
-     RETURNING id, user_id, guest_token_hash, surface, currency, shipping_address, billing_address, status, created_at, updated_at;`,
+     RETURNING id, user_id, guest_token_hash, surface, currency, shipping_address, billing_address, checkout_email, status, created_at, updated_at;`,
     [guestTokenHash, surface, currency],
   );
 
@@ -140,7 +142,7 @@ export async function createUserCart(
      ) VALUES ($1, $2, $3, 'active', NOW(), NOW())
      ON CONFLICT (user_id, surface) WHERE (user_id IS NOT NULL AND status = 'active')
      DO UPDATE SET updated_at = NOW()
-     RETURNING id, user_id, guest_token_hash, surface, currency, shipping_address, billing_address, status, created_at, updated_at;`,
+     RETURNING id, user_id, guest_token_hash, surface, currency, shipping_address, billing_address, checkout_email, status, created_at, updated_at;`,
     [userId, surface, currency],
   );
 
@@ -271,7 +273,7 @@ export async function claimOrMergeGuestCart(
   return await transaction(async (client) => {
     // 1. Lock active guest cart if exists
     const guestRes = await client.query<Record<string, unknown>>(
-      `SELECT id, user_id, guest_token_hash, surface, currency, shipping_address, billing_address, status, created_at, updated_at
+      `SELECT id, user_id, guest_token_hash, surface, currency, shipping_address, billing_address, checkout_email, status, created_at, updated_at
        FROM public.carts
        WHERE guest_token_hash = $1 AND surface = $2 AND status = 'active'
        FOR UPDATE;`,
@@ -282,7 +284,7 @@ export async function claimOrMergeGuestCart(
 
     // 2. Lock active user cart if exists
     const userRes = await client.query<Record<string, unknown>>(
-      `SELECT id, user_id, guest_token_hash, surface, currency, shipping_address, billing_address, status, created_at, updated_at
+      `SELECT id, user_id, guest_token_hash, surface, currency, shipping_address, billing_address, checkout_email, status, created_at, updated_at
        FROM public.carts
        WHERE user_id = $1 AND surface = $2 AND status = 'active'
        FOR UPDATE;`,
@@ -300,7 +302,7 @@ export async function claimOrMergeGuestCart(
          VALUES ($1, $2, 'USD', 'active', NOW(), NOW())
          ON CONFLICT (user_id, surface) WHERE (user_id IS NOT NULL AND status = 'active')
          DO UPDATE SET updated_at = NOW()
-         RETURNING id, user_id, guest_token_hash, surface, currency, shipping_address, billing_address, status, created_at, updated_at;`,
+         RETURNING id, user_id, guest_token_hash, surface, currency, shipping_address, billing_address, checkout_email, status, created_at, updated_at;`,
         [userId, surface],
       );
       return mapCartRow(createRes.rows[0]);
@@ -318,7 +320,7 @@ export async function claimOrMergeGuestCart(
         `UPDATE public.carts
          SET user_id = $1, guest_token_hash = NULL, updated_at = NOW()
          WHERE id = $2
-         RETURNING id, user_id, guest_token_hash, surface, currency, shipping_address, billing_address, status, created_at, updated_at;`,
+         RETURNING id, user_id, guest_token_hash, surface, currency, shipping_address, billing_address, checkout_email, status, created_at, updated_at;`,
         [userId, guestCart.id],
       );
       return mapCartRow(claimRes.rows[0]);
@@ -358,3 +360,78 @@ export async function claimOrMergeGuestCart(
     return userCart;
   });
 }
+
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Updates checkout state (shipping/billing address snapshots, checkout email)
+ * on a persistent cart with strict database-level authorization.
+ *
+ * Authorization is bound directly into the SQL query:
+ * - cart id
+ * - surface
+ * - status = 'active'
+ * - authenticated owner (user_id = $authUserId) OR matching guest bearer (guest_token_hash = $guestTokenHash)
+ */
+export async function updateAuthorizedCartCheckoutData(params: {
+  cartId: string;
+  surface: CartSurface;
+  auth: {
+    userId?: string | null;
+    guestTokenHash?: string | null;
+  };
+  data: {
+    shipping_address?: Record<string, unknown> | null;
+    billing_address?: Record<string, unknown> | null;
+    checkout_email?: string | null;
+  };
+}): Promise<boolean> {
+  const { cartId, surface, auth, data } = params;
+
+  if (!UUID_REGEX.test(cartId)) {
+    return false;
+  }
+
+  if (!auth.userId && !auth.guestTokenHash) {
+    return false;
+  }
+
+  const sets: string[] = ["updated_at = NOW()"];
+  const values: unknown[] = [cartId, surface];
+
+  if (data.shipping_address !== undefined) {
+    values.push(data.shipping_address ? JSON.stringify(data.shipping_address) : null);
+    sets.push(`shipping_address = $${values.length}`);
+  }
+  if (data.billing_address !== undefined) {
+    values.push(data.billing_address ? JSON.stringify(data.billing_address) : null);
+    sets.push(`billing_address = $${values.length}`);
+  }
+  if (data.checkout_email !== undefined) {
+    values.push(data.checkout_email?.trim() || null);
+    sets.push(`checkout_email = $${values.length}`);
+  }
+
+  let authClause: string;
+  if (auth.userId) {
+    values.push(auth.userId);
+    authClause = `user_id = $${values.length}`;
+  } else {
+    values.push(auth.guestTokenHash);
+    authClause = `guest_token_hash = $${values.length}`;
+  }
+
+  const res = await query(
+    `UPDATE public.carts
+     SET ${sets.join(", ")}
+     WHERE id = $1
+       AND surface = $2
+       AND status = 'active'
+       AND ${authClause};`,
+    values,
+  );
+
+  return (res.rowCount ?? 0) > 0;
+}
+

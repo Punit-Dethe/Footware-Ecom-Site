@@ -1,5 +1,6 @@
 "use server";
 
+import crypto from "node:crypto";
 import type { AddressParams, Cart } from "@spree/sdk";
 import { SpreeError } from "@spree/sdk";
 import { updateTag } from "next/cache";
@@ -7,15 +8,17 @@ import {
   cacheTagSuffix,
   getCartId,
   getCartOptions,
+  getCartToken,
   getClientForSurface,
   isWholesaleEnabled,
   requireCartId,
   type Surface,
 } from "@/lib/spree";
-import { findCartById } from "@/lib/db/cart";
-import { getCart } from "./cart";
-import { getOrder } from "./orders";
-import { actionResult, withFallback } from "./utils";
+import { findCartById, updateAuthorizedCartCheckoutData } from "@/lib/db/cart";
+import { getOrderBySourceCartAuthorized } from "@/lib/db/order";
+import { getCart, verifyAuthSession } from "./cart";
+import { adaptDbOrderToCart } from "./order-adapter";
+import { actionResult } from "./utils";
 import { getWholesaleChannel } from "./wholesale";
 
 /**
@@ -94,6 +97,36 @@ function cartTag(surface: Surface): string {
   return `cart${cacheTagSuffix(surface)}`;
 }
 
+export async function getCompletedOrder(cartId: string): Promise<Cart | null> {
+  const surface = await resolveSurfaceForCart(cartId);
+  const authSession = await verifyAuthSession();
+
+  let userId: string | null = null;
+  let guestTokenHash: string | null = null;
+
+  if (authSession.status === "authenticated") {
+    userId = authSession.userId;
+  }
+
+  const rawToken = await getCartToken(surface);
+  if (rawToken) {
+    guestTokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+  }
+
+  if (!userId && !guestTokenHash) {
+    return null;
+  }
+
+  const result = await getOrderBySourceCartAuthorized(cartId, {
+    userId,
+    guestTokenHash,
+    surface,
+  });
+  if (!result) return null;
+
+  return adaptDbOrderToCart(result.order, result.items);
+}
+
 export async function getCheckoutOrder(cartId: string): Promise<Cart | null> {
   const surface = await resolveSurfaceForCart(cartId);
 
@@ -102,23 +135,7 @@ export async function getCheckoutOrder(cartId: string): Promise<Cart | null> {
   if (cart && cart.id === cartId) return cart;
 
   // Cart completed — fetch as completed order.
-  return withFallback(
-    async () => (await getOrder(cartId, undefined, surface)) as unknown as Cart,
-    null,
-  );
-}
-
-export async function getCompletedOrder(cartId: string): Promise<Cart | null> {
-  const surface = await resolveSurfaceForCart(cartId);
-
-  // Fetch order directly — used by the order-placed page.
-  // Does not call getCart() first because getCart() auto-clears
-  // the cart token cookie on failure, which breaks getOrder()
-  // for guest users.
-  return withFallback(
-    async () => (await getOrder(cartId, undefined, surface)) as unknown as Cart,
-    null,
-  );
+  return await getCompletedOrder(cartId);
 }
 
 export async function updateOrderAddresses(
@@ -134,6 +151,39 @@ export async function updateOrderAddresses(
 ) {
   return actionResult(async () => {
     const surface = await resolveSurfaceForCart(cartId);
+    const authSession = await verifyAuthSession();
+
+    let userId: string | null = null;
+    let guestTokenHash: string | null = null;
+
+    if (authSession.status === "authenticated") {
+      userId = authSession.userId;
+    } else {
+      const rawToken = await getCartToken(surface);
+      if (rawToken) {
+        guestTokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+      }
+    }
+
+    if (!userId && !guestTokenHash) {
+      throw new Error("Unauthorized to update checkout addresses");
+    }
+
+    const updated = await updateAuthorizedCartCheckoutData({
+      cartId,
+      surface,
+      auth: { userId, guestTokenHash },
+      data: {
+        shipping_address: addresses.shipping_address as Record<string, unknown> | undefined,
+        billing_address: addresses.billing_address as Record<string, unknown> | undefined,
+        checkout_email: addresses.email,
+      },
+    });
+
+    if (!updated) {
+      throw new Error("Failed to update cart checkout data: cart not found or unauthorized");
+    }
+
     const options = await getCartOptions(surface);
     const id = await requireCartId(surface);
     const cart = await getClientForSurface(surface).carts.update(
