@@ -1,6 +1,19 @@
 import type { QueryResultRow } from "pg";
 import { query } from "./index";
 
+export interface DbCatalogProductImageJson {
+  id: string;
+  storage_path: string;
+  alt_text: string | null;
+  position: number;
+  is_hero: boolean;
+  width: number | null;
+  height: number | null;
+  dominant_color: string | null;
+  lqip: string | null;
+  processed_variants: Record<string, { avif?: string; webp?: string }> | null;
+}
+
 export interface DbCatalogProductRow {
   id: string;
   name: string;
@@ -14,6 +27,7 @@ export interface DbCatalogProductRow {
   meta_keywords: string | null;
   created_at: Date;
   updated_at: Date;
+  images?: DbCatalogProductImageJson[];
 }
 
 export interface DbCatalogCategoryRow {
@@ -89,11 +103,32 @@ export async function loadPublicCatalogRows(
 
   const [productsRes, categoriesRes, variantsRes, pcRes] = await Promise.all([
     runner.query<DbCatalogProductRow>(
-      `SELECT id, name, slug, sku, description, description_html, status,
-              meta_title, meta_description, meta_keywords, created_at, updated_at
-       FROM public.products
-       WHERE status = 'active'
-       ORDER BY created_at ASC;`,
+      `SELECT p.id, p.name, p.slug, p.sku, p.description, p.description_html, p.status,
+              p.meta_title, p.meta_description, p.meta_keywords, p.created_at, p.updated_at,
+              COALESCE(
+                (
+                  SELECT json_agg(
+                    json_build_object(
+                      'id', pi.id,
+                      'storage_path', pi.storage_path,
+                      'alt_text', pi.alt_text,
+                      'position', pi.position,
+                      'is_hero', pi.is_hero,
+                      'width', pi.width,
+                      'height', pi.height,
+                      'dominant_color', pi.dominant_color,
+                      'lqip', pi.lqip,
+                      'processed_variants', pi.processed_variants
+                    ) ORDER BY pi.position ASC, pi.created_at ASC
+                  )
+                  FROM public.product_images pi
+                  WHERE pi.product_id = p.id
+                ),
+                '[]'::json
+              ) AS images
+       FROM public.products p
+       WHERE p.status = 'active'
+       ORDER BY p.created_at ASC;`,
     ),
     runner.query<DbCatalogCategoryRow>(
       `SELECT id, name, slug, description, parent_id, position, created_at, updated_at
