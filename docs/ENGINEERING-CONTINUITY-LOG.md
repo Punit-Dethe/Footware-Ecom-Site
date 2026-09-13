@@ -999,35 +999,29 @@ B6A authoritative catalog + cached read model      COMPLETE
 B6B first-party catalog admin                      COMPLETE
 B7  first-party media management/publishing        COMPLETE
 B8  remove Spree SDK / fake Spree BFF compatibility COMPLETE
-B9  remove Render/Rails legacy                     IN PROGRESS (IMPLEMENTED, PENDING REVIEW)
+B9  remove Render/Rails legacy                     COMPLETE
 B10 cleanup / dead compatibility / naming/config   NEXT
 ```
 
 ---
 
-## 12. Immediate next executor run — B8 Spree SDK / fake Spree Store API BFF compatibility removal
+## 12. Immediate next executor run — B10 General Cleanup / Dead Compatibility / Naming / Stale Config
 
 **Target:**
-Complete **B8 — remove the remaining Spree SDK / fake Spree Store API BFF compatibility layer**.
+Complete **B10 — cleanup / dead compatibility / naming / stale config**.
 
 Do **not** redesign the storefront.
 Do **not** import the new shoe catalog.
 Do **not** start image/data performance optimization.
-Do **not** start B9 Render/Rails infrastructure cleanup.
-Do **not** start B10 generic dead-code/config/documentation cleanup.
 
-Architecture goal:
+Scope of B10:
 ```text
-first-party auth/cart/order/catalog/media architecture
-+
-zero runtime dependency on @spree/sdk
-+
-zero runtime dependency on the fake /api/v3/store/[...spree] compatibility BFF
+- Dead compatibility removal (e.g. unused compatibility adapters, dead helpers);
+- Legacy vendor naming cleanup (e.g. SPREE_WHOLESALE_CHANNEL, _spree_* cookie names, spree_country, spree_locale, src/lib/spree namespace, adaptDbOrderToSpree);
+- Stale configuration cleanup (e.g. dead npm packages, unused devDependencies, stale tsconfig/eslint leftovers);
+- Obsolete seed scripts and historical experiment artifacts cleanup where appropriate;
+- Final repository polishing and documentation alignment.
 ```
-
-Execution sequence:
-1. Reconcile this canonical continuity log on `main` via docs-only commit.
-2. Branch `backend/b8-spree-compat-removal` from reconciled `main`.
 3. Complete inventory/audit of `@spree/sdk`, `@spree/sdk/webhooks`, `@/lib/spree`, `getClient(`, `withAuthRefresh`, `getLocaleOptions`, `/api/v3/store`, `_spree_`, `SPREE_`, `SpreeError`.
 4. Replace remaining `@spree/sdk` types with narrowly scoped local application types.
 5. Auth compatibility removal: Supabase Auth authoritative, remove `getClient().auth.*`, `withAuthRefresh`, legacy Spree tokens.
@@ -1110,13 +1104,19 @@ Do not assume older `ARCHITECTURE.md`, old specification docs, or old performanc
 
 ## 16. Rolling change log
 
-### 2026-09-13 — B9 implementation complete: Render / Rails / Spree backend infrastructure removed
+### 2026-09-13 — B9 complete: Render / Rails / Spree backend infrastructure removed & verified
 
 Recorded:
 
+- B9 CODE: COMPLETE
+- B9 MERGED: COMPLETE (`8fb4af3cbc2b42cde4896e4627689c71e0a56c34`)
+- B9 DEPLOYED: COMPLETE (`dpl_E4ZRX6HF6WJaJK8zqzHs9527p38x`)
+- B9 PRODUCTION VERIFIED: COMPLETE (`https://mirzafootwear.vercel.app`)
 - Starting main: `438832f2dae3904de3bc4aa44fd43cacae95e0e0`;
 - Branch: `backend/b9-render-rails-cleanup`;
-- B9 implementation SHA: `a56bd6d5984c208e6fcf62c12b10dc153e9f34d6`;
+- B9 implementation SHA: `6c580d42a535397ada00a92d937c250b01448e5b`;
+- B9 merge SHA: `8fb4af3cbc2b42cde4896e4627689c71e0a56c34`;
+- Deployment ID: `dpl_E4ZRX6HF6WJaJK8zqzHs9527p38x`;
 - Scope: complete removal of operational Render, Ruby on Rails, and Spree-backend operational infrastructure;
 - Removed operational infrastructure:
   * `storefront/next.config.ts`: removed `spreeImagePatterns()`, `SPREE_IMAGES_URL`, `SPREE_API_URL`, `/rails/active_storage/**`, `transpilePackages: ["@spree/sdk"]`, and `dangerouslyAllowLocalIP: true`;
@@ -1134,12 +1134,22 @@ Recorded:
   * `storefront/README.md`: updated local development setup instructions for first-party PostgreSQL and Supabase;
   * `infra/README.md` & `docs/ARCHITECTURE.md`: updated operational architecture documentation and topology diagram to describe first-party Next.js App Router, Supabase Auth, Supabase Storage, and PostgreSQL architecture;
 - Guard tests:
-  * Added `storefront/src/lib/__tests__/b9-architecture-audit.test.ts` (14 assertions across 7 suites) enforcing zero operational references to `SPREE_API_URL`, `SPREE_PUBLISHABLE_KEY`, `SPREE_IMAGES_URL`, `/rails/active_storage`, `@spree/sdk` in next.config, preconnects, and e2e-backend / bootstrap-spree;
-- Verification:
+  * Added `storefront/src/lib/__tests__/b9-architecture-audit.test.ts` (21 assertions across 7 suites) enforcing zero operational references to `SPREE_API_URL`, `SPREE_PUBLISHABLE_KEY`, `SPREE_IMAGES_URL`, `/rails/active_storage`, `@spree/sdk` in next.config, preconnects, and e2e-backend / bootstrap-spree;
+  * Preserved `storefront/src/lib/__tests__/b8-architecture-audit.test.ts` (18 assertions across 2 suites);
+- Verification on merged main:
   * TypeScript `tsc --noEmit`: 0 errors;
   * Biome lint: 0 errors, 0 warnings (330 files checked);
   * Vitest: 61 test suites / 627 tests passing (100%);
+  * Playwright first-party smoke: 2 passed / 2 total (100%);
   * Next.js production build: 110 static pages successfully compiled;
+- Production Smoke & Network Verification:
+  * Live URL: `https://mirzafootwear.vercel.app`
+  * Homepage: HTTP 200, brand navigation rendered, zero Spree preconnect links;
+  * PLP (`/us/en/products`): HTTP 200, 12 initial products + remainder intact, zero Active Storage links;
+  * PDP (`/us/en/products/office-footwear-01`): HTTP 200, Supabase Storage product image, add-to-cart button intact;
+  * Cart (`/us/en/cart`): HTTP 200;
+  * Sitemap (`/sitemap/0.xml`): HTTP 200;
+  * 0 requests to legacy Spree API, 0 to `/api/v3/store`, 0 to `mirza-spree-backend.onrender.com`, 0 Active Storage URLs;
 - Security & Performance Invariants:
   * Strict database TLS (`rejectUnauthorized: true`) fully preserved across all application code;
   * Zero browser-visible database secrets or service-role keys;
@@ -1147,7 +1157,7 @@ Recorded:
   * Warm catalog snapshot: 0 DB queries; cold catalog snapshot: bounded 4 queries; PLP 12 + remainder; P1 PDP prewarm preserved; S8 cart behavior preserved;
 - B10 Deferred Boundary:
   * `SPREE_WHOLESALE_CHANNEL`, `_spree_*` cookies, `spree_country`, `spree_locale`, and `src/lib/spree/` namespace intentionally deferred to B10;
-- Status: READY FOR PLANNER / AUDITOR REVIEW (do NOT merge to main, do NOT deploy production until reviewed);
+- Status: B9 COMPLETE AND VERIFIED IN PRODUCTION;
 - Next phase: B10 — cleanup / dead compatibility / naming / stale config.
 
 ### 2026-09-13 — B8.1 complete: fake unsupported checkout successes removed
