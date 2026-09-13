@@ -108,3 +108,115 @@ describe("B8 Architecture Audit — Zero Spree SDK / BFF Runtime Dependency", ()
     expect(fs.existsSync(webhookHandlers)).toBe(false);
   });
 });
+
+describe("B8.1 Architecture Audit — Zero Fake Checkout Successes", () => {
+  const srcDir = path.resolve(__dirname, "../../");
+  const productionFiles = walk(srcDir);
+
+  it("proves 0 references to direct_payment_session in production source", () => {
+    const offendingFiles: string[] = [];
+    for (const file of productionFiles) {
+      const content = fs.readFileSync(file, "utf8");
+      if (content.includes("direct_payment_session")) {
+        offendingFiles.push(path.relative(srcDir, file));
+      }
+    }
+    expect(offendingFiles).toEqual([]);
+  });
+
+  it("proves 0 references to fake direct_payment sentinel in production source", () => {
+    const offendingFiles: string[] = [];
+    for (const file of productionFiles) {
+      const content = fs.readFileSync(file, "utf8");
+      if (content.includes("direct_payment")) {
+        offendingFiles.push(path.relative(srcDir, file));
+      }
+    }
+    expect(offendingFiles).toEqual([]);
+  });
+
+  it("proves 0 references to paymentSessions in production source", () => {
+    const offendingFiles: string[] = [];
+    for (const file of productionFiles) {
+      const content = fs.readFileSync(file, "utf8");
+      if (content.includes("paymentSessions")) {
+        offendingFiles.push(path.relative(srcDir, file));
+      }
+    }
+    expect(offendingFiles).toEqual([]);
+  });
+
+  it("proves 0 references to selectDeliveryRate in production source", () => {
+    const offendingFiles: string[] = [];
+    for (const file of productionFiles) {
+      const content = fs.readFileSync(file, "utf8");
+      if (content.includes("selectDeliveryRate")) {
+        offendingFiles.push(path.relative(srcDir, file));
+      }
+    }
+    expect(offendingFiles).toEqual([]);
+  });
+
+  it("proves 0 references to confirmPaymentAndCompleteCart in production source", () => {
+    const offendingFiles: string[] = [];
+    for (const file of productionFiles) {
+      const content = fs.readFileSync(file, "utf8");
+      if (content.includes("confirmPaymentAndCompleteCart")) {
+        offendingFiles.push(path.relative(srcDir, file));
+      }
+    }
+    expect(offendingFiles).toEqual([]);
+  });
+
+  it("proves 0 references to createCheckoutPaymentSession in production source", () => {
+    const offendingFiles: string[] = [];
+    for (const file of productionFiles) {
+      const content = fs.readFileSync(file, "utf8");
+      if (content.includes("createCheckoutPaymentSession")) {
+        offendingFiles.push(path.relative(srcDir, file));
+      }
+    }
+    expect(offendingFiles).toEqual([]);
+  });
+
+  it("proves 0 references to updateCheckoutPaymentSession in production source", () => {
+    const offendingFiles: string[] = [];
+    for (const file of productionFiles) {
+      const content = fs.readFileSync(file, "utf8");
+      if (content.includes("updateCheckoutPaymentSession")) {
+        offendingFiles.push(path.relative(srcDir, file));
+      }
+    }
+    expect(offendingFiles).toEqual([]);
+  });
+
+  it("proves 0 references to completeCheckoutPaymentSession in production source", () => {
+    const offendingFiles: string[] = [];
+    for (const file of productionFiles) {
+      const content = fs.readFileSync(file, "utf8");
+      if (content.includes("completeCheckoutPaymentSession")) {
+        offendingFiles.push(path.relative(srcDir, file));
+      }
+    }
+    expect(offendingFiles).toEqual([]);
+  });
+
+  it("proves 0 references to createDirectPayment in production source", () => {
+    const offendingFiles: string[] = [];
+    for (const file of productionFiles) {
+      const content = fs.readFileSync(file, "utf8");
+      if (content.includes("createDirectPayment")) {
+        offendingFiles.push(path.relative(srcDir, file));
+      }
+    }
+    expect(offendingFiles).toEqual([]);
+  });
+
+  it("proves legacy gateway callback route (confirm-payment) is deleted", () => {
+    const callbackRoute = path.resolve(
+      srcDir,
+      "app/[country]/[locale]/(checkout)/confirm-payment",
+    );
+    expect(fs.existsSync(callbackRoute)).toBe(false);
+  });
+});

@@ -19,10 +19,6 @@ import {
   updateAddressField,
 } from "@/lib/utils/address";
 
-export type PaymentCompleteResult =
-  | { type: "session"; sessionId: string; sessionResult?: string }
-  | { type: "direct" };
-
 export interface PaymentSectionHandle {
   submit: () => Promise<{ error?: string }>;
 }
@@ -37,10 +33,9 @@ interface PaymentSectionProps {
     billing_address?: AddressParams;
     use_shipping?: boolean;
   }) => Promise<boolean>;
-  onPaymentComplete: (result: PaymentCompleteResult) => Promise<void>;
+  onPaymentComplete: () => Promise<void>;
   processing: boolean;
   setProcessing: (processing: boolean) => void;
-  onSessionMethodChange?: (isSessionBased: boolean) => void;
   errors?: string[];
 }
 
@@ -53,14 +48,9 @@ export function PaymentSection({
   onPaymentComplete,
   processing: _processing,
   setProcessing,
-  onSessionMethodChange,
   errors,
 }: PaymentSectionProps) {
   const t = useTranslations("checkout");
-
-  useEffect(() => {
-    onSessionMethodChange?.(false);
-  }, [onSessionMethodChange]);
 
   // Billing address state
   const [useShippingForBilling, setUseShippingForBilling] = useState(true);
@@ -134,7 +124,7 @@ export function PaymentSection({
             });
           }
 
-          await onPaymentComplete({ type: "direct" });
+          await onPaymentComplete();
           return {};
         } catch {
           setProcessing(false);

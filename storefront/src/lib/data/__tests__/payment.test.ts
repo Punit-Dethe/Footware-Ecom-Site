@@ -1,14 +1,21 @@
+import crypto from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockGetCart, mockPlaceOrderFromCart, mockGetCompletedOrder } = vi.hoisted(() => ({
+const {
+  mockGetCart,
+  mockPlaceOrderFromCart,
+  mockVerifyAuthSession,
+  mockUpdateTag,
+} = vi.hoisted(() => ({
   mockGetCart: vi.fn(),
   mockPlaceOrderFromCart: vi.fn(),
-  mockGetCompletedOrder: vi.fn(),
+  mockVerifyAuthSession: vi.fn(),
+  mockUpdateTag: vi.fn(),
 }));
 
 vi.mock("@/lib/data/cart", () => ({
   getCart: mockGetCart,
-  verifyAuthSession: vi.fn().mockResolvedValue({ status: "anonymous" }),
+  verifyAuthSession: mockVerifyAuthSession,
 }));
 
 vi.mock("@/lib/db/order", () => ({
@@ -17,36 +24,20 @@ vi.mock("@/lib/db/order", () => ({
 
 vi.mock("@/lib/data/checkout", () => ({
   resolveSurfaceForCart: vi.fn().mockResolvedValue("dtc"),
-  resolveSurfaceForCartVerified: vi.fn().mockResolvedValue("dtc"),
-  getCompletedOrder: mockGetCompletedOrder,
 }));
 
 vi.mock("@/lib/spree", () => ({
   cacheTagSuffix: () => "",
   DEFAULT_SURFACE: "dtc",
   isWholesaleEnabled: vi.fn().mockReturnValue(false),
-  getCartToken: vi.fn().mockResolvedValue("order-token-123"),
-  getCartId: vi.fn().mockResolvedValue("cart-1"),
-  getAccessToken: vi.fn().mockResolvedValue(undefined),
-  setCartCookies: vi.fn(),
-  clearCartCookies: vi.fn(),
-  getCartOptions: vi.fn().mockResolvedValue({
-    spreeToken: "order-token-123",
-    token: undefined,
-  }),
-  requireCartId: vi.fn().mockResolvedValue("cart-1"),
+  getCartToken: vi.fn().mockResolvedValue("guest-bearer-token-raw-123"),
 }));
 
 vi.mock("next/cache", () => ({
-  updateTag: vi.fn(),
+  updateTag: mockUpdateTag,
 }));
 
-import {
-  completeCheckoutOrder,
-  confirmPaymentAndCompleteCart,
-  createCheckoutPaymentSession,
-  createDirectPayment,
-} from "@/lib/data/payment";
+import { completeCheckoutOrder } from "@/lib/data/payment";
 
 const mockDbOrder = {
   id: "33333333-3333-3333-3333-333333333333",
@@ -62,21 +53,11 @@ const mockDbOrder = {
   discount_total_in_cents: 0,
   shipping_address: null,
   billing_address: null,
-  checkout_email: "guest@example.com",
-  completed_at: new Date(),
-  created_at: new Date(),
-  updated_at: new Date(),
+  checkout_email: "customer@example.com",
+  completed_at: new Date("2026-09-13T10:00:00Z"),
+  created_at: new Date("2026-09-13T10:00:00Z"),
+  updated_at: new Date("2026-09-13T10:00:00Z"),
 };
-
-const mockOrder = {
-  id: "cart-1",
-  number: "R100",
-  current_step: "complete",
-  items: [],
-  currency: "USD",
-  total: "50.00",
-  display_total: "$50.00",
-} as any;
 
 describe("payment server actions (first-party architecture)", () => {
   beforeEach(() => {
@@ -84,9 +65,13 @@ describe("payment server actions (first-party architecture)", () => {
   });
 
   describe("completeCheckoutOrder", () => {
-    it("places order in PostgreSQL and returns placed order", async () => {
+    it("completes checkout for authenticated user with verified user ID", async () => {
+      mockVerifyAuthSession.mockResolvedValue({
+        status: "authenticated",
+        userId: "auth-user-999",
+      });
       mockPlaceOrderFromCart.mockResolvedValue({
-        order: mockDbOrder,
+        order: { ...mockDbOrder, user_id: "auth-user-999" },
         items: [],
       });
 
@@ -95,14 +80,68 @@ describe("payment server actions (first-party architecture)", () => {
       expect(mockPlaceOrderFromCart).toHaveBeenCalledWith({
         cartId: "cart-1",
         surface: "dtc",
-        verifiedUserId: null,
-        guestTokenHash: expect.any(String),
+        verifiedUserId: "auth-user-999",
+        guestTokenHash: null,
       });
       expect(result.success).toBe(true);
-      expect(result.order?.number).toBe("MRZ-TEST123456");
+      if (result.success) {
+        expect(result.order.number).toBe("MRZ-TEST123456");
+      }
+      expect(mockUpdateTag).toHaveBeenCalledWith("checkout");
+      expect(mockUpdateTag).toHaveBeenCalledWith("cart");
     });
 
-    it("returns error on placement failure", async () => {
+    it("completes checkout for guest using SHA-256 hashed bearer token", async () => {
+      mockVerifyAuthSession.mockResolvedValue({
+        status: "anonymous",
+      });
+      mockPlaceOrderFromCart.mockResolvedValue({
+        order: mockDbOrder,
+        items: [],
+      });
+
+      const expectedHash = crypto
+        .createHash("sha256")
+        .update("guest-bearer-token-raw-123")
+        .digest("hex");
+
+      const result = await completeCheckoutOrder("cart-1");
+
+      expect(mockPlaceOrderFromCart).toHaveBeenCalledWith({
+        cartId: "cart-1",
+        surface: "dtc",
+        verifiedUserId: null,
+        guestTokenHash: expectedHash,
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.order.number).toBe("MRZ-TEST123456");
+      }
+    });
+
+    it("uses explicitly provided surface when known", async () => {
+      mockVerifyAuthSession.mockResolvedValue({
+        status: "authenticated",
+        userId: "wholesale-user-1",
+      });
+      mockPlaceOrderFromCart.mockResolvedValue({
+        order: { ...mockDbOrder, user_id: "wholesale-user-1" },
+        items: [],
+      });
+
+      const result = await completeCheckoutOrder("cart-1", "wholesale");
+
+      expect(mockPlaceOrderFromCart).toHaveBeenCalledWith({
+        cartId: "cart-1",
+        surface: "wholesale",
+        verifiedUserId: "wholesale-user-1",
+        guestTokenHash: null,
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it("returns error on placement failure (e.g. empty cart)", async () => {
+      mockVerifyAuthSession.mockResolvedValue({ status: "anonymous" });
       mockPlaceOrderFromCart.mockRejectedValue(new Error("Cart not found or empty"));
 
       const result = await completeCheckoutOrder("cart-1");
@@ -112,53 +151,17 @@ describe("payment server actions (first-party architecture)", () => {
         error: "Cart not found or empty",
       });
     });
-  });
 
-  describe("confirmPaymentAndCompleteCart", () => {
-    it("returns existing completed order when cart is already converted", async () => {
-      mockGetCart.mockResolvedValue(null);
-      mockGetCompletedOrder.mockResolvedValue(mockOrder);
+    it("returns generic error message on non-Error exceptions", async () => {
+      mockVerifyAuthSession.mockResolvedValue({ status: "anonymous" });
+      mockPlaceOrderFromCart.mockRejectedValue("unexpected transport failure");
 
-      const result = await confirmPaymentAndCompleteCart("cart-1");
+      const result = await completeCheckoutOrder("cart-1");
 
-      expect(result.success).toBe(true);
-      if (result.success) {
-        expect(result.order).toBe(mockOrder);
-      }
-    });
-
-    it("places order directly without external payment session calls", async () => {
-      mockGetCart.mockResolvedValue({
-        ...mockOrder,
-        current_step: "payment",
-      });
-      mockPlaceOrderFromCart.mockResolvedValue({
-        order: mockDbOrder,
-        items: [],
-      });
-
-      const result = await confirmPaymentAndCompleteCart("cart-1");
-
-      expect(mockPlaceOrderFromCart).toHaveBeenCalled();
-      expect(result.success).toBe(true);
-    });
-  });
-
-  describe("direct payment and retired session compatibility", () => {
-    it("createDirectPayment returns success without network call", async () => {
-      const result = await createDirectPayment("cart-1", "direct");
       expect(result).toEqual({
-        success: true,
-        payment: { id: "direct_payment" },
+        success: false,
+        error: "Failed to complete order",
       });
-    });
-
-    it("createCheckoutPaymentSession returns safe direct session without external call", async () => {
-      const result = await createCheckoutPaymentSession("cart-1", "pm-1");
-      expect(result.success).toBe(true);
-      if (result.success) {
-        expect(result.session?.id).toBe("direct_payment_session");
-      }
     });
   });
 });

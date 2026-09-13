@@ -16,7 +16,6 @@ import {
 import { AddressSection } from "@/components/checkout/AddressSection";
 import { DeliveryMethodSection } from "@/components/checkout/DeliveryMethodSection";
 import {
-  type PaymentCompleteResult,
   PaymentSection,
   type PaymentSectionHandle,
 } from "@/components/checkout/PaymentSection";
@@ -27,13 +26,11 @@ import { useCart } from "@/contexts/CartContext";
 import { useCheckout } from "@/contexts/CheckoutContext";
 import {
   trackAddPaymentInfo,
-  trackAddShippingInfo,
   trackBeginCheckout,
 } from "@/lib/analytics/gtm";
 import { getAddresses, updateAddress } from "@/lib/data/addresses";
 import {
   getCheckoutOrder,
-  selectDeliveryRate,
   updateOrderAddresses,
 } from "@/lib/data/checkout";
 import { isAuthenticated as checkAuth } from "@/lib/data/cookies";
@@ -82,7 +79,7 @@ function CheckoutPageContentInner({
   const tc = useTranslations("common");
   const { user, loading: authLoading } = useAuth();
 
-  // Pick up payment errors from the confirm-payment redirect
+  // Pick up payment errors from query param
   const paymentError = searchParams.get("payment_error");
 
   // Initialize state from server-fetched data — no loading skeleton needed
@@ -105,9 +102,6 @@ function CheckoutPageContentInner({
   );
   const [policyConsent, setPolicyConsent] = useState(false);
   const [policyError, setPolicyError] = useState(false);
-  const [isSessionPayment, setIsSessionPayment] = useState(false);
-
-  const fulfillments = cart?.fulfillments ?? [];
 
   const cartRef = useRef(cart);
   cartRef.current = cart;
@@ -297,52 +291,6 @@ function CheckoutPageContentInner({
     [],
   );
 
-  // Handle delivery rate selection
-  const handleDeliveryRateSelect = useCallback(
-    async (fulfillmentId: string, rateId: string) => {
-      const currentOrder = cartRef.current;
-      if (!currentOrder) return;
-
-      setProcessing(true);
-      setError(null);
-
-      let trackingOrder: Cart | null = null;
-      let trackingRateName: string | undefined;
-
-      try {
-        const result = await selectDeliveryRate(
-          currentOrder.id,
-          fulfillmentId,
-          rateId,
-        );
-        if (!result.success) {
-          setError(result.error || tRef.current("failedToSelectRate"));
-        } else if (result.cart) {
-          setCart(result.cart);
-
-          const selectedRate = result.cart.fulfillments
-            ?.flatMap((s) => s.delivery_rates || [])
-            ?.find((r) => r.id === rateId);
-          trackingOrder = result.cart;
-          trackingRateName = selectedRate?.name;
-        }
-      } catch {
-        setError(tRef.current("generalError"));
-      } finally {
-        setProcessing(false);
-      }
-
-      if (trackingOrder) {
-        try {
-          trackAddShippingInfo(trackingOrder, trackingRateName);
-        } catch {
-          // Analytics should never break checkout flow
-        }
-      }
-    },
-    [],
-  );
-
   // Handle billing address update (called by PaymentSection before gateway confirmation)
   const handleUpdateBillingAddress = useCallback(
     async (data: {
@@ -377,8 +325,7 @@ function CheckoutPageContentInner({
   );
 
   // Handle payment completion (called by PaymentSection after payment is confirmed)
-  const handlePaymentComplete = useCallback(
-    async (_result: PaymentCompleteResult) => {
+  const handlePaymentComplete = useCallback(async () => {
       const currentOrder = cartRef.current;
       if (!currentOrder) return;
 
@@ -613,12 +560,7 @@ function CheckoutPageContentInner({
 
         {/* Shipping method */}
         <div id="checkout-section-shipping" className="mt-6">
-          <DeliveryMethodSection
-            fulfillments={fulfillments}
-            onDeliveryRateSelect={handleDeliveryRateSelect}
-            processing={processing}
-            errors={sectionErrors.shipping}
-          />
+          <DeliveryMethodSection errors={sectionErrors.shipping} />
         </div>
 
         {/* Payment */}
@@ -633,7 +575,6 @@ function CheckoutPageContentInner({
             onPaymentComplete={handlePaymentComplete}
             processing={processing}
             setProcessing={setProcessing}
-            onSessionMethodChange={setIsSessionPayment}
             errors={sectionErrors.payment}
           />
         </div>
@@ -652,7 +593,7 @@ function CheckoutPageContentInner({
           </div>
         )}
 
-        {/* Pay now button */}
+        {/* Place order button */}
         <button
           type="button"
           onClick={validateAndPay}
@@ -664,8 +605,6 @@ function CheckoutPageContentInner({
               <Loader2 className="h-4 w-4 animate-spin" />
               {tc("processing")}
             </>
-          ) : isSessionPayment ? (
-            t("payNow")
           ) : (
             t("placeOrder")
           )}

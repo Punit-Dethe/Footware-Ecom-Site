@@ -56,7 +56,6 @@ vi.mock("next/cache", () => ({
 
 import {
   getCheckoutOrder,
-  selectDeliveryRate,
   updateCartMarket,
   updateOrderAddresses,
 } from "@/lib/data/checkout";
@@ -223,16 +222,6 @@ describe("checkout server actions (first-party architecture)", () => {
         auth: expect.any(Object),
       });
       expect(result).toEqual({ success: true, cart: updatedOrder });
-    });
-  });
-
-  describe("selectDeliveryRate (retired live mutation path)", () => {
-    it("returns current cart without calling external shipping engine", async () => {
-      mockGetCart.mockResolvedValue(mockOrder);
-
-      const result = await selectDeliveryRate("order-1", "ship-1", "rate-1");
-
-      expect(result).toEqual({ success: true, cart: mockOrder });
     });
   });
 });

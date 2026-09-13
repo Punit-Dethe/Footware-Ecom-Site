@@ -233,15 +233,3 @@ export async function updateCartMarket(
     return { cart };
   }, "Failed to update order market");
 }
-
-export async function selectDeliveryRate(
-  cartId: string,
-  _fulfillmentId: string,
-  _deliveryRateId: string,
-) {
-  return actionResult(async () => {
-    const surface = await resolveSurfaceForCart(cartId);
-    const cart = await getCart(cartId, surface);
-    return { cart };
-  }, "Failed to select delivery rate");
-}
