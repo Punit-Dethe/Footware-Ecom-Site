@@ -998,9 +998,9 @@ B5  orders + order history                         COMPLETE
 B6A authoritative catalog + cached read model      COMPLETE
 B6B first-party catalog admin                      COMPLETE
 B7  first-party media management/publishing        COMPLETE
-B8  remove Spree SDK / fake Spree BFF compatibility NEXT / IN PROGRESS
-B9  remove Render/Rails legacy                     NOT STARTED
-B10 cleanup / dead compatibility / naming/config   NOT STARTED
+B8  remove Spree SDK / fake Spree BFF compatibility COMPLETE
+B9  remove Render/Rails legacy                     IN PROGRESS (IMPLEMENTED, PENDING REVIEW)
+B10 cleanup / dead compatibility / naming/config   NEXT
 ```
 
 ---
@@ -1109,6 +1109,46 @@ Do not assume older `ARCHITECTURE.md`, old specification docs, or old performanc
 ---
 
 ## 16. Rolling change log
+
+### 2026-09-13 — B9 implementation complete: Render / Rails / Spree backend infrastructure removed
+
+Recorded:
+
+- Starting main: `438832f2dae3904de3bc4aa44fd43cacae95e0e0`;
+- Branch: `backend/b9-render-rails-cleanup`;
+- B9 implementation SHA: `a56bd6d5984c208e6fcf62c12b10dc153e9f34d6`;
+- Scope: complete removal of operational Render, Ruby on Rails, and Spree-backend operational infrastructure;
+- Removed operational infrastructure:
+  * `storefront/next.config.ts`: removed `spreeImagePatterns()`, `SPREE_IMAGES_URL`, `SPREE_API_URL`, `/rails/active_storage/**`, `transpilePackages: ["@spree/sdk"]`, and `dangerouslyAllowLocalIP: true`;
+  * `storefront/src/components/layout/DocumentShell.tsx`: removed `spreeApiOrigin` derivation and Spree `<link rel="preconnect">` / `<link rel="dns-prefetch">` elements;
+  * `storefront/Dockerfile`: removed `SPREE_API_URL` and `SPREE_PUBLISHABLE_KEY` build arguments and legacy comments, leaving generic standalone Next.js container;
+  * `.github/workflows/lighthouse-ci.yml`: removed `SPREE_API_URL` and `SPREE_PUBLISHABLE_KEY` environment overrides from the storefront build step;
+  * `storefront/.env.example` & `.env.local.example`: removed legacy `SPREE_API_URL` and `SPREE_PUBLISHABLE_KEY` lines, added first-party PostgreSQL `DATABASE_URL` and Supabase variables;
+  * `storefront/e2e-backend/`: deleted entire directory (`docker-compose.yml`, `.env`);
+  * `storefront/scripts/e2e/`: deleted `bootstrap-spree.sh` and `dev-with-env.sh`;
+  * `storefront/package.json`: removed `e2e:up` and `e2e:down` scripts, uninstalled `@spree/cli` devDependency;
+  * `storefront/e2e/checkout.spec.ts`: deleted retired Spree/Stripe container integration test;
+  * `storefront/playwright.config.ts`: redirected `webServer.command` to `pnpm run dev`;
+  * `storefront/e2e/storefront-smoke.spec.ts`: created lightweight first-party storefront smoke E2E test;
+  * `storefront/.github/workflows/ci.yml`: deleted inactive nested Spree CI workflow;
+  * `storefront/README.md`: updated local development setup instructions for first-party PostgreSQL and Supabase;
+  * `infra/README.md` & `docs/ARCHITECTURE.md`: updated operational architecture documentation and topology diagram to describe first-party Next.js App Router, Supabase Auth, Supabase Storage, and PostgreSQL architecture;
+- Guard tests:
+  * Added `storefront/src/lib/__tests__/b9-architecture-audit.test.ts` (14 assertions across 7 suites) enforcing zero operational references to `SPREE_API_URL`, `SPREE_PUBLISHABLE_KEY`, `SPREE_IMAGES_URL`, `/rails/active_storage`, `@spree/sdk` in next.config, preconnects, and e2e-backend / bootstrap-spree;
+- Verification:
+  * TypeScript `tsc --noEmit`: 0 errors;
+  * Biome lint: 0 errors, 0 warnings (330 files checked);
+  * Vitest: 61 test suites / 627 tests passing (100%);
+  * Next.js production build: 110 static pages successfully compiled;
+- Security & Performance Invariants:
+  * Strict database TLS (`rejectUnauthorized: true`) fully preserved across all application code;
+  * Zero browser-visible database secrets or service-role keys;
+  * Supabase Storage `product-media` remote pattern strictly preserved;
+  * Warm catalog snapshot: 0 DB queries; cold catalog snapshot: bounded 4 queries; PLP 12 + remainder; P1 PDP prewarm preserved; S8 cart behavior preserved;
+- B10 Deferred Boundary:
+  * `SPREE_WHOLESALE_CHANNEL`, `_spree_*` cookies, `spree_country`, `spree_locale`, and `src/lib/spree/` namespace intentionally deferred to B10;
+- Status: READY FOR PLANNER / AUDITOR REVIEW (do NOT merge to main, do NOT deploy production until reviewed);
+- Next phase: B10 — cleanup / dead compatibility / naming / stale config.
 
 ### 2026-09-13 — B8.1 complete: fake unsupported checkout successes removed
 

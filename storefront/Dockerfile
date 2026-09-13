@@ -2,11 +2,8 @@
 
 # Multi-stage build for Next.js 16 (standalone output) on Node.js 22 (Alpine).
 #
-# Build (Spree env required: pages are prerendered against the Spree API at build time):
-#   docker build \
-#     --build-arg SPREE_API_URL=https://your-spree.example.com \
-#     --build-arg SPREE_PUBLISHABLE_KEY=your_publishable_key \
-#     -t storefront .
+# Build:
+#   docker build -t storefront .
 #
 # Run:
 #   docker run -p 3001:3001 --env-file .env.local storefront
@@ -15,8 +12,6 @@
 # SENTRY_AUTH_TOKEN is read via a BuildKit secret so it never lands in image
 # layers, history, or shared builder caches.
 #   SENTRY_AUTH_TOKEN=... docker build \
-#     --build-arg SPREE_API_URL=... \
-#     --build-arg SPREE_PUBLISHABLE_KEY=... \
 #     --build-arg SENTRY_DSN=... \
 #     --build-arg SENTRY_ORG=... \
 #     --build-arg SENTRY_PROJECT=... \
@@ -49,13 +44,6 @@ WORKDIR /app
 
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
-
-# Spree API config — required at build time because the app prerenders pages
-# that fetch from Spree (categories, products, etc.).
-ARG SPREE_API_URL
-ARG SPREE_PUBLISHABLE_KEY
-ENV SPREE_API_URL=$SPREE_API_URL \
-    SPREE_PUBLISHABLE_KEY=$SPREE_PUBLISHABLE_KEY
 
 # Optional Sentry release/source-map upload. When SENTRY_DSN is empty,
 # next.config.ts skips withSentryConfig entirely, so the build still works.
