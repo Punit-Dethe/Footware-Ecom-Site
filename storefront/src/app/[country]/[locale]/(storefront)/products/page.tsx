@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
+import { CatalogHero } from "@/components/products/CatalogHero";
 import { ProductListing } from "@/components/products/ProductListing";
 import { ProductListingSkeleton } from "@/components/products/ProductListingSkeleton";
 import { resolveCurrency } from "@/lib/data/markets";
@@ -67,30 +67,16 @@ async function ProductsPageContent({
     <div className="catalog-page">
       {query ? (
         <div className="catalog-search-heading">
-          <h1>
-            {t("searchResultsFor", { query })}
-          </h1>
+          <h1>{t("searchResultsFor", { query })}</h1>
         </div>
       ) : (
-        <section className="catalog-hero" aria-labelledby="catalog-title">
-          <div className="catalog-hero__copy">
-            <p className="catalog-eyebrow">{t("catalogEyebrow")}</p>
-            <h1 id="catalog-title">{t("allProducts")}</h1>
-            <p className="catalog-hero__intro">{t("catalogIntro")}</p>
-            <p className="catalog-hero__note">{t("catalogNote")}</p>
-          </div>
-          <div className="catalog-hero__visual">
-            <Image
-              src="/editorial/campaign-hero.webp"
-              alt=""
-              fill
-              priority
-              sizes="(max-width: 760px) 100vw, 50vw"
-              className="object-cover"
-            />
-            <span>{t("catalogSignature")}</span>
-          </div>
-        </section>
+        <CatalogHero
+          title={t("allProducts")}
+          eyebrow={t("catalogEyebrow")}
+          intro={t("catalogIntro")}
+          note={t("catalogNote")}
+          signature={t("catalogSignature")}
+        />
       )}
 
       <ProductListing

@@ -45,18 +45,17 @@ body:has(.home-page) .editorial-header:not(.editorial-header--solid) { backgroun
 .home-hero__title { max-width: 590px; font-size: clamp(70px, 6.8vw, 112px); text-wrap: balance; }
 .home-hero .home-button { margin-top: 42px; }
 
-.home-highlights { padding: 46px clamp(22px, 4.4vw, 72px) 44px; border-bottom: 1px solid var(--home-line); }
-.home-highlights .product-carousel { max-width: 1500px; margin: 20px auto 0; }
-.product-carousel__viewport { display: flex; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; cursor: grab; user-select: none; }
+.home-highlights { padding: 46px 0 44px; border-bottom: 1px solid var(--home-line); }
+.home-highlights .home-section-heading { max-width: none; padding-inline: clamp(22px, 4.4vw, 72px); }
+.home-highlights .product-carousel { width: 100%; margin: 20px 0 0; }
+.product-carousel__viewport { display: flex; gap: 1%; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; cursor: grab; user-select: none; }
 .product-carousel__viewport::-webkit-scrollbar { display: none; }
 .product-carousel__viewport img { -webkit-user-drag: none; }
 .product-carousel__viewport.is-dragging { cursor: grabbing; user-select: none; }
 .product-carousel__viewport.is-dragging a { pointer-events: none; }
 .product-carousel__viewport:focus-visible { outline: 1px solid var(--home-ink, #211b17); outline-offset: 4px; }
-.product-carousel__item { position: relative; flex: 0 0 22.222%; min-width: 0; }
-.product-carousel__item::after { position: absolute; top: 0; right: 0; bottom: 12px; width: 1px; background: var(--home-line); content: ""; pointer-events: none; }
+.product-carousel__item { flex: 0 0 21.333%; min-width: 0; }
 .home-highlights .product-card { padding: 0; }
-.home-highlights .product-carousel__item .product-card { padding: 0 14px; }
 .home-highlights .product-card__image { aspect-ratio: 1.26; background: #fff !important; }
 .home-highlights .product-card__image img { object-fit: cover; }
 .home-highlights .product-card__content { padding: 16px 2px 0; }
@@ -168,7 +167,6 @@ body:has(.home-page) .editorial-header:not(.editorial-header--solid) { backgroun
   .home-section-label { font-size: 9px; letter-spacing: .2em; }
   .home-text-link { font-size: 9px; letter-spacing: .08em; }
   .product-carousel__item { flex-basis: min(70vw, 300px); }
-  .home-highlights .product-carousel__item .product-card { padding: 0 10px; }
   .home-craft__copy { min-height: 0; padding: 45px 26px; }
   .home-craft__title { font-size: 54px; }
   .home-craft__visual { min-height: 355px; }

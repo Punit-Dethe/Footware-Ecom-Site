@@ -1,16 +1,20 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { getTranslations } from "next-intl/server";
+import { Suspense } from "react";
+import { CatalogHero } from "@/components/products/CatalogHero";
 import { ProductListing } from "@/components/products/ProductListing";
+import { ProductListingSkeleton } from "@/components/products/ProductListingSkeleton";
 import { JsonLd } from "@/components/seo/JsonLd";
+import { listCatalogCategories } from "@/lib/catalog/catalog-repository";
 import { CATEGORY_PAGE_EXPAND, getCachedCategory } from "@/lib/data/cached";
 import { getCategoryProducts } from "@/lib/data/categories";
 import { resolveCurrency } from "@/lib/data/markets";
 import { getProductFilters } from "@/lib/data/products";
 import { generateCategoryMetadata } from "@/lib/metadata/category";
 import { buildBreadcrumbJsonLd } from "@/lib/seo";
-import { getStoreUrl } from "@/lib/store";
+import { getDefaultCountry, getDefaultLocale, getStoreUrl } from "@/lib/store";
 import { parseListingSearchParams } from "@/lib/utils/listing-search-params";
-import { CategoryBanner } from "./CategoryBanner";
 
 interface CategoryPageProps {
   params: Promise<{
@@ -20,9 +24,6 @@ interface CategoryPageProps {
   }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
-
-import { listCatalogCategories } from "@/lib/catalog/catalog-repository";
-import { getDefaultCountry, getDefaultLocale } from "@/lib/store";
 
 export async function generateStaticParams() {
   const country = getDefaultCountry();
@@ -43,17 +44,11 @@ export async function generateMetadata({
   return generateCategoryMetadata({ country, locale, permalink });
 }
 
-import { Suspense } from "react";
-
 function CategoryPageSkeleton() {
   return (
-    <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-pulse">
-      <div className="h-48 w-full bg-stone-100 rounded-2xl mb-8" />
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6">
-        {[...Array(8)].map((_, i) => (
-          <div key={i} className="aspect-square bg-stone-100 rounded-xl" />
-        ))}
-      </div>
+    <div className="catalog-page catalog-page--loading" aria-busy="true">
+      <div className="catalog-hero" aria-hidden="true" />
+      <ProductListingSkeleton />
     </div>
   );
 }
@@ -79,10 +74,12 @@ async function CategoryPageContent({
 
   let category;
   let currency;
+  let t;
   try {
-    [category, currency] = await Promise.all([
+    [category, currency, t] = await Promise.all([
       getCachedCategory(fullPermalink, CATEGORY_PAGE_EXPAND),
       resolveCurrency(country),
+      getTranslations({ locale: locale as Locale, namespace: "products" }),
     ]);
   } catch (error) {
     console.error("Failed to fetch category:", error);
@@ -103,27 +100,38 @@ async function CategoryPageContent({
   const fetchCategoryProducts = getCategoryProducts.bind(null, category.id);
 
   return (
-    <div>
+    <div className="catalog-page">
       {storeUrl && (
         <JsonLd data={buildBreadcrumbJsonLd(category, basePath, storeUrl)} />
       )}
 
-      <CategoryBanner category={category} basePath={basePath} locale={locale} />
+      <CatalogHero
+        title={category.name}
+        eyebrow={t("catalogEyebrow")}
+        intro={t("categoryIntro", { category: category.name })}
+        note={t("catalogNote")}
+        signature={t("catalogSignature")}
+      />
 
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8 pt-4">
-        <ProductListing
-          state={listingState}
-          basePath={basePath}
-          currency={currency}
-          locale={locale as Locale}
-          listId={`category-${category.id}`}
-          listName={`Category: ${category.name}`}
-          categoryId={category.id}
-          baseParams={{ in_category: category.id }}
-          fetchProducts={fetchCategoryProducts}
-          fetchFilters={getProductFilters}
-        />
-      </div>
+      <ProductListing
+        state={listingState}
+        basePath={basePath}
+        currency={currency}
+        locale={locale as Locale}
+        listId={`category-${category.id}`}
+        listName={`Category: ${category.name}`}
+        categoryId={category.id}
+        baseParams={{ in_category: category.id }}
+        fetchProducts={fetchCategoryProducts}
+        fetchFilters={getProductFilters}
+        editorialBreak
+        editorialHref={`${basePath}/#craft`}
+        editorialCopy={{
+          label: t("editorialLabel"),
+          title: t("editorialTitle"),
+          action: t("editorialAction"),
+        }}
+      />
     </div>
   );
 }
