@@ -3,7 +3,7 @@ import {
   CategorySection,
   ClosingStatement,
   CraftSection,
-  HeritageSection,
+  EditorialProductRow,
 } from "@/components/home/EditorialSections";
 import { FeaturedProductsSection } from "@/components/home/FeaturedProductsSection";
 import { HeroSection } from "@/components/home/HeroSection";
@@ -40,7 +40,11 @@ export default async function HomePage({ params }: HomePageProps) {
         currency={currency}
       />
       <CraftSection basePath={basePath} locale={locale} />
-      <HeritageSection basePath={basePath} locale={locale} />
+      <EditorialProductRow
+        basePath={basePath}
+        locale={locale}
+        currency={currency}
+      />
       <CategorySection basePath={basePath} locale={locale} />
       <WholesaleSection basePath={basePath} locale={locale} />
       <ClosingStatement locale={locale} />

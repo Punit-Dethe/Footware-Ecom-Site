@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
+import { ProductCarousel } from "@/components/products/ProductCarousel";
 import { getPublicCatalogSnapshot } from "@/lib/catalog/catalog-repository";
 
 interface HomeSectionProps {
@@ -58,50 +59,39 @@ export async function CraftSection({ basePath, locale }: HomeSectionProps) {
   );
 }
 
-export async function HeritageSection({ basePath, locale }: HomeSectionProps) {
-  const t = await getTranslations({
-    locale: locale as Locale,
-    namespace: "home",
-  });
+export async function EditorialProductRow({
+  basePath,
+  locale,
+  currency,
+}: HomeSectionProps & { currency?: string }) {
+  const [tHome, tProducts, snapshot] = await Promise.all([
+    getTranslations({ locale: locale as Locale, namespace: "home" }),
+    getTranslations({ locale: locale as Locale, namespace: "products" }),
+    getPublicCatalogSnapshot().catch(() => null),
+  ]);
+
+  if (!snapshot?.products.length) return null;
 
   return (
-    <section
-      id="heritage"
-      className="home-heritage"
-      aria-labelledby="home-heritage-title"
-    >
-      <div className="home-heritage__image home-heritage__image--craft">
+    <section className="home-edit-row" aria-label={tProducts("allProducts")}>
+      <div className="home-edit-row__image">
         <Image
           src="/editorial/craft-hands.webp"
-          alt={t("heritageCraftAlt")}
+          alt={tHome("heritageCraftAlt")}
           fill
-          sizes="(max-width: 900px) 100vw, 38vw"
+          sizes="(max-width: 900px) 100vw, 32vw"
           className="object-cover"
         />
       </div>
-      <div className="home-heritage__copy">
-        <p className="home-eyebrow">{t("heritageLabel")}</p>
-        <h2
-          id="home-heritage-title"
-          className="home-display home-heritage__title"
-        >
-          {t("heritageTitle")}
-        </h2>
-        <p>{t("heritageDescription")}</p>
-        <Link
-          className="home-button home-button--outline"
-          href={`${basePath}/products`}
-        >
-          {t("viewCatalog")} <span aria-hidden="true">→</span>
-        </Link>
-      </div>
-      <div className="home-heritage__image home-heritage__image--place">
-        <Image
-          src="/editorial/heritage-architecture.webp"
-          alt={t("heritagePlaceAlt")}
-          fill
-          sizes="(max-width: 900px) 100vw, 30vw"
-          className="object-cover"
+      <div className="home-edit-row__products">
+        <ProductCarousel
+          products={snapshot.products}
+          basePath={basePath}
+          currency={currency}
+          ariaLabel={tProducts("allProducts")}
+          listId="editorial-all-products"
+          listName="All Products"
+          priorityFirst={false}
         />
       </div>
     </section>

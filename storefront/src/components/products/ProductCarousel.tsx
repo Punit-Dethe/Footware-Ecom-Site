@@ -15,6 +15,10 @@ interface ProductCarouselProps {
   products: Product[];
   basePath: string;
   currency?: string;
+  ariaLabel?: string;
+  listId?: string;
+  listName?: string;
+  priorityFirst?: boolean;
 }
 
 interface DragState {
@@ -28,6 +32,10 @@ export function ProductCarousel({
   products,
   basePath,
   currency,
+  ariaLabel,
+  listId = "featured-products",
+  listName = "Featured Products",
+  priorityFirst = true,
 }: ProductCarouselProps) {
   const t = useTranslations("products");
   const tHome = useTranslations("home");
@@ -117,7 +125,7 @@ export function ProductCarousel({
       <section
         ref={viewportRef}
         className={`product-carousel__viewport${isDragging ? " is-dragging" : ""}`}
-        aria-label={tHome("featuredProducts")}
+        aria-label={ariaLabel ?? tHome("featuredProducts")}
         // biome-ignore lint/a11y/noNoninteractiveTabindex: Focus lets keyboard users scroll the overflow region with arrow keys.
         tabIndex={0}
         onPointerDown={(event) => {
@@ -165,10 +173,14 @@ export function ProductCarousel({
                 product={product}
                 basePath={basePath}
                 index={index}
-                listId="featured-products"
-                listName="Featured Products"
+                listId={listId}
+                listName={listName}
                 currency={currency}
-                fetchPriority={copy === 1 && index === 0 ? "high" : undefined}
+                fetchPriority={
+                  priorityFirst && copy === 1 && index === 0
+                    ? "high"
+                    : undefined
+                }
               />
             </div>
           )),

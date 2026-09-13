@@ -329,7 +329,7 @@ export function ProductDetails({
           <div className="pdp-campaign__content">
             <p className="pdp-kicker">{th("heritageLabel")}</p>
             <h2 id="pdp-campaign-title">{th("heritageTitle")}</h2>
-            <Link href={`${basePath}/#heritage`}>
+            <Link href={`${basePath}/#craft`}>
               {t("discoverStory")} <span aria-hidden="true">→</span>
             </Link>
           </div>
