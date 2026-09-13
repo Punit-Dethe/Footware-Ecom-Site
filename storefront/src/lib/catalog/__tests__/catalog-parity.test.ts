@@ -64,10 +64,7 @@ vi.mock("next/cache", () => ({
 }));
 
 import { cacheTag } from "next/cache";
-import {
-  EXPECTED_CATEGORIES,
-  EXPECTED_PRODUCTS,
-} from "./catalog-parity-fixture";
+import { EXPECTED_CATEGORIES } from "./catalog-parity-fixture";
 import {
   adaptRawCatalogToPublicSnapshot,
   getCategoryByPermalinkOrId,
@@ -99,6 +96,18 @@ import {
   cachedListCategoryProducts,
 } from "@/lib/data/categories";
 
+const shoeManifest = JSON.parse(
+  fs.readFileSync(
+    path.resolve(process.cwd(), "../scripts/catalog/shoes-2026-09.json"),
+    "utf8",
+  ),
+) as Array<{ name: string; category: string; price: number }>;
+const firstShoe = {
+  name: shoeManifest[0].name,
+  slug: "shoe-2026-09-001",
+  variantSku: "MIRZA-SH-001-6",
+};
+
 describe("B6A Catalog Parity & Read Model Tests", () => {
   it("read model contains exact 2 categories matching baseline fixture", async () => {
     const categories = await listCatalogCategories();
@@ -114,98 +123,47 @@ describe("B6A Catalog Parity & Read Model Tests", () => {
     }
   });
 
-  it("read model contains exact 38 active products matching baseline fixture", async () => {
+  it("read model contains all 31 new shoes with their own media and sizes", async () => {
     const products = await listCatalogProducts();
-    expect(products).toHaveLength(EXPECTED_PRODUCTS.length);
+    expect(products).toHaveLength(shoeManifest.length);
 
-    for (const expectedProd of EXPECTED_PRODUCTS) {
-      const found = products.find((p) => p.slug === expectedProd.slug);
+    for (const [index, expectedProd] of shoeManifest.entries()) {
+      const number = String(index + 1).padStart(3, "0");
+      const slug = `shoe-2026-09-${number}`;
+      const sku = `MIRZA-SH-${number}`;
+      const image = `/catalog-shoes/shoe-${String(index + 1).padStart(2, "0")}.webp`;
+      const found = products.find((product) => product.slug === slug);
       expect(found).toBeDefined();
-
-      // Names, SKUs, Descriptions
       expect(found?.name).toBe(expectedProd.name);
-      expect(found?.sku).toBe(expectedProd.sku);
-      expect(found?.description).toBe(expectedProd.description);
-      expect(found?.description_html).toBe(expectedProd.description_html);
-
-      // SEO
-      expect(found?.meta_title).toBe(expectedProd.meta_title);
-      expect(found?.meta_description).toBe(expectedProd.meta_description);
-      expect(found?.meta_keywords).toBe(expectedProd.meta_keywords);
-
-      // Price & Compare-at price
-      expect(found?.price.amount_in_cents).toBe(
-        expectedProd.price.amount_in_cents,
-      );
-      expect(found?.price.display_amount).toBe(
-        expectedProd.price.display_amount,
-      );
-      expect(found?.price.compare_at_amount_in_cents).toBe(
-        expectedProd.price.compare_at_amount_in_cents,
-      );
-
-      // Availability
+      expect(found?.sku).toBe(sku);
+      expect(found?.description).toContain(expectedProd.name);
+      expect(found?.price.amount_in_cents).toBe(expectedProd.price * 100);
       expect(found?.purchasable).toBe(true);
       expect(found?.in_stock).toBe(true);
-
-      // Categories
-      expect(found?.categories).toHaveLength(expectedProd.categories.length);
-      const expectedCatSlug = expectedProd.categories[0].permalink.replace(
-        /^categories\//,
-        "",
-      );
-      expect(found?.categories[0].slug).toBe(expectedCatSlug);
-
-      // Default variant semantics
+      expect(found?.categories).toHaveLength(1);
+      expect(found?.categories[0].slug).toBe(expectedProd.category);
       expect(found?.default_variant).toBeDefined();
       expect(found?.default_variant?.is_master).toBe(true);
-      expect(found?.default_variant?.sku).toBe(`${expectedProd.sku}-8`);
-
-      // Variants (exact 4 size variants: 7, 8, 9, 10)
-      expect(found?.variants).toHaveLength(4);
-      const sizes = found?.variants.map((v) => v.options_text);
-      expect(sizes).toEqual([
-        "Size: UK/India 7",
-        "Size: UK/India 8",
-        "Size: UK/India 9",
-        "Size: UK/India 10",
-      ]);
-
-      for (let i = 0; i < 4; i++) {
-        const expectedVar = expectedProd.variants[i];
-        const actualVar = found?.variants[i];
-        expect(actualVar?.sku).toBe(expectedVar.sku);
-        expect(actualVar?.price.amount_in_cents).toBe(
-          expectedVar.price.amount_in_cents,
-        );
-        expect(actualVar?.price.compare_at_amount_in_cents).toBe(
-          expectedVar.price.compare_at_amount_in_cents,
-        );
-        expect(actualVar?.in_stock).toBe(true);
-        expect(actualVar?.purchasable).toBe(true);
-      }
-
-      // Media association preserved (B7.1: resolves to clean Supabase Storage URL, zero legacy /products/ paths)
-      expect(found?.thumbnail_url).toContain("/storage/v1/object/public/product-media/");
-      expect(found?.thumbnail_url).not.toMatch(/^\/products\//);
-      expect(found?.primary_media.url).toContain("/storage/v1/object/public/product-media/");
-      expect(found?.primary_media.url).not.toMatch(/^\/products\//);
-      expect(found?.product_media?.lqip).toBe(expectedProd.product_media?.lqip);
-      expect(found?.product_media?.dominantColor).toBe(
-        expectedProd.product_media?.dominantColor,
+      expect(found?.default_variant?.sku).toBe(`${sku}-9`);
+      expect(found?.variants.map((variant) => variant.options_text)).toEqual(
+        [6, 7, 8, 9, 10, 11, 12].map((size) => `Size: UK/India ${size}`),
       );
+      expect(found?.variants.every((variant) => variant.purchasable)).toBe(true);
+      expect(found?.thumbnail_url).toBe(image);
+      expect(found?.primary_media.url).toBe(image);
+      expect(fs.existsSync(path.resolve(process.cwd(), `public${image}`))).toBe(true);
     }
   });
 
   it("resolves product by slug, SKU, and variant SKU", async () => {
-    const bySlug = await getProductBySlugOrId("office-footwear-01");
+    const bySlug = await getProductBySlugOrId("shoe-2026-09-001");
     expect(bySlug).toBeDefined();
-    expect(bySlug?.sku).toBe("MIRZA-OFF-001");
+    expect(bySlug?.sku).toBe("MIRZA-SH-001");
 
-    const bySku = await getProductBySlugOrId("MIRZA-OFF-001");
+    const bySku = await getProductBySlugOrId("MIRZA-SH-001");
     expect(bySku?.id).toBe(bySlug?.id);
 
-    const byVariantSku = await getProductBySlugOrId("MIRZA-OFF-001-9");
+    const byVariantSku = await getProductBySlugOrId("MIRZA-SH-001-9");
     expect(byVariantSku?.id).toBe(bySlug?.id);
   });
 
@@ -224,21 +182,21 @@ describe("B6A Catalog Parity & Read Model Tests", () => {
     // Pagination (12 items)
     const page1 = await queryProducts({ page: 1, limit: 12 });
     expect(page1.data).toHaveLength(12);
-    expect(page1.meta.total_count).toBe(38);
-    expect(page1.meta.pages).toBe(4);
+    expect(page1.meta.total_count).toBe(31);
+    expect(page1.meta.pages).toBe(3);
 
     // Category filter
     const officeProds = await queryProducts({
       in_category: "office-wear",
       limit: 50,
     });
-    expect(officeProds.data).toHaveLength(19);
+    expect(officeProds.data).toHaveLength(21);
 
     const tradProds = await queryProducts({
       in_category: "traditional",
       limit: 50,
     });
-    expect(tradProds.data).toHaveLength(19);
+    expect(tradProds.data).toHaveLength(10);
 
     // Search
     const searchRes = await queryProducts({ q: "Oxford" });
@@ -250,7 +208,7 @@ describe("B6A Catalog Parity & Read Model Tests", () => {
     ).toBe(true);
 
     // Price sort ascending
-    const sortedAsc = await queryProducts({ sort: "price_asc", limit: 38 });
+    const sortedAsc = await queryProducts({ sort: "price_asc", limit: 31 });
     for (let i = 0; i < sortedAsc.data.length - 1; i++) {
       expect(sortedAsc.data[i].price.amount_in_cents).toBeLessThanOrEqual(
         sortedAsc.data[i + 1].price.amount_in_cents,
@@ -258,7 +216,7 @@ describe("B6A Catalog Parity & Read Model Tests", () => {
     }
 
     // Price sort descending
-    const sortedDesc = await queryProducts({ sort: "price_desc", limit: 38 });
+    const sortedDesc = await queryProducts({ sort: "price_desc", limit: 31 });
     for (let i = 0; i < sortedDesc.data.length - 1; i++) {
       expect(sortedDesc.data[i].price.amount_in_cents).toBeGreaterThanOrEqual(
         sortedDesc.data[i + 1].price.amount_in_cents,
@@ -269,13 +227,13 @@ describe("B6A Catalog Parity & Read Model Tests", () => {
 
 describe("PostgreSQL Variant Lookup & PDP Add-To-Cart Integration", () => {
   it("performs real UUID and SKU variant lookup, and returns null for unknown values", async () => {
-    const firstExpectedVariant = EXPECTED_PRODUCTS[0].variants[0];
+    const firstExpectedVariant = { sku: firstShoe.variantSku };
 
     // 1. Real variant SKU lookup -> PASS
     const bySku = await getVariantByIdOrSku(firstExpectedVariant.sku);
     expect(bySku).not.toBeNull();
     expect(bySku?.sku).toBe(firstExpectedVariant.sku);
-    expect(bySku?.product_name).toBe(EXPECTED_PRODUCTS[0].name);
+    expect(bySku?.product_name).toBe(firstShoe.name);
     const realUuid = bySku!.id;
 
     // 2. Real variant UUID lookup -> PASS
@@ -283,7 +241,7 @@ describe("PostgreSQL Variant Lookup & PDP Add-To-Cart Integration", () => {
     expect(byUuid).not.toBeNull();
     expect(byUuid?.id).toBe(realUuid);
     expect(byUuid?.sku).toBe(firstExpectedVariant.sku);
-    expect(byUuid?.product_slug).toBe(EXPECTED_PRODUCTS[0].slug);
+    expect(byUuid?.product_slug).toBe(firstShoe.slug);
 
     // 3. Unknown UUID -> null
     const unknownUuidRes = await getVariantByIdOrSku(
@@ -297,7 +255,7 @@ describe("PostgreSQL Variant Lookup & PDP Add-To-Cart Integration", () => {
   });
 
   it("PDP UUID add-to-cart persists exact variant UUID and matching variant SKU into PostgreSQL", async () => {
-    const firstExpectedVariant = EXPECTED_PRODUCTS[0].variants[0];
+    const firstExpectedVariant = { sku: firstShoe.variantSku };
     const variant = await getVariantByIdOrSku(firstExpectedVariant.sku);
     expect(variant).not.toBeNull();
     const realUuid = variant!.id;
@@ -328,7 +286,7 @@ describe("PostgreSQL Variant Lookup & PDP Add-To-Cart Integration", () => {
 
 describe("Guest -> Existing-User Cart Merge (Case C Live DB Sanity)", () => {
   it("merges guest cart into existing user cart with variant_id NOT NULL and abandons guest cart", async () => {
-    const firstExpectedVariant = EXPECTED_PRODUCTS[0].variants[0];
+    const firstExpectedVariant = { sku: firstShoe.variantSku };
     const variant = await getVariantByIdOrSku(firstExpectedVariant.sku);
     expect(variant).not.toBeNull();
     const realUuid = variant!.id;
@@ -544,9 +502,9 @@ describe("Category Relationships & Product Integrity Rules", () => {
     );
   });
 
-  it("confirms 38/38 seeded products have expected category relationships and exactly 152 total variants", async () => {
+  it("confirms all new products have a category and exactly 217 total variants", async () => {
     const snapshot = await getPublicCatalogSnapshot();
-    expect(snapshot.products).toHaveLength(38);
+    expect(snapshot.products).toHaveLength(31);
     expect(snapshot.categories).toHaveLength(2);
 
     let totalVariants = 0;
@@ -557,7 +515,7 @@ describe("Category Relationships & Product Integrity Rules", () => {
       expect(product.default_variant?.is_master).toBe(true);
       totalVariants += product.variants.length;
     }
-    expect(totalVariants).toBe(152);
+    expect(totalVariants).toBe(217);
   });
 });
 
@@ -572,7 +530,7 @@ describe("Outer Cache Invalidation Tag Propagation", () => {
   });
 
   it("attaches 'catalog-public' tag to cachedGetProduct", async () => {
-    await cachedGetProduct("office-footwear-01", [], {}, "dtc");
+    await cachedGetProduct("shoe-2026-09-001", [], {}, "dtc");
     expect(cacheTag).toHaveBeenCalledWith(
       "catalog-public",
       expect.anything(),
@@ -612,9 +570,9 @@ describe("searchCatalogVariants in-memory search", () => {
   });
 
   it("searches variants by product name matching public snapshot", async () => {
-    const res = await searchCatalogVariants("Wholecut Oxford", 5);
+    const res = await searchCatalogVariants("Ivory Toe-Loop", 5);
     expect(res.length).toBeGreaterThan(0);
-    expect(res[0].productName).toContain("Wholecut Oxford");
+    expect(res[0].productName).toContain("Ivory Toe-Loop");
     expect(res[0].variantId).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
     );
@@ -624,10 +582,10 @@ describe("searchCatalogVariants in-memory search", () => {
   });
 
   it("searches variants by exact or partial variant SKU", async () => {
-    const res = await searchCatalogVariants("MIRZA-OFF-001-8", 5);
+    const res = await searchCatalogVariants("MIRZA-SH-001-8", 5);
     expect(res.length).toBe(1);
-    expect(res[0].sku).toBe("MIRZA-OFF-001-8");
-    expect(res[0].productName).toBe("The Sovereign Wholecut Oxford");
+    expect(res[0].sku).toBe("MIRZA-SH-001-8");
+    expect(res[0].productName).toBe(firstShoe.name);
   });
 
   it("searches variants by options text (size)", async () => {

@@ -135,9 +135,11 @@ export async function CategorySection({ basePath, locale }: HomeSectionProps) {
       </div>
       <div className="home-categories__grid">
         {categories.map((category) => {
-          const imageUrl = category.permalink.includes("traditional")
-            ? "/editorial/category-traditional.webp"
-            : "/editorial/temporary-product-03.webp";
+          const imageUrl = snapshot?.products.find((product) =>
+            product.categories.some((entry) => entry.id === category.id),
+          )?.thumbnail_url;
+
+          if (!imageUrl) return null;
 
           return (
             <Link

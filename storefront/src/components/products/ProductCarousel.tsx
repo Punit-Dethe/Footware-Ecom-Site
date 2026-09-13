@@ -17,17 +17,6 @@ interface ProductCarouselProps {
 const NAV_BUTTON_BASE =
   "absolute top-1/2 -translate-y-1/2 z-10 w-10 h-10 flex items-center justify-center cursor-pointer rounded-lg bg-white/95 backdrop-blur-xs border border-gray-300 text-gray-700 hover:bg-white hover:text-gray-900 shadow-sm transition-all duration-200 disabled:opacity-0 disabled:pointer-events-none focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary";
 
-const TEMPORARY_HOMEPAGE_IMAGES = [
-  "/editorial/temporary-product-01.webp",
-  "/editorial/temporary-product-02.webp",
-  "/editorial/temporary-product-03.webp",
-  "/editorial/temporary-product-04.webp",
-  "/editorial/temporary-product-05.webp",
-  "/editorial/temporary-product-06.webp",
-  "/editorial/temporary-product-07.webp",
-  "/editorial/temporary-product-08.webp",
-];
-
 export function ProductCarousel({
   products,
   basePath,
@@ -120,11 +109,6 @@ export function ProductCarousel({
           >
             <ProductCard
               product={product}
-              imageOverrideUrl={
-                TEMPORARY_HOMEPAGE_IMAGES[
-                  index % TEMPORARY_HOMEPAGE_IMAGES.length
-                ]
-              }
               basePath={basePath}
               index={index}
               listId="featured-products"

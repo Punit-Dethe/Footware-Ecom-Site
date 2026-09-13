@@ -48,7 +48,6 @@ function prewarmPdpHero(heroSrc: string) {
 interface ProductCardProps {
   product: Product;
   media?: ProductMedia;
-  imageOverrideUrl?: string;
   basePath?: string;
   categoryId?: string;
   index?: number;
@@ -63,7 +62,6 @@ interface ProductCardProps {
 export const ProductCard = memo(function ProductCard({
   product,
   media: mediaProp,
-  imageOverrideUrl,
   basePath = "",
   categoryId,
   index,
@@ -135,7 +133,7 @@ export const ProductCard = memo(function ProductCard({
       {/* Image */}
       <div className="product-card__image relative aspect-square overflow-hidden bg-white">
         <ProductImage
-          src={imageOverrideUrl ?? imageUrl}
+          src={imageUrl}
           alt={product.name}
           fill
           className="object-cover group-hover:scale-105 transition-transform duration-300"
