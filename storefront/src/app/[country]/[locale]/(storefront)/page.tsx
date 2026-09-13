@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import {
-  CategorySection,
   ClosingStatement,
   CraftSection,
+  CultureMosaicSection,
   EditorialProductRow,
+  MoreProductsSection,
 } from "@/components/home/EditorialSections";
 import { FeaturedProductsSection } from "@/components/home/FeaturedProductsSection";
 import { HeroSection } from "@/components/home/HeroSection";
@@ -45,7 +46,12 @@ export default async function HomePage({ params }: HomePageProps) {
         locale={locale}
         currency={currency}
       />
-      <CategorySection basePath={basePath} locale={locale} />
+      <CultureMosaicSection locale={locale} />
+      <MoreProductsSection
+        basePath={basePath}
+        locale={locale}
+        currency={currency}
+      />
       <WholesaleSection basePath={basePath} locale={locale} />
       <ClosingStatement locale={locale} />
     </div>
