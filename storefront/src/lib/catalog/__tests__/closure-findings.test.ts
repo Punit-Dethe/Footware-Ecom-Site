@@ -359,6 +359,22 @@ describe("B6B.1 Closure Findings: Filters, Compare-At, and Media", () => {
             meta_keywords: null,
             created_at: new Date(),
             updated_at: new Date(),
+            images: [
+              {
+                id: "img-seeded",
+                storage_path: "products/prod-seeded/card-lg-640.webp",
+                alt_text: "Office Footwear 01",
+                position: 1,
+                is_hero: true,
+                width: 640,
+                height: 640,
+                dominant_color: "#1a1a1a",
+                lqip: "data:image/webp;base64,mock",
+                processed_variants: {
+                  "640": { webp: "/products/office-footwear-01/card-lg-640.webp" },
+                },
+              },
+            ],
           },
         ],
         variants: [

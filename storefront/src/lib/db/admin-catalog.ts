@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import type { PoolClient } from "pg";
 import { query, transaction } from "./index";
 import { formatSafeDescription } from "@/lib/catalog/description";
+import { listProductMedia, type DbProductImageRow } from "./media";
 
 export interface AdminProductSummary {
   id: string;
@@ -51,6 +52,7 @@ export interface AdminProductDetail {
   updatedAt: Date;
   categories: Array<{ id: string; name: string; slug: string }>;
   variants: AdminVariantRecord[];
+  images: DbProductImageRow[];
 }
 
 export interface AdminCategoryRecord {
@@ -317,7 +319,7 @@ export async function getAdminProduct(
   }
   const p = prodRes.rows[0];
 
-  const [catRes, varRes] = await Promise.all([
+  const [catRes, varRes, images] = await Promise.all([
     query<{ id: string; name: string; slug: string }>(
       `SELECT c.id, c.name, c.slug
        FROM public.categories c
@@ -350,6 +352,7 @@ export async function getAdminProduct(
        ORDER BY position ASC, created_at ASC;`,
       [id],
     ),
+    listProductMedia(id),
   ]);
 
   return {
@@ -382,6 +385,7 @@ export async function getAdminProduct(
       createdAt: v.created_at,
       updatedAt: v.updated_at,
     })),
+    images,
   };
 }
 
@@ -1173,7 +1177,7 @@ async function getAdminProductWithClient(
   if (prodRes.rows.length === 0) return null;
   const p = prodRes.rows[0];
 
-  const [catRes, varRes] = await Promise.all([
+  const [catRes, varRes, images] = await Promise.all([
     client.query<{ id: string; name: string; slug: string }>(
       `SELECT c.id, c.name, c.slug
        FROM public.categories c
@@ -1206,6 +1210,7 @@ async function getAdminProductWithClient(
        ORDER BY position ASC, created_at ASC;`,
       [id],
     ),
+    listProductMedia(id, client),
   ]);
 
   return {
@@ -1238,5 +1243,6 @@ async function getAdminProductWithClient(
       createdAt: v.created_at,
       updatedAt: v.updated_at,
     })),
+    images,
   };
 }

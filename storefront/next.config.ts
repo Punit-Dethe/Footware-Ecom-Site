@@ -42,6 +42,32 @@ function spreeImagePatterns(): RemotePattern[] {
   ];
 }
 
+/**
+ * Tightly-scoped remote pattern for Supabase product-media storage images.
+ * Scoped strictly to clean Supabase hostname and /storage/v1/object/public/product-media/**.
+ */
+function supabaseImagePatterns(): RemotePattern[] {
+  const raw = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  let hostname = "hkncfdsvgjopkujmmxem.supabase.co";
+  let protocol: "http" | "https" = "https";
+  if (raw) {
+    try {
+      const url = new URL(raw);
+      hostname = url.hostname;
+      protocol = url.protocol.replace(":", "") as "http" | "https";
+    } catch {
+      // Malformed URL — keep default clean host
+    }
+  }
+  return [
+    {
+      protocol,
+      hostname,
+      pathname: "/storage/v1/object/public/product-media/**",
+    },
+  ];
+}
+
 const nextConfig: NextConfig = {
   output: "standalone",
   allowedDevOrigins: ["shop.lvh.me", "*.trycloudflare.com", "192.168.33.13"],
@@ -76,6 +102,8 @@ const nextConfig: NextConfig = {
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
     remotePatterns: [
+      // Clean Supabase Storage product-media bucket
+      ...supabaseImagePatterns(),
       // Derived from SPREE_IMAGES_URL (if set) or SPREE_API_URL.
       ...spreeImagePatterns(),
       { protocol: "https", hostname: "images.unsplash.com" },

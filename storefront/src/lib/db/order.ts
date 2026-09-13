@@ -1,21 +1,12 @@
 import "server-only";
 
 import crypto from "node:crypto";
-import manifestData from "@/lib/media/manifest.json";
 import type { CartSurface } from "./cart";
 import { query, transaction } from "./index";
-
-const typedManifest = manifestData as Record<
-  string,
-  {
-    slug: string;
-    hash: string;
-    dominantColor: string;
-    lqip: string;
-    mainUrl: string;
-    variants: Record<string, { avif: string; webp: string }>;
-  }
->;
+import {
+  getStoragePublicUrl,
+  resolveResponsiveVariants,
+} from "@/lib/media/delivery";
 
 export type OrderStatus = "placed" | "cancelled";
 
@@ -206,7 +197,21 @@ export async function placeOrderFromCart(params: {
          p.id AS product_id,
          p.name AS product_name,
          p.slug AS product_slug,
-         p.status AS product_status
+         p.status AS product_status,
+         (
+           SELECT pi.storage_path
+           FROM public.product_images pi
+           WHERE pi.product_id = p.id
+           ORDER BY pi.is_hero DESC, pi.position ASC
+           LIMIT 1
+         ) AS hero_storage_path,
+         (
+           SELECT pi.processed_variants
+           FROM public.product_images pi
+           WHERE pi.product_id = p.id
+           ORDER BY pi.is_hero DESC, pi.position ASC
+           LIMIT 1
+         ) AS hero_variants
        FROM public.cart_items ci
        JOIN public.variants v ON v.id = ci.variant_id
        JOIN public.products p ON p.id = v.product_id
@@ -263,12 +268,12 @@ export async function placeOrderFromCart(params: {
       const lineTotalInCents = priceInCents * quantity;
       subtotalInCents += lineTotalInCents;
 
-      const slug = row.product_slug as string;
-      const manifest = typedManifest[slug];
+      const heroVariants = resolveResponsiveVariants(
+        row.hero_variants as Parameters<typeof resolveResponsiveVariants>[0],
+      );
       const thumbUrl =
-        manifest?.variants?.["320"]?.webp ||
-        manifest?.mainUrl ||
-        `/products/${slug}/card-lg-640.webp`;
+        heroVariants?.["320"]?.webp ||
+        getStoragePublicUrl(row.hero_storage_path as string | null);
 
       snapshottedItems.push({
         variant_id: row.db_variant_id as string,

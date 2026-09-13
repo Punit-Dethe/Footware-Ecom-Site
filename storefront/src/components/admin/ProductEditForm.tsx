@@ -12,6 +12,7 @@ import type {
   AdminProductDetail,
   SaveProductVariantInput,
 } from "@/lib/db/admin-catalog";
+import { ProductMediaManager } from "./ProductMediaManager";
 
 interface ProductEditFormProps {
   initialProduct: AdminProductDetail;
@@ -368,6 +369,12 @@ export function ProductEditForm({
           ))}
         </div>
       </div>
+
+      {/* Product Media Manager */}
+      <ProductMediaManager
+        productId={initialProduct.id}
+        initialMedia={initialProduct.images || []}
+      />
 
       {/* Variants Editor */}
       <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 space-y-4">

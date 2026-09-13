@@ -5,7 +5,10 @@ import {
   type DbCatalogVariantRow,
   type PublicCatalogRawData,
 } from "@/lib/db/catalog";
-import manifestData from "@/lib/media/manifest.json";
+import {
+  getStoragePublicUrl,
+  resolveResponsiveVariants,
+} from "@/lib/media/delivery";
 import type { ProductMedia } from "@/lib/media/types";
 import {
   COUNTRIES,
@@ -137,18 +140,6 @@ export interface PublicCatalogSnapshot {
   categories: CatalogCategory[];
 }
 
-const typedManifest = manifestData as Record<
-  string,
-  {
-    slug: string;
-    hash: string;
-    dominantColor: string;
-    lqip: string;
-    mainUrl: string;
-    variants: Record<string, { avif: string; webp: string }>;
-  }
->;
-
 /**
  * Pure adapter converting raw database catalog rows into compatibility DTO shapes.
  */
@@ -196,20 +187,17 @@ export function adaptRawCatalogToPublicSnapshot(
       .map((id) => categoryMap.get(id))
       .filter((c): c is CatalogCategory => c != null);
 
-    const manifest = typedManifest[p.slug];
-    const placeholderUrl = "/placeholder.svg";
-    const primaryUrl =
-      manifest?.variants?.["640"]?.webp ||
-      manifest?.mainUrl ||
-      placeholderUrl;
-    const originalUrl =
-      manifest?.variants?.["1600"]?.webp ||
-      manifest?.mainUrl ||
-      placeholderUrl;
-    const thumbUrl =
-      manifest?.variants?.["320"]?.webp ||
-      manifest?.mainUrl ||
-      placeholderUrl;
+    const dbImages = p.images || [];
+    const heroImage = dbImages.find((img) => img.is_hero) || dbImages[0];
+    const heroVariants = heroImage?.processed_variants
+      ? resolveResponsiveVariants(heroImage.processed_variants)
+      : undefined;
+    const heroMainUrl = heroImage
+      ? getStoragePublicUrl(heroImage.storage_path)
+      : "/placeholder.svg";
+    const primaryUrl = heroVariants?.["640"]?.webp || heroMainUrl;
+    const originalUrl = heroVariants?.["1600"]?.webp || heroMainUrl;
+    const thumbUrl = heroVariants?.["320"]?.webp || heroMainUrl;
 
     const variants: CatalogVariant[] = dbVariants.map((v, sIdx) => {
       const cents = v.price_in_cents;
@@ -283,19 +271,41 @@ export function adaptRawCatalogToPublicSnapshot(
 
     const defaultVariant = defaultVariants[0];
 
-    const primaryMedia: CatalogMedia = {
-      id: `med_${p.slug.replace(/-/g, "_")}_1`,
-      url: primaryUrl,
-      alt: p.name,
-      position: 1,
-      media_type: "image",
-      original_url: originalUrl,
-      large_url: primaryUrl,
-      xlarge_url: originalUrl,
-      small_url: thumbUrl,
-      mini_url: thumbUrl,
-      variant_ids: variants.map((v) => v.id),
-    };
+    const catalogMediaList: CatalogMedia[] = dbImages.map((img, idx) => {
+      const imgVariants = img.processed_variants
+        ? resolveResponsiveVariants(img.processed_variants)
+        : undefined;
+      const main = getStoragePublicUrl(img.storage_path);
+      return {
+        id: img.id,
+        url: imgVariants?.["640"]?.webp || main,
+        alt: img.alt_text || p.name,
+        position: img.position ?? idx + 1,
+        media_type: "image",
+        original_url: imgVariants?.["1600"]?.webp || main,
+        large_url: imgVariants?.["640"]?.webp || main,
+        xlarge_url: imgVariants?.["1600"]?.webp || main,
+        small_url: imgVariants?.["320"]?.webp || main,
+        mini_url: imgVariants?.["320"]?.webp || main,
+        variant_ids: variants.map((v) => v.id),
+      };
+    });
+
+    const primaryMedia: CatalogMedia =
+      catalogMediaList.find((m) => m.id === heroImage?.id) ||
+      catalogMediaList[0] || {
+        id: `med_${p.slug.replace(/-/g, "_")}_default`,
+        url: primaryUrl,
+        alt: p.name,
+        position: 1,
+        media_type: "image",
+        original_url: originalUrl,
+        large_url: primaryUrl,
+        xlarge_url: originalUrl,
+        small_url: thumbUrl,
+        mini_url: thumbUrl,
+        variant_ids: variants.map((v) => v.id),
+      };
 
     const hasStock =
       p.status === "active" && variants.some((v) => v.in_stock && v.purchasable);
@@ -319,12 +329,12 @@ export function adaptRawCatalogToPublicSnapshot(
         p.meta_keywords || `${p.name}, handcrafted footwear, luxury leather`,
       thumbnail_url: thumbUrl,
       primary_media: primaryMedia,
-      media: [primaryMedia],
+      media: catalogMediaList.length > 0 ? catalogMediaList : [primaryMedia],
       product_media: {
         mainUrl: primaryUrl,
-        lqip: manifest?.lqip,
-        dominantColor: manifest?.dominantColor || "#f5f5f5",
-        variants: manifest?.variants,
+        lqip: heroImage?.lqip || undefined,
+        dominantColor: heroImage?.dominant_color || "#f5f5f5",
+        variants: heroVariants,
       },
       price: {
         amount: defaultPrice.amount,
