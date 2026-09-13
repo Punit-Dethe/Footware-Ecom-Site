@@ -31,7 +31,7 @@ vi.mock("@/lib/db/cart", () => ({
   updateAuthorizedCartCurrency: mockUpdateAuthorizedCartCurrency,
 }));
 
-vi.mock("@/lib/spree", () => ({
+vi.mock("@/lib/storefront", () => ({
   cacheTagSuffix: () => "",
   DEFAULT_SURFACE: "dtc",
   isWholesaleEnabled: vi.fn().mockReturnValue(false),
@@ -39,15 +39,6 @@ vi.mock("@/lib/spree", () => ({
   getCartId: vi.fn((surface = "dtc") =>
     Promise.resolve(surface === "wholesale" ? undefined : "order-1"),
   ),
-  getAccessToken: vi.fn().mockResolvedValue(undefined),
-  setCartCookies: vi.fn(),
-  clearCartCookies: vi.fn(),
-  isPoisonedDtcCartId: vi.fn().mockResolvedValue(false),
-  getCartOptions: vi.fn().mockResolvedValue({
-    spreeToken: "order-token-123",
-    token: undefined,
-  }),
-  requireCartId: vi.fn().mockResolvedValue("order-1"),
 }));
 
 vi.mock("next/cache", () => ({

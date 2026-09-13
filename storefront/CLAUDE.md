@@ -1,15 +1,16 @@
-# Claude Code Rules for Next.js Spree Storefront
+# Claude Code Rules for Mirza Footwear Storefront
 
 ## Project Overview
 
-This is a headless e-commerce storefront built with Next.js 16 and React 19, using the Spree Commerce API v3 via `@spree/sdk`.
+This is a headless e-commerce storefront built with Next.js 16 and React 19, backed by a first-party PostgreSQL data access layer, Supabase Auth, and cached catalog read models.
 
 ## Tech Stack
 
 - **Framework:** Next.js 16 (App Router)
 - **React:** 19 (with new features like `use()`, Actions, improved Suspense)
 - **Styling:** Tailwind CSS
-- **API Client:** `@spree/sdk`
+- **Database & DAL:** PostgreSQL (`pg` pool) with strict verification
+- **Authentication:** Supabase Auth (server-side verification with `@supabase/ssr`)
 - **Language:** TypeScript
 
 ## Project Structure
@@ -143,15 +144,8 @@ Only add `"use client"` when you need:
 // src/lib/data/cart.ts
 "use server";
 
-export async function addToCart(variantId: string, quantity: number) {
-  const cart = await getOrCreateCart();
-  const client = await getSpreeClient();
-
-  return client.orders.lineItems.create(
-    cart.id,
-    { variant_id: variantId, quantity },
-    { orderToken: cart.token }
-  );
+export async function addItem(variantId: string, quantity: number) {
+  return addToCart(variantId, quantity);
 }
 
 // Component usage
@@ -359,7 +353,7 @@ export async function generateMetadata({ params }: MetadataProps): Promise<Metad
 }
 ```
 
-## Spree SDK Usage
+## First-Party Data Access & Auth
 
 ### Server-Side Data Fetching
 
@@ -367,14 +361,12 @@ export async function generateMetadata({ params }: MetadataProps): Promise<Metad
 // src/lib/data/products.ts
 "use server";
 
-import { getSpreeClient } from "@/lib/spree";
+import { listProducts } from "@/lib/data/products";
 
-export async function getProducts(params?: ProductListParams) {
-  const client = await getSpreeClient();
-
-  return client.products.list({
-    per_page: 12,
-    includes: "images,default_variant",
+export async function getProducts(params?: Record<string, unknown>) {
+  return listProducts({
+    page: 1,
+    limit: 12,
     ...params,
   });
 }
@@ -382,56 +374,31 @@ export async function getProducts(params?: ProductListParams) {
 
 ### Authentication Pattern
 
+Authentication is managed strictly through Supabase Auth:
+
 ```typescript
-// src/lib/data/auth.ts
+// src/lib/data/customer.ts
 "use server";
 
-import { cookies } from "next/headers";
-import { getSpreeClient } from "@/lib/spree";
-
-const SEVEN_DAYS = 60 * 60 * 24 * 7;
+import { createClient } from "@/lib/supabase/server";
 
 export async function login(email: string, password: string) {
-  const client = await getSpreeClient();
-  const { token, user } = await client.auth.login({ email, password });
-
-  const cookieStore = await cookies();
-  cookieStore.set("spree_token", token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: SEVEN_DAYS,
+  const supabase = await createClient();
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
   });
-
-  return user;
-}
-
-export async function getAuthToken() {
-  const cookieStore = await cookies();
-  return cookieStore.get("spree_token")?.value;
+  if (error) throw error;
+  return data.user;
 }
 ```
 
-### Cart Token Management
+### Cart Cookie Management
+
+Cart tokens and identifiers are managed through the neutral `@/lib/storefront` cookie bridge:
 
 ```typescript
-// Guest carts use order tokens stored in cookies
-const THIRTY_DAYS = 60 * 60 * 24 * 30;
-
-export async function getCartToken() {
-  const cookieStore = await cookies();
-  return cookieStore.get("spree_cart_token")?.value;
-}
-
-export async function setCartToken(token: string) {
-  const cookieStore = await cookies();
-  cookieStore.set("spree_cart_token", token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: THIRTY_DAYS,
-  });
-}
+import { getCartId, getCartToken, setCartCookies } from "@/lib/storefront";
 ```
 
 ## State Management
@@ -485,19 +452,20 @@ function ProductFilters() {
 
 ## TypeScript
 
-### Use SDK Types
+### Use Commerce Types
 
 ```typescript
 import type {
-  StoreProduct,
-  StoreVariant,
-  StoreOrder,
-  StoreLineItem,
-  PaginatedResponse,
-} from "@spree/sdk";
+  Product,
+  Variant,
+  Order,
+  LineItem,
+  Cart,
+  Image as CommerceImage,
+} from "@/types/commerce";
 
 interface ProductCardProps {
-  product: StoreProduct;
+  product: Product;
   basePath: string;
 }
 ```
@@ -515,9 +483,10 @@ The project uses strict TypeScript. Always:
 
 ```typescript
 import Image from "next/image";
+import type { Image as CommerceImage } from "@/types/commerce";
 
 interface ProductImageProps {
-  image: StoreImage;
+  image: CommerceImage;
 }
 
 function ProductImage({ image }: ProductImageProps) {

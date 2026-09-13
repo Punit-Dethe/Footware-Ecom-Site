@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// Hoisted mocks for DB and Spree
+// Hoisted mocks for DB and Storefront
 const mockDb = vi.hoisted(() => ({
   findActiveGuestCart: vi.fn(),
   findActiveUserCart: vi.fn(),
@@ -16,15 +16,7 @@ const mockDb = vi.hoisted(() => ({
   claimOrMergeGuestCart: vi.fn(),
 }));
 
-const mockSpreeClient = vi.hoisted(() => ({
-  carts: {
-    get: vi.fn(),
-  },
-}));
-
-const mockSpree = vi.hoisted(() => ({
-  getClientForSurface: vi.fn(() => mockSpreeClient),
-  getClient: vi.fn(() => mockSpreeClient),
+const mockStorefront = vi.hoisted(() => ({
   getCartId: vi.fn(),
   getCartToken: vi.fn(),
   setCartCookies: vi.fn(),
@@ -42,7 +34,7 @@ const mockSupabase = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/db/cart", () => mockDb);
-vi.mock("@/lib/spree", () => mockSpree);
+vi.mock("@/lib/storefront", () => mockStorefront);
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn().mockResolvedValue(mockSupabase),
 }));
@@ -177,9 +169,9 @@ describe("B3 Persistent Cart — Server Actions & Data Layer", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockCookies._store.clear();
-    mockSpree.getCartId.mockResolvedValue(undefined);
-    mockSpree.getCartToken.mockResolvedValue(undefined);
-    mockSpree.isPoisonedDtcCartId.mockResolvedValue(false);
+    mockStorefront.getCartId.mockResolvedValue(undefined);
+    mockStorefront.getCartToken.mockResolvedValue(undefined);
+    mockStorefront.isPoisonedDtcCartId.mockResolvedValue(false);
     mockSupabase.auth.getClaims.mockResolvedValue({
       data: { claims: null },
       error: null,
@@ -188,8 +180,8 @@ describe("B3 Persistent Cart — Server Actions & Data Layer", () => {
 
   describe("getCart & Security (IDOR / Token Hashing)", () => {
     it("returns null when no cookies and no auth exist (0 DB queries for guest)", async () => {
-      mockSpree.getCartId.mockResolvedValue(undefined);
-      mockSpree.getCartToken.mockResolvedValue(undefined);
+      mockStorefront.getCartId.mockResolvedValue(undefined);
+      mockStorefront.getCartToken.mockResolvedValue(undefined);
 
       const cart = await getCart();
       expect(cart).toBeNull();
@@ -198,8 +190,8 @@ describe("B3 Persistent Cart — Server Actions & Data Layer", () => {
     });
 
     it("short-circuits anonymous callers without auth claims lookup when no sb-* cookie exists", async () => {
-      mockSpree.getCartId.mockResolvedValue("cart-uuid-1");
-      mockSpree.getCartToken.mockResolvedValue(rawBearerToken);
+      mockStorefront.getCartId.mockResolvedValue("cart-uuid-1");
+      mockStorefront.getCartToken.mockResolvedValue(rawBearerToken);
       mockDb.findActiveGuestCart.mockResolvedValue(mockDbCart);
       mockDb.loadCartItems.mockResolvedValue([]);
 
@@ -211,8 +203,8 @@ describe("B3 Persistent Cart — Server Actions & Data Layer", () => {
     });
 
     it("fetches guest cart when raw bearer token matches hashed token in DB", async () => {
-      mockSpree.getCartId.mockResolvedValue("cart-uuid-1");
-      mockSpree.getCartToken.mockResolvedValue(rawBearerToken);
+      mockStorefront.getCartId.mockResolvedValue("cart-uuid-1");
+      mockStorefront.getCartToken.mockResolvedValue(rawBearerToken);
       mockDb.findActiveGuestCart.mockResolvedValue(mockDbCart);
       mockDb.loadCartItems.mockResolvedValue([mockDbLineItem]);
 
@@ -229,18 +221,18 @@ describe("B3 Persistent Cart — Server Actions & Data Layer", () => {
     });
 
     it("IDOR protection: rejects guest cart if raw token does NOT match DB hash", async () => {
-      mockSpree.getCartId.mockResolvedValue("cart-uuid-1");
-      mockSpree.getCartToken.mockResolvedValue("invalid-attacker-raw-token");
+      mockStorefront.getCartId.mockResolvedValue("cart-uuid-1");
+      mockStorefront.getCartToken.mockResolvedValue("invalid-attacker-raw-token");
       mockDb.findActiveGuestCart.mockResolvedValue(null);
 
       const cart = await getCart();
       expect(cart).toBeNull();
-      expect(mockSpree.clearCartCookies).toHaveBeenCalledWith("dtc");
+      expect(mockStorefront.clearCartCookies).toHaveBeenCalledWith("dtc");
     });
 
     it("IDOR protection: rejects cart if guest token cookie is missing entirely", async () => {
-      mockSpree.getCartId.mockResolvedValue("cart-uuid-1");
-      mockSpree.getCartToken.mockResolvedValue(undefined);
+      mockStorefront.getCartId.mockResolvedValue("cart-uuid-1");
+      mockStorefront.getCartToken.mockResolvedValue(undefined);
 
       const cart = await getCart();
       expect(cart).toBeNull();
@@ -248,13 +240,13 @@ describe("B3 Persistent Cart — Server Actions & Data Layer", () => {
     });
 
     it("cross-surface isolation: rejects cart if surface mismatch", async () => {
-      mockSpree.getCartId.mockResolvedValue("cart-uuid-1");
-      mockSpree.getCartToken.mockResolvedValue(rawBearerToken);
+      mockStorefront.getCartId.mockResolvedValue("cart-uuid-1");
+      mockStorefront.getCartToken.mockResolvedValue(rawBearerToken);
       mockDb.findActiveGuestCart.mockResolvedValue(null);
 
       const cart = await getCart(undefined, "dtc");
       expect(cart).toBeNull();
-      expect(mockSpree.clearCartCookies).toHaveBeenCalledWith("dtc");
+      expect(mockStorefront.clearCartCookies).toHaveBeenCalledWith("dtc");
     });
 
     it("fetches active user cart when authenticated", async () => {
@@ -278,7 +270,7 @@ describe("B3 Persistent Cart — Server Actions & Data Layer", () => {
       expect(mockDb.findActiveUserCart).toHaveBeenCalledWith("user-123", "dtc");
     });
 
-    it("foreign explicit cart UUID: returns null and makes 0 Spree client calls", async () => {
+    it("foreign explicit cart UUID: returns null", async () => {
       mockCookies._store.set("sb-mock-auth-token", "token-xyz");
       mockSupabase.auth.getClaims.mockResolvedValue({
         data: { claims: { sub: "user-123" } },
@@ -293,44 +285,36 @@ describe("B3 Persistent Cart — Server Actions & Data Layer", () => {
 
       const cart = await getCart("foreign-cart-999");
       expect(cart).toBeNull();
-      expect(mockSpree.getClientForSurface).not.toHaveBeenCalled();
-      expect(mockSpreeClient.carts.get).not.toHaveBeenCalled();
     });
 
-    it("wrong guest token: returns null and makes 0 Spree client calls", async () => {
-      mockSpree.getCartToken.mockResolvedValue("invalid-attacker-raw-token");
+    it("wrong guest token: returns null", async () => {
+      mockStorefront.getCartToken.mockResolvedValue("invalid-attacker-raw-token");
       mockDb.findActiveGuestCart.mockResolvedValue(null);
 
       const cart = await getCart();
       expect(cart).toBeNull();
-      expect(mockSpree.getClientForSurface).not.toHaveBeenCalled();
-      expect(mockSpreeClient.carts.get).not.toHaveBeenCalled();
     });
 
-    it("cart UUID only without token: returns null and makes 0 Spree client calls", async () => {
-      mockSpree.getCartToken.mockResolvedValue(undefined);
+    it("cart UUID only without token: returns null", async () => {
+      mockStorefront.getCartToken.mockResolvedValue(undefined);
 
       const cart = await getCart("cart-uuid-1");
       expect(cart).toBeNull();
       expect(mockDb.findActiveGuestCart).not.toHaveBeenCalled();
       expect(mockDb.findActiveUserCart).not.toHaveBeenCalled();
-      expect(mockSpree.getClientForSurface).not.toHaveBeenCalled();
-      expect(mockSpreeClient.carts.get).not.toHaveBeenCalled();
     });
 
-    it("database failure throws and fails closed without falling back to Spree SDK", async () => {
-      mockSpree.getCartToken.mockResolvedValue(rawBearerToken);
+    it("database failure throws and fails closed", async () => {
+      mockStorefront.getCartToken.mockResolvedValue(rawBearerToken);
       mockDb.findActiveGuestCart.mockRejectedValue(
         new Error("PostgreSQL connection timeout"),
       );
 
       await expect(getCart()).rejects.toThrow("PostgreSQL connection timeout");
-      expect(mockSpree.getClientForSurface).not.toHaveBeenCalled();
-      expect(mockSpreeClient.carts.get).not.toHaveBeenCalled();
     });
 
     it("fails closed with integrity error when cart item variant_id does not match variant_sku", async () => {
-      mockSpree.getCartToken.mockResolvedValue(rawBearerToken);
+      mockStorefront.getCartToken.mockResolvedValue(rawBearerToken);
       mockDb.findActiveGuestCart.mockResolvedValue(mockDbCart);
       mockDb.loadCartItems.mockResolvedValue([
         {
@@ -345,9 +329,9 @@ describe("B3 Persistent Cart — Server Actions & Data Layer", () => {
       await expect(getCart()).rejects.toThrow(/Cart item integrity error/);
     });
 
-    it("auth verification infrastructure failure throws and fails closed without falling back to Spree or treating user as guest", async () => {
+    it("auth verification infrastructure failure throws and fails closed without treating user as guest", async () => {
       mockCookies._store.set("sb-mock-auth-token", "token-xyz");
-      mockSpree.getCartToken.mockResolvedValue(rawBearerToken);
+      mockStorefront.getCartToken.mockResolvedValue(rawBearerToken);
       mockSupabase.auth.getClaims.mockRejectedValue(
         new Error("fetch failed: connection refused"),
       );
@@ -357,8 +341,6 @@ describe("B3 Persistent Cart — Server Actions & Data Layer", () => {
       );
       expect(mockDb.findActiveGuestCart).not.toHaveBeenCalled();
       expect(mockDb.claimOrMergeGuestCart).not.toHaveBeenCalled();
-      expect(mockSpree.getClientForSurface).not.toHaveBeenCalled();
-      expect(mockSpreeClient.carts.get).not.toHaveBeenCalled();
     });
 
     it("normal expired auth session falls back to anonymous guest without error", async () => {
@@ -371,7 +353,7 @@ describe("B3 Persistent Cart — Server Actions & Data Layer", () => {
           name: "AuthSessionMissingError",
         },
       });
-      mockSpree.getCartToken.mockResolvedValue(rawBearerToken);
+      mockStorefront.getCartToken.mockResolvedValue(rawBearerToken);
       mockDb.findActiveGuestCart.mockResolvedValue(mockDbCart);
       mockDb.loadCartItems.mockResolvedValue([]);
 
@@ -382,7 +364,7 @@ describe("B3 Persistent Cart — Server Actions & Data Layer", () => {
     });
 
     it("fails closed when persisted cart item references an unknown SKU (never prices at $0)", async () => {
-      mockSpree.getCartToken.mockResolvedValue(rawBearerToken);
+      mockStorefront.getCartToken.mockResolvedValue(rawBearerToken);
       mockDb.findActiveGuestCart.mockResolvedValue(mockDbCart);
       mockDb.loadCartItems.mockResolvedValue([
         {
@@ -473,8 +455,8 @@ describe("B3 Persistent Cart — Server Actions & Data Layer", () => {
 
   describe("getOrCreateCart", () => {
     it("returns existing active guest cart if already present", async () => {
-      mockSpree.getCartId.mockResolvedValue("cart-uuid-1");
-      mockSpree.getCartToken.mockResolvedValue(rawBearerToken);
+      mockStorefront.getCartId.mockResolvedValue("cart-uuid-1");
+      mockStorefront.getCartToken.mockResolvedValue(rawBearerToken);
       mockDb.findActiveGuestCart.mockResolvedValue(mockDbCart);
       mockDb.loadCartItems.mockResolvedValue([]);
 
@@ -484,8 +466,8 @@ describe("B3 Persistent Cart — Server Actions & Data Layer", () => {
     });
 
     it("creates a new guest cart with hashed bearer token and sets cookies", async () => {
-      mockSpree.getCartId.mockResolvedValue(undefined);
-      mockSpree.getCartToken.mockResolvedValue(undefined);
+      mockStorefront.getCartId.mockResolvedValue(undefined);
+      mockStorefront.getCartToken.mockResolvedValue(undefined);
 
       const createdCart = {
         id: "new-guest-cart-uuid",
@@ -511,7 +493,7 @@ describe("B3 Persistent Cart — Server Actions & Data Layer", () => {
       const passedHash = mockDb.createGuestCart.mock.calls[0][0];
       expect(passedHash).toMatch(/^[a-f0-9]{64}$/);
 
-      expect(mockSpree.setCartCookies).toHaveBeenCalledWith(
+      expect(mockStorefront.setCartCookies).toHaveBeenCalledWith(
         "new-guest-cart-uuid",
         expect.any(String),
         "dtc",
@@ -542,7 +524,7 @@ describe("B3 Persistent Cart — Server Actions & Data Layer", () => {
       const cart = await getOrCreateCart();
       expect(cart.id).toBe("new-user-cart-uuid");
       expect(mockDb.createUserCart).toHaveBeenCalledWith("user-456", "dtc", "USD");
-      expect(mockSpree.setCartCookies).toHaveBeenCalledWith(
+      expect(mockStorefront.setCartCookies).toHaveBeenCalledWith(
         "new-user-cart-uuid",
         undefined,
         "dtc",
@@ -559,8 +541,8 @@ describe("B3 Persistent Cart — Server Actions & Data Layer", () => {
     });
 
     it("successfully adds valid variant to cart and adapts response", async () => {
-      mockSpree.getCartId.mockResolvedValue("cart-uuid-1");
-      mockSpree.getCartToken.mockResolvedValue(rawBearerToken);
+      mockStorefront.getCartId.mockResolvedValue("cart-uuid-1");
+      mockStorefront.getCartToken.mockResolvedValue(rawBearerToken);
       mockDb.findActiveGuestCart.mockResolvedValue(mockDbCart);
       mockDb.loadCartItems.mockResolvedValue([mockDbLineItem]);
       mockDb.addOrIncrementCartItem.mockResolvedValue({
@@ -582,8 +564,8 @@ describe("B3 Persistent Cart — Server Actions & Data Layer", () => {
     });
 
     it("duplicate add increments quantity atomically in DB", async () => {
-      mockSpree.getCartId.mockResolvedValue("cart-uuid-1");
-      mockSpree.getCartToken.mockResolvedValue(rawBearerToken);
+      mockStorefront.getCartId.mockResolvedValue("cart-uuid-1");
+      mockStorefront.getCartToken.mockResolvedValue(rawBearerToken);
       mockDb.findActiveGuestCart.mockResolvedValue(mockDbCart);
       mockDb.loadCartItems.mockResolvedValue([
         { ...mockDbLineItem, quantity: 3 },
@@ -607,8 +589,8 @@ describe("B3 Persistent Cart — Server Actions & Data Layer", () => {
 
   describe("updateCartItem & removeCartItem", () => {
     it("updates line item quantity", async () => {
-      mockSpree.getCartId.mockResolvedValue("cart-uuid-1");
-      mockSpree.getCartToken.mockResolvedValue(rawBearerToken);
+      mockStorefront.getCartId.mockResolvedValue("cart-uuid-1");
+      mockStorefront.getCartToken.mockResolvedValue(rawBearerToken);
       mockDb.findActiveGuestCart.mockResolvedValue(mockDbCart);
       mockDb.updateCartItemQuantity.mockResolvedValue({
         ...mockDbLineItem,
@@ -629,8 +611,8 @@ describe("B3 Persistent Cart — Server Actions & Data Layer", () => {
     });
 
     it("removes line item from cart", async () => {
-      mockSpree.getCartId.mockResolvedValue("cart-uuid-1");
-      mockSpree.getCartToken.mockResolvedValue(rawBearerToken);
+      mockStorefront.getCartId.mockResolvedValue("cart-uuid-1");
+      mockStorefront.getCartToken.mockResolvedValue(rawBearerToken);
       mockDb.findActiveGuestCart.mockResolvedValue(mockDbCart);
       mockDb.removeCartItem.mockResolvedValue(true);
       mockDb.loadCartItems.mockResolvedValue([]);
@@ -648,15 +630,15 @@ describe("B3 Persistent Cart — Server Actions & Data Layer", () => {
 
   describe("clearCart", () => {
     it("marks cart abandoned in DB and clears cookies", async () => {
-      mockSpree.getCartId.mockResolvedValue("cart-uuid-1");
-      mockSpree.getCartToken.mockResolvedValue(rawBearerToken);
+      mockStorefront.getCartId.mockResolvedValue("cart-uuid-1");
+      mockStorefront.getCartToken.mockResolvedValue(rawBearerToken);
       mockDb.findActiveGuestCart.mockResolvedValue(mockDbCart);
       mockDb.markCartAbandoned.mockResolvedValue(true);
 
       const result = await clearCart();
       expect(result.success).toBe(true);
       expect(mockDb.markCartAbandoned).toHaveBeenCalledWith("cart-uuid-1");
-      expect(mockSpree.clearCartCookies).toHaveBeenCalledWith("dtc");
+      expect(mockStorefront.clearCartCookies).toHaveBeenCalledWith("dtc");
     });
   });
 
@@ -668,8 +650,8 @@ describe("B3 Persistent Cart — Server Actions & Data Layer", () => {
         error: null,
       });
 
-      mockSpree.getCartId.mockResolvedValue("guest-cart-1");
-      mockSpree.getCartToken.mockResolvedValue(rawBearerToken);
+      mockStorefront.getCartId.mockResolvedValue("guest-cart-1");
+      mockStorefront.getCartToken.mockResolvedValue(rawBearerToken);
 
       const claimedCart = {
         ...mockDbCart,
@@ -687,8 +669,8 @@ describe("B3 Persistent Cart — Server Actions & Data Layer", () => {
         hashedBearerToken,
         "dtc",
       );
-      expect(mockSpree.clearCartToken).toHaveBeenCalledWith("dtc");
-      expect(mockSpree.setCartCookies).toHaveBeenCalledWith(
+      expect(mockStorefront.clearCartToken).toHaveBeenCalledWith("dtc");
+      expect(mockStorefront.setCartCookies).toHaveBeenCalledWith(
         "guest-cart-1",
         undefined,
         "dtc",
@@ -702,8 +684,8 @@ describe("B3 Persistent Cart — Server Actions & Data Layer", () => {
         error: null,
       });
 
-      mockSpree.getCartId.mockResolvedValue("guest-cart-1");
-      mockSpree.getCartToken.mockResolvedValue(rawBearerToken);
+      mockStorefront.getCartId.mockResolvedValue("guest-cart-1");
+      mockStorefront.getCartToken.mockResolvedValue(rawBearerToken);
 
       const userCart = {
         ...mockDbCart,
@@ -722,8 +704,8 @@ describe("B3 Persistent Cart — Server Actions & Data Layer", () => {
         hashedBearerToken,
         "dtc",
       );
-      expect(mockSpree.clearCartToken).toHaveBeenCalledWith("dtc");
-      expect(mockSpree.setCartCookies).toHaveBeenCalledWith(
+      expect(mockStorefront.clearCartToken).toHaveBeenCalledWith("dtc");
+      expect(mockStorefront.setCartCookies).toHaveBeenCalledWith(
         "user-cart-existing",
         undefined,
         "dtc",
@@ -737,8 +719,8 @@ describe("B3 Persistent Cart — Server Actions & Data Layer", () => {
         error: null,
       });
 
-      mockSpree.getCartId.mockResolvedValue(undefined);
-      mockSpree.getCartToken.mockResolvedValue(undefined);
+      mockStorefront.getCartId.mockResolvedValue(undefined);
+      mockStorefront.getCartToken.mockResolvedValue(undefined);
 
       const userCart = {
         ...mockDbCart,
@@ -761,7 +743,7 @@ describe("B3 Persistent Cart — Server Actions & Data Layer", () => {
         data: { claims: { sub: "user-123" } },
         error: null,
       });
-      mockSpree.getCartToken.mockResolvedValue(rawBearerToken);
+      mockStorefront.getCartToken.mockResolvedValue(rawBearerToken);
       mockDb.claimOrMergeGuestCart.mockResolvedValue({
         ...mockDbCart,
         id: "merged-cart-id",

@@ -1,8 +1,8 @@
 import { SUPPORTED_LOCALES } from "@/i18n/locales";
-import { createSpreeMiddleware } from "@/lib/spree/middleware";
+import { createStorefrontMiddleware } from "@/lib/storefront/middleware";
 import { getDefaultCountry, getDefaultLocale } from "@/lib/store";
 
-export const proxy = createSpreeMiddleware({
+export const proxy = createStorefrontMiddleware({
   defaultCountry: getDefaultCountry(),
   defaultLocale: getDefaultLocale(),
   supportedLocales: SUPPORTED_LOCALES,

@@ -6,11 +6,11 @@ import {
   cacheTagSuffix,
   getCartToken,
   type Surface,
-} from "@/lib/spree";
+} from "@/lib/storefront";
 import { placeOrderFromCart } from "@/lib/db/order";
 import type { Order } from "@/types/commerce";
 import { verifyAuthSession } from "./cart";
-import { adaptDbOrderToSpree } from "./order-adapter";
+import { adaptDbOrderToCommerceOrder } from "./order-adapter";
 import { resolveSurfaceForCart } from "./checkout";
 
 function checkoutTag(surface: Surface): string {
@@ -57,7 +57,7 @@ export async function completeCheckoutOrder(
       guestTokenHash,
     });
 
-    const adaptedOrder = adaptDbOrderToSpree(order, items);
+    const adaptedOrder = adaptDbOrderToCommerceOrder(order, items);
     updateTag(checkoutTag(surface));
     updateTag(cartTag(surface));
     return { success: true as const, order: adaptedOrder as unknown as Order };

@@ -36,7 +36,7 @@ interface MediaGalleryProps {
   activeIndex?: number | null;
 }
 
-/** Prefer pre-sized Spree media URLs over the full-resolution original,
+/** Prefer pre-sized media URLs over the full-resolution original,
  * so the Next.js image optimizer doesn't have to fetch the source file. */
 function getMainImageUrl(media: Media | undefined): string | null {
   if (!media) return null;

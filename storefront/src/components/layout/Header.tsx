@@ -7,7 +7,7 @@ import type { ReactNode } from "react";
 import { CartButton } from "@/components/layout/CartButton";
 import { SearchToggle } from "@/components/layout/SearchToggle";
 import { Button } from "@/components/ui/button";
-import { isWholesaleEnabled } from "@/lib/spree";
+import { isWholesaleEnabled } from "@/lib/storefront";
 
 const LazyMobileMenu = dynamic(
   () =>

@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { AuthRouteSync } from "@/components/auth/AuthRouteSync";
-import { isWholesaleEnabled } from "@/lib/spree";
+import { isWholesaleEnabled } from "@/lib/storefront";
 
 interface WholesaleLayoutProps {
   children: React.ReactNode;

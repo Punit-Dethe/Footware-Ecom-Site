@@ -25,8 +25,7 @@ vi.mock("@/lib/db/profile", () => ({
   updateProfile: (id: string, data: unknown) => mockUpdateProfile(id, data),
 }));
 
-vi.mock("@/lib/spree", () => ({
-  clearAuthCookies: vi.fn(),
+vi.mock("@/lib/storefront", () => ({
   clearAllCartCookies: vi.fn(),
   cacheTagSuffix: (surface: string) =>
     surface === "wholesale" ? "-wholesale" : "",

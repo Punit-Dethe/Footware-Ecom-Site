@@ -2,10 +2,13 @@ import fs from "node:fs";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mockSpree = vi.hoisted(() => ({
-  getAccessToken: vi.fn(),
-  getWholesaleClient: vi.fn(),
+const mockStorefront = vi.hoisted(() => ({
   isWholesaleEnabled: vi.fn().mockReturnValue(true),
+  getWholesaleChannelCode: vi.fn().mockReturnValue("wholesale"),
+}));
+
+const mockCustomer = vi.hoisted(() => ({
+  getVerifiedUserId: vi.fn(),
 }));
 
 const mockCatalogRepo = vi.hoisted(() => ({
@@ -16,10 +19,13 @@ const mockDbCatalog = vi.hoisted(() => ({
   getVariantByIdOrSku: vi.fn(),
 }));
 
-vi.mock("@/lib/spree", () => ({
-  getAccessToken: mockSpree.getAccessToken,
-  getWholesaleClient: mockSpree.getWholesaleClient,
-  isWholesaleEnabled: mockSpree.isWholesaleEnabled,
+vi.mock("@/lib/storefront", () => ({
+  isWholesaleEnabled: mockStorefront.isWholesaleEnabled,
+  getWholesaleChannelCode: mockStorefront.getWholesaleChannelCode,
+}));
+
+vi.mock("../customer", () => ({
+  getVerifiedUserId: mockCustomer.getVerifiedUserId,
 }));
 
 vi.mock("@/lib/catalog/catalog-repository", () => ({
@@ -50,25 +56,24 @@ describe("Wholesale Quick-Order First-Party Catalog Integration", () => {
     it("returns empty array for short query (< 2 chars) without querying auth or catalog", async () => {
       const res = await searchWholesaleVariants("a");
       expect(res).toEqual([]);
-      expect(mockSpree.getAccessToken).not.toHaveBeenCalled();
+      expect(mockCustomer.getVerifiedUserId).not.toHaveBeenCalled();
       expect(mockCatalogRepo.searchCatalogVariants).not.toHaveBeenCalled();
     });
 
     it("returns empty array when unauthenticated (no token)", async () => {
-      mockSpree.getAccessToken.mockResolvedValue(null);
+      mockCustomer.getVerifiedUserId.mockResolvedValue(null);
       const res = await searchWholesaleVariants("Oxford");
       expect(res).toEqual([]);
-      expect(mockSpree.getAccessToken).toHaveBeenCalled();
+      expect(mockCustomer.getVerifiedUserId).toHaveBeenCalled();
       expect(mockCatalogRepo.searchCatalogVariants).not.toHaveBeenCalled();
     });
 
     it("searches catalog variants by product name / SKU and returns PostgreSQL UUID results", async () => {
-      mockSpree.getAccessToken.mockResolvedValue("mock-jwt-token");
+      mockCustomer.getVerifiedUserId.mockResolvedValue("user-uuid-123");
       mockCatalogRepo.searchCatalogVariants.mockResolvedValue([
         {
           variantId: "7406f1a7-15a4-4af9-8fb5-d136bbf6392c",
           productName: "The Sovereign Wholecut Oxford",
-          productSlug: "office-footwear-01",
           optionsText: "Size: UK/India 8",
           sku: "MIRZA-OFF-001-8",
           displayPrice: "$285.00",
@@ -76,7 +81,7 @@ describe("Wholesale Quick-Order First-Party Catalog Integration", () => {
         },
       ]);
 
-      const res = await searchWholesaleVariants("Oxford", 5);
+      const res = await searchWholesaleVariants("Sovereign", 5);
       expect(res).toEqual([
         {
           variantId: "7406f1a7-15a4-4af9-8fb5-d136bbf6392c",
@@ -87,15 +92,14 @@ describe("Wholesale Quick-Order First-Party Catalog Integration", () => {
           purchasable: true,
         },
       ]);
-
       expect(mockCatalogRepo.searchCatalogVariants).toHaveBeenCalledWith(
-        "Oxford",
+        "Sovereign",
         5,
       );
     });
 
-    it("propagates DB / cache outage without swallowing error into empty array", async () => {
-      mockSpree.getAccessToken.mockResolvedValue("mock-jwt-token");
+    it("propagates search failure without swallowing error into empty array", async () => {
+      mockCustomer.getVerifiedUserId.mockResolvedValue("user-uuid-123");
       mockCatalogRepo.searchCatalogVariants.mockRejectedValue(
         new Error("Database connection pool exhausted"),
       );
@@ -110,19 +114,19 @@ describe("Wholesale Quick-Order First-Party Catalog Integration", () => {
     it("returns { found: false } for empty / whitespace SKU", async () => {
       const res = await findWholesaleVariantBySku("   ");
       expect(res).toEqual({ found: false });
-      expect(mockSpree.getAccessToken).not.toHaveBeenCalled();
+      expect(mockCustomer.getVerifiedUserId).not.toHaveBeenCalled();
       expect(mockDbCatalog.getVariantByIdOrSku).not.toHaveBeenCalled();
     });
 
     it("returns { found: false } when unauthenticated", async () => {
-      mockSpree.getAccessToken.mockResolvedValue(null);
+      mockCustomer.getVerifiedUserId.mockResolvedValue(null);
       const res = await findWholesaleVariantBySku("MIRZA-OFF-001-8");
       expect(res).toEqual({ found: false });
       expect(mockDbCatalog.getVariantByIdOrSku).not.toHaveBeenCalled();
     });
 
     it("returns { found: false } when SKU does not exist in catalog", async () => {
-      mockSpree.getAccessToken.mockResolvedValue("mock-jwt-token");
+      mockCustomer.getVerifiedUserId.mockResolvedValue("user-uuid-123");
       mockDbCatalog.getVariantByIdOrSku.mockResolvedValue(null);
 
       const res = await findWholesaleVariantBySku("NONEXISTENT-SKU");
@@ -133,7 +137,7 @@ describe("Wholesale Quick-Order First-Party Catalog Integration", () => {
     });
 
     it("resolves valid SKU with DB price formatting and case-insensitive matching", async () => {
-      mockSpree.getAccessToken.mockResolvedValue("mock-jwt-token");
+      mockCustomer.getVerifiedUserId.mockResolvedValue("user-uuid-123");
       mockDbCatalog.getVariantByIdOrSku.mockResolvedValue({
         id: "7406f1a7-15a4-4af9-8fb5-d136bbf6392c",
         product_id: "prod-1",
@@ -163,7 +167,7 @@ describe("Wholesale Quick-Order First-Party Catalog Integration", () => {
     });
 
     it("derives purchasable: false when product is not active", async () => {
-      mockSpree.getAccessToken.mockResolvedValue("mock-jwt-token");
+      mockCustomer.getVerifiedUserId.mockResolvedValue("user-uuid-123");
       mockDbCatalog.getVariantByIdOrSku.mockResolvedValue({
         id: "7406f1a7-15a4-4af9-8fb5-d136bbf6392c",
         sku: "MIRZA-OFF-001-8",
@@ -192,7 +196,7 @@ describe("Wholesale Quick-Order First-Party Catalog Integration", () => {
     });
 
     it("derives purchasable: false when variant is not active", async () => {
-      mockSpree.getAccessToken.mockResolvedValue("mock-jwt-token");
+      mockCustomer.getVerifiedUserId.mockResolvedValue("user-uuid-123");
       mockDbCatalog.getVariantByIdOrSku.mockResolvedValue({
         id: "7406f1a7-15a4-4af9-8fb5-d136bbf6392c",
         sku: "MIRZA-OFF-001-8",
@@ -215,7 +219,7 @@ describe("Wholesale Quick-Order First-Party Catalog Integration", () => {
     });
 
     it("derives purchasable: false when out of stock and not backorderable", async () => {
-      mockSpree.getAccessToken.mockResolvedValue("mock-jwt-token");
+      mockCustomer.getVerifiedUserId.mockResolvedValue("user-uuid-123");
       mockDbCatalog.getVariantByIdOrSku.mockResolvedValue({
         id: "7406f1a7-15a4-4af9-8fb5-d136bbf6392c",
         sku: "MIRZA-OFF-001-8",
@@ -238,7 +242,7 @@ describe("Wholesale Quick-Order First-Party Catalog Integration", () => {
     });
 
     it("propagates DB / infrastructure outage without swallowing error into { found: false }", async () => {
-      mockSpree.getAccessToken.mockResolvedValue("mock-jwt-token");
+      mockCustomer.getVerifiedUserId.mockResolvedValue("user-uuid-123");
       mockDbCatalog.getVariantByIdOrSku.mockRejectedValue(
         new Error("PostgreSQL connection timeout"),
       );

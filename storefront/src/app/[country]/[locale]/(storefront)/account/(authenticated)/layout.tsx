@@ -44,7 +44,7 @@ export async function AuthenticatedAccountLayoutContent({
   // it bubbles to the error boundary rather than misreporting as anonymous.
   const customer = await getCustomer();
 
-  // Strictly require verified Supabase identity; legacy Spree cookies cannot authorize
+  // Strictly require verified Supabase identity; legacy cookies cannot authorize
   if (!customer) redirect(loginHref);
 
   return (

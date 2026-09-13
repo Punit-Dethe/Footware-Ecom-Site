@@ -59,7 +59,7 @@ describe("RegionPreferences", () => {
       currency: "USD",
       locale: "en",
       loading: false,
-      storeName: "Spree Store",
+      storeName: "Mirza Footwear",
     });
   });
 

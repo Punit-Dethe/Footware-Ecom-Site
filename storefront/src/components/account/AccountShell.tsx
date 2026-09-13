@@ -2,8 +2,6 @@
 
 import type { LucideIcon } from "lucide-react";
 import {
-  CreditCard,
-  Gift,
   Home,
   LogOut,
   MapPin,
@@ -27,12 +25,6 @@ function getNavItems(t: ReturnType<typeof useTranslations<"account">>): {
     { href: "/account", label: t("overview"), icon: Home },
     { href: "/account/orders", label: t("orders"), icon: ShoppingBag },
     { href: "/account/addresses", label: t("addresses"), icon: MapPin },
-    {
-      href: "/account/credit-cards",
-      label: t("paymentMethods"),
-      icon: CreditCard,
-    },
-    { href: "/account/gift-cards", label: t("giftCards"), icon: Gift },
     { href: "/account/profile", label: t("profile"), icon: User },
   ];
 }

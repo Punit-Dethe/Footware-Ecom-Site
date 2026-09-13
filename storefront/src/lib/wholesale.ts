@@ -11,7 +11,7 @@ export const WHOLESALE_GROUP_NAME = "Wholesale";
 /**
  * Minimum quantity of a single item required to unlock wholesale (trade) pricing.
  * Mirrors the VolumeRule min_quantity on the seeded "Wholesale" price list
- * (spree/core/db/sample_data/wholesale.rb). This is a demo constant — the
+ * (wholesale demo catalog). This is a demo constant — the
  * production version would read the applicable volume rule's min_quantity from
  * the API per variant. Keep in sync with the seed if the seed changes.
  */

@@ -1,5 +1,5 @@
 /**
- * Maps raw Spree payment/shipment state strings to i18n translation keys
+ * Maps payment/shipment state strings to i18n translation keys
  * under the "orders" namespace.
  */
 

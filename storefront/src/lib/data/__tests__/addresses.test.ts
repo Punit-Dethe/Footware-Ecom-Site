@@ -35,7 +35,7 @@ vi.mock("@/lib/db/address", () => ({
     mockDbDeleteAddress(userId, id),
 }));
 
-import { adaptDbAddressToSpree } from "../address-adapter";
+import { adaptDbAddressToCommerceAddress } from "../address-adapter";
 import {
   createAddress,
   deleteAddress,
@@ -72,9 +72,9 @@ describe("Addresses Data Access Layer (B4)", () => {
     ]);
   });
 
-  describe("Compatibility Adapter (adaptDbAddressToSpree)", () => {
-    it("adapts DB row into Spree SDK Address contract with derived fields", () => {
-      const adapted = adaptDbAddressToSpree(sampleDbRow);
+  describe("Commerce Adapter (adaptDbAddressToCommerceAddress)", () => {
+    it("adapts DB row into commerce Address contract with derived fields", () => {
+      const adapted = adaptDbAddressToCommerceAddress(sampleDbRow);
 
       expect(adapted.id).toBe("addr-123");
       expect(adapted.first_name).toBe("Alice");
@@ -101,7 +101,7 @@ describe("Addresses Data Access Layer (B4)", () => {
         state: "London",
         state_abbr: null,
       };
-      const adapted = adaptDbAddressToSpree(ukRow);
+      const adapted = adaptDbAddressToCommerceAddress(ukRow);
       expect(adapted.country_iso).toBe("GB");
       expect(adapted.country_name).toBe("United Kingdom");
       expect(adapted.state_text).toBe("London");

@@ -23,42 +23,36 @@
 Current `origin/main`:
 
 ```text
-4cbf62fbc926bff96f7f405e6353afc5be3d0d39
+cd4d99bc17c59ba20e8c0626c22a0ad64eb1f128
 ```
 
-B1 through B8.1 are **COMPLETE**.
+B1 through B9 are **COMPLETE / MERGED / PRODUCTION VERIFIED**.
 
-B8 / B8.1 is **COMPLETE / MERGED / PRODUCTION VERIFIED**.
+B10.1 is **IMPLEMENTATION COMPLETE / READY FOR INDEPENDENT REVIEW**.
+Branch: `backend/b10-final-migration-cleanup`
+Accepted-for-fix base: `1a4ec01d716abdf46129b109c181fdf6f71a9b77`
+Base main: `cd4d99bc17c59ba20e8c0626c22a0ad64eb1f128`
 
-Accepted B8.1 baseline:
+Accepted B10.1 validation baseline:
 
-* 60 suites / 606 tests accepted at B8.1 closure (100% pass)
-* 18/18 architectural invariants verified by `b8-architecture-audit.test.ts` (SDK/BFF removal + zero fake payment/delivery successes)
-* Zero runtime dependency on `@spree/sdk` (package uninstalled)
-* Zero runtime dependency on `/api/v3/store/[...spree]` fake BFF (deleted)
-* Zero runtime dependency on `@spree/sdk/webhooks` or `/api/webhooks/spree` (deleted)
-* Zero fake payment session methods (`createCheckoutPaymentSession`, `updateCheckoutPaymentSession`, `completeCheckoutPaymentSession`, `createDirectPayment`, `confirmPaymentAndCompleteCart` deleted)
-* Zero fake payment sentinels (`direct_payment_session`, `"direct_payment"` deleted)
-* Zero legacy gateway callback routes (`confirm-payment` deleted)
-* Zero fake delivery rate mutations (`selectDeliveryRate` deleted)
-* Direct first-party DAL & Server Actions (`storefront/src/lib/data/` + `storefront/src/lib/db/` + `storefront/src/lib/catalog/`)
-* Direct first-party domain types (`storefront/src/types/commerce.ts`)
+* 61 suites / 660 tests passing (100% pass)
+* 22/22 architectural invariants verified by `b10-architecture-audit.test.ts`
+* 21/21 architectural invariants verified by `b9-architecture-audit.test.ts`
+* 18/18 architectural invariants verified by `b8-architecture-audit.test.ts`
+* Cart cookie namespace mixing eliminated: atomic resolution via `resolveCartCookieState`
+* Zero namespace crossing: new ID + legacy token = impossible; legacy ID + new token = impossible
+* `setCartCookies` unconditionally expires legacy ID and token cookies
+* Full test coverage for mixed and legacy cart states (cases A through G)
+* Production references to `LEGACY_*` cookie constants outside bridge = 0
+* Renamed `adaptDbCartToSpreeCart` to `adaptDbCartToCommerceCart` (guard: 0 references)
+* Renamed `adaptDbAddressToSpree` to `adaptDbAddressToCommerceAddress` (guard: 0 references)
+* Request headers neutralized: `x-mirza-request-pathname` / `x-mirza-request-search` (0 `x-spree-request-*`)
+* Production source Spree identifiers/comments outside migration bridge = 0
+* Environment example updated: `SUPABASE_SECRET_KEY=your_supabase_secret_key # server-only`
 * TypeScript `tsc --noEmit` clean (0 errors)
-* Biome lint clean (0 errors, 0 warnings)
-* Next.js production build: 110 static pages successfully generated
-* categories: 2
-* products: 38
-* variants: 152
-* product_images: 38
-* hero rows: 38
-* clean database: `hkncfdsvgjopkujmmxem` (legacy project `nmddtxibpsbtswxnienm` untouched)
-
-Accepted B8 lineage:
-
-```text
-9283a01a7041382411e67d8890a9563d4abd83ac  B8 initial Spree SDK / BFF removal
-c1223ebb2a92a16a56c334ac74ef6597f2b067ce  B8.1 semantic closure (zero fake checkout successes)
-```
+* Biome lint clean (0 errors, 0 warnings across 320 files)
+* Next.js production build: 106 static pages successfully generated
+* Playwright first-party smoke E2E: 2 passed / 2 total (100%)
 
 Merge commit to `main`:
 
@@ -1103,6 +1097,79 @@ Do not assume older `ARCHITECTURE.md`, old specification docs, or old performanc
 ---
 
 ## 16. Rolling change log
+
+### 2026-09-13 — B10 complete: Final migration cleanup, neutral naming & stale compatibility removal
+
+Recorded:
+
+- B10 CODE: COMPLETE
+- B10 STATUS: IMPLEMENTATION COMPLETE / READY FOR REVIEW (Do NOT merge or deploy until independent audit)
+- Starting main: `cd4d99bc17c59ba20e8c0626c22a0ad64eb1f128` (B9 application merge `8fb4af3cbc2b42cde4896e4627689c71e0a56c34`, production verified)
+- Branch: `backend/b10-final-migration-cleanup`
+- Scope: complete removal of internal Spree compatibility layer, neutral first-party naming, seamless cart cookie migration bridge, removal of obsolete static assets, uninstallation of dead payment packages, and configuration cleanup.
+
+1. Cookie migration bridge (`src/lib/storefront/legacy-cookie-migration.ts`):
+   - Preserves existing carts exactly: reads `_mirza_cart_*` first, falls back to legacy `_spree_*`, copies existing tokens/IDs, and defensively expires legacy cookies when writable.
+   - Preserves existing guest bearer tokens without recreating or re-hashing them.
+   - Isolates all legacy cookie literals (`_spree_cart_token`, `_spree_wholesale_cart_token`, `spree_country`, `spree_locale`, `_spree_jwt`, `_spree_refresh_token`) strictly to `legacy-cookie-migration.ts` and its dedicated test suite.
+   - Neutral cookie names established: `_mirza_cart_token`, `_mirza_cart_id`, `_mirza_wholesale_cart_token`, `_mirza_wholesale_cart_id`, `mirza_country`, `mirza_locale`.
+   - Legacy auth cookies (`_spree_jwt`, `_spree_refresh_token`) are strictly expired without migrating into Supabase Auth.
+
+2. Supabase Auth sole authority:
+   - Completely deleted legacy JWT authentication helpers and endpoints.
+   - `isAuthenticated()`, account/session checks, and wholesale protected operations use verified Supabase server-side identity (`getVerifiedUserId` / `getClaims`).
+   - Ordinary public catalog requests incur zero auth overhead.
+
+3. Removed dead catalog auth cache dimension:
+   - Eliminated dead `getAccessToken() -> userToken` argument from `cachedListProducts`, `getProducts`, `cachedGetProduct`, `getProduct`, `cachedGetProductFilters`, `getProductFilters`, and category equivalents.
+   - Preserved only real cache dimensions: surface, locale/country, filters/query, product identity, catalog tags.
+   - Public catalog remains: warm = 0 DB queries, cold = bounded 4 queries, N+1 = 0.
+
+4. Unsupported compatibility UI deleted after reachability tracing:
+   - Deleted dead credit cards and gift cards pages and components (`credit-cards/page.tsx`, `gift-cards/page.tsx`, `CreditCardList.tsx`, `GiftCardList.tsx`, `lib/data/credit-cards.ts`, `lib/data/gift-cards.ts`).
+   - Removed dead payment gateway utility files `src/lib/utils/stripe.ts` and `src/lib/utils/payment-gateway.ts`.
+   - Removed unused icons from `PaymentInfo.tsx`, preserving stored order snapshot presentation with standard Lucide icons.
+   - Uninstalled 5 unused gateway packages from `storefront/package.json`: `@adyen/adyen-web`, `@paypal/react-paypal-js`, `@stripe/react-stripe-js`, `@stripe/stripe-js`, `react-svg-credit-card-payment-icons`. Cleaned lockfile (16 packages removed).
+
+5. Obsolete static assets & seed scripts removed:
+   - Verified 0 references to `/products/...` in production database `product_images` (all 38 items use Supabase Storage derivatives).
+   - Deleted `storefront/public/products/` and `storefront/public/spree.png`.
+   - Deleted obsolete backend seed scripts `scripts/seeds/seed_catalog.mjs`, `scripts/seeds/seed_new_catalog.mjs`, and `scripts/seeds/` directory.
+   - Deleted `storefront/src/lib/media/manifest.json` and `storefront/src/lib/media/__tests__/migration.test.ts`.
+
+6. Neutral first-party namespace (`src/lib/storefront/`):
+   - Completely deleted `src/lib/spree/` directory.
+   - Created first-party modules: `surface.ts`, `config.ts`, `locale.ts`, `cookies.ts`, `middleware.ts`, `legacy-cookie-migration.ts`.
+   - Renamed `createSpreeMiddleware` -> `createStorefrontMiddleware`, `SpreeMiddlewareConfig` -> `StorefrontMiddlewareConfig`.
+   - Renamed `adaptDbOrderToSpree` -> `adaptDbOrderToCommerceOrder`.
+   - Discarded dead Spree wrappers (`SpreeNextConfig`, `SpreeNextOptions`, `getCartOptions`, `spreeToken`).
+
+7. Operational environment & docs cleanup:
+   - Removed stale operational references: `SPREE_WHOLESALE_CHANNEL`, `SPREE_WHOLESALE_PUBLISHABLE_KEY`, `SPREE_WEBHOOK_SECRET`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`.
+   - Established neutral `WHOLESALE_CHANNEL=wholesale`.
+   - Updated `storefront/CLAUDE.md`, `storefront/README.md`, and root `README.md` for first-party architecture.
+   - Preserved genuine historical material in ledger, paper evidence, perf, and continuity records.
+
+8. Comprehensive architectural audit test:
+   - Created `storefront/src/lib/__tests__/b10-architecture-audit.test.ts` with 18 assertions validating:
+     * `src/lib/spree` absent
+     * `@/lib/spree` imports = 0
+     * `SpreeMiddleware*` = 0, `SpreeNext*` = 0
+     * `adaptDbOrderToSpree` = 0
+     * `spreeToken` = 0 in production source
+     * Runtime legacy JWT calls = 0
+     * Operational `SPREE_*` env vars = 0
+     * Dead gateway packages = 0
+     * Obsolete static assets / seed dirs absent
+     * Legacy cookie literals isolated strictly to `legacy-cookie-migration.ts` and its test suite.
+
+9. Strict verification results:
+   - TypeScript `tsc --noEmit`: 0 errors;
+   - Biome lint: 0 errors, 0 warnings (320 files checked);
+   - Vitest: 61 test suites / 641 tests passing (100%);
+   - Playwright first-party smoke: 2 passed / 2 total (100%);
+   - Next.js production build: 106 static pages successfully compiled;
+   - Next phase: Independent audit of B10. (Do NOT merge, deploy, or mark BACKEND MIGRATION COMPLETE until audit passes).
 
 ### 2026-09-13 — B9 complete: Render / Rails / Spree backend infrastructure removed & verified
 

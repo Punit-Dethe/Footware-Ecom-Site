@@ -3,10 +3,10 @@ import { COUNTRIES } from "@/lib/catalog/store-config";
 import type { AddressRow } from "@/lib/db/address";
 
 /**
- * Adapts a PostgreSQL AddressRow into the Spree SDK Address compatibility shape
+ * Adapts a PostgreSQL AddressRow into the commerce Address shape
  * expected by existing account and checkout UI components without causing UI churn.
  */
-export function adaptDbAddressToSpree(row: AddressRow): Address {
+export function adaptDbAddressToCommerceAddress(row: AddressRow): Address {
   const fullName = [row.first_name, row.last_name]
     .filter(Boolean)
     .join(" ")

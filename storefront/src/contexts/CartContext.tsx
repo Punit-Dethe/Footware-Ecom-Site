@@ -22,7 +22,7 @@ import {
   removeCartItem as removeCartItemAction,
   updateCartItem as updateCartItemAction,
 } from "@/lib/data/cart";
-import type { Surface } from "@/lib/spree/surface";
+import type { Surface } from "@/lib/storefront/surface";
 
 interface CartContextType {
   cart: Cart | null;

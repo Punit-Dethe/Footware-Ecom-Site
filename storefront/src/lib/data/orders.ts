@@ -3,9 +3,9 @@
 import type { Order, OrderListParams } from "@/types/commerce";
 import { cookies } from "next/headers";
 import { getOrderForUser, listOrdersForUser } from "@/lib/db/order";
-import type { Surface } from "@/lib/spree";
+import type { Surface } from "@/lib/storefront";
 import { createClient } from "@/lib/supabase/server";
-import { adaptDbOrderToSpree } from "./order-adapter";
+import { adaptDbOrderToCommerceOrder } from "./order-adapter";
 
 /**
  * Extracts and cryptographically verifies the authenticated Supabase user ID.
@@ -64,7 +64,7 @@ async function getVerifiedUserId(options?: {
 
 /**
  * Retrieve paginated order history for the authenticated user from PostgreSQL public.orders.
- * Zero Spree backend calls, zero Spree fallback.
+ * Zero external backend calls, zero legacy fallback.
  */
 export async function getOrders(params?: OrderListParams): Promise<{
   data: Order[];
@@ -108,7 +108,7 @@ export async function getOrders(params?: OrderListParams): Promise<{
   );
 
   const adaptedOrders = orders.map((order) =>
-    adaptDbOrderToSpree(order, itemsByOrderId.get(order.id) || []),
+    adaptDbOrderToCommerceOrder(order, itemsByOrderId.get(order.id) || []),
   );
 
   const totalPages = Math.ceil(totalCount / limit);
@@ -131,7 +131,7 @@ export async function getOrders(params?: OrderListParams): Promise<{
 
 /**
  * Retrieve a single order by ID or order number, scoped strictly to the authenticated user.
- * Zero Spree backend calls, zero Spree fallback.
+ * Zero external backend calls, zero legacy fallback.
  */
 export async function getOrder(
   id: string,
@@ -146,5 +146,5 @@ export async function getOrder(
   const result = await getOrderForUser(userId, id);
   if (!result) return null;
 
-  return adaptDbOrderToSpree(result.order, result.items);
+  return adaptDbOrderToCommerceOrder(result.order, result.items);
 }

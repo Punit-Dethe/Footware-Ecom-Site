@@ -5,8 +5,6 @@ import type { AppUser } from "@/lib/data/customer";
 
 const mocks = vi.hoisted(() => ({
   customer: null as AppUser | null,
-  accessToken: undefined as string | undefined,
-  refreshToken: undefined as string | undefined,
   headers: vi.fn(),
   redirect: vi.fn((location: string) => {
     throw new Error(`redirect:${location}`);
@@ -17,10 +15,6 @@ vi.mock("next/headers", () => ({ headers: mocks.headers }));
 vi.mock("next/navigation", () => ({ redirect: mocks.redirect }));
 vi.mock("@/lib/data/customer", () => ({
   getCustomer: vi.fn(() => Promise.resolve(mocks.customer)),
-}));
-vi.mock("@/lib/spree", () => ({
-  getAccessToken: () => Promise.resolve(mocks.accessToken),
-  getRefreshToken: () => Promise.resolve(mocks.refreshToken),
 }));
 vi.mock("@/components/account/AuthenticatedAccountShell", () => ({
   AuthenticatedAccountShell: ({
@@ -49,8 +43,6 @@ describe("AuthenticatedAccountLayoutContent", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.customer = null;
-    mocks.accessToken = undefined;
-    mocks.refreshToken = undefined;
     mocks.headers.mockResolvedValue(
       new Headers({
         [REQUEST_PATHNAME_HEADER]: "/us/en/account/orders",
@@ -60,17 +52,6 @@ describe("AuthenticatedAccountLayoutContent", () => {
   });
 
   it("redirects an anonymous request before rendering protected chrome", async () => {
-    await expect(renderLayout()).rejects.toThrow(
-      "redirect:/us/en/account?redirect=%2Fus%2Fen%2Faccount%2Forders%3Fstate%3Dcomplete",
-    );
-    expect(mocks.redirect).toHaveBeenCalledOnce();
-  });
-
-  it("redirects when legacy tokens exist but no verified Supabase customer is found", async () => {
-    mocks.accessToken = "legacy-access-token";
-    mocks.refreshToken = "legacy-refresh-token";
-    mocks.customer = null;
-
     await expect(renderLayout()).rejects.toThrow(
       "redirect:/us/en/account?redirect=%2Fus%2Fen%2Faccount%2Forders%3Fstate%3Dcomplete",
     );
