@@ -1,16 +1,16 @@
 import { cookies } from "next/headers";
 import {
   CART_TOKEN_MAX_AGE,
-  LEGACY_CART_ID_COOKIE,
-  LEGACY_CART_TOKEN_COOKIE,
-  LEGACY_WHOLESALE_CART_ID_COOKIE,
-  LEGACY_WHOLESALE_CART_TOKEN_COOKIE,
+  clearLegacyCartCookies,
+  clearLegacyCartToken,
   MIRZA_CART_ID_COOKIE,
   MIRZA_CART_TOKEN_COOKIE,
   MIRZA_WHOLESALE_CART_ID_COOKIE,
   MIRZA_WHOLESALE_CART_TOKEN_COOKIE,
+  resolveCartCookieState,
   resolveCartId,
   resolveCartToken,
+  type ResolvedCartCookieState,
 } from "./legacy-cookie-migration";
 import {
   DEFAULT_SURFACE,
@@ -51,6 +51,13 @@ export function getCartIdCookieName(surface: Surface = DEFAULT_SURFACE): string 
 // Cart cookies are surface-scoped: the DTC and wholesale carts live in separate
 // cookie pairs so a customer can hold both at once. `surface` defaults to DTC.
 
+export async function getCartCookieState(
+  surface: Surface = DEFAULT_SURFACE,
+): Promise<ResolvedCartCookieState> {
+  const cookieStore = await cookies();
+  return resolveCartCookieState(cookieStore, surface);
+}
+
 export async function getCartToken(
   surface: Surface = DEFAULT_SURFACE,
 ): Promise<string | undefined> {
@@ -65,6 +72,17 @@ export async function getCartId(
   return resolveCartId(cookieStore, surface);
 }
 
+/**
+ * Sets cart cookies for a surface.
+ *
+ * Invariant:
+ * Writing new cart state makes the Mirza namespace authoritative.
+ * - Always sets the new ID cookie.
+ * - If token is provided, sets the new token cookie; if absent (authenticated cart),
+ *   clears the new token cookie.
+ * - Unconditionally expires the corresponding legacy ID and token cookies
+ *   so stale legacy bearer tokens can never be resolved as fallback.
+ */
 export async function setCartCookies(
   id: string,
   token?: string,
@@ -78,25 +96,16 @@ export async function setCartCookies(
     path: "/",
     maxAge: CART_TOKEN_MAX_AGE,
   };
-  const expireOpts = { maxAge: -1, path: "/" };
 
   cookieStore.set(getCartIdCookieName(surface), id, opts);
   if (token) {
     cookieStore.set(getCartCookieName(surface), token, opts);
+  } else {
+    cookieStore.set(getCartCookieName(surface), "", { maxAge: -1, path: "/" });
   }
 
-  // Idempotently clean legacy cookie pair when writing new ones
-  if (surface === "wholesale") {
-    cookieStore.set(LEGACY_WHOLESALE_CART_ID_COOKIE, "", expireOpts);
-    if (token) {
-      cookieStore.set(LEGACY_WHOLESALE_CART_TOKEN_COOKIE, "", expireOpts);
-    }
-  } else {
-    cookieStore.set(LEGACY_CART_ID_COOKIE, "", expireOpts);
-    if (token) {
-      cookieStore.set(LEGACY_CART_TOKEN_COOKIE, "", expireOpts);
-    }
-  }
+  // Idempotently and unconditionally expire legacy cookie pair (ID + token)
+  clearLegacyCartCookies(cookieStore, surface);
 }
 
 export async function clearCartToken(
@@ -105,11 +114,7 @@ export async function clearCartToken(
   const cookieStore = await cookies();
   const opts = { maxAge: -1, path: "/" };
   cookieStore.set(getCartCookieName(surface), "", opts);
-  if (surface === "wholesale") {
-    cookieStore.set(LEGACY_WHOLESALE_CART_TOKEN_COOKIE, "", opts);
-  } else {
-    cookieStore.set(LEGACY_CART_TOKEN_COOKIE, "", opts);
-  }
+  clearLegacyCartToken(cookieStore, surface);
 }
 
 export async function clearCartCookies(
@@ -119,13 +124,7 @@ export async function clearCartCookies(
   const opts = { maxAge: -1, path: "/" };
   cookieStore.set(getCartCookieName(surface), "", opts);
   cookieStore.set(getCartIdCookieName(surface), "", opts);
-  if (surface === "wholesale") {
-    cookieStore.set(LEGACY_WHOLESALE_CART_TOKEN_COOKIE, "", opts);
-    cookieStore.set(LEGACY_WHOLESALE_CART_ID_COOKIE, "", opts);
-  } else {
-    cookieStore.set(LEGACY_CART_TOKEN_COOKIE, "", opts);
-    cookieStore.set(LEGACY_CART_ID_COOKIE, "", opts);
-  }
+  clearLegacyCartCookies(cookieStore, surface);
 }
 
 /**

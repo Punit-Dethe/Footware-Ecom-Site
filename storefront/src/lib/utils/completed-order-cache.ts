@@ -5,9 +5,8 @@
  * so the thank-you page can display it immediately without re-fetching.
  * Falls back to API on page refresh.
  *
- * Future-proof: in Spree 6, `complete` will return a new Order object
- * with its own ID. This cache works regardless — it stores whatever
- * the completion response returns, keyed by the cart ID used to complete.
+ * This cache stores whatever the completion response returns, keyed by the
+ * cart ID used to complete.
  */
 
 const STORAGE_KEY_PREFIX = "mirza_completed_order_";

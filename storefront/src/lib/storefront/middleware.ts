@@ -12,10 +12,8 @@ import { buildAccountLoginHref } from "@/lib/utils/account-redirect";
 import {
   expireLegacyAuthCookies,
   expireLegacyLocaleCookies,
-  LEGACY_ACCESS_TOKEN_COOKIE,
-  LEGACY_COUNTRY_COOKIE,
-  LEGACY_LOCALE_COOKIE,
-  LEGACY_REFRESH_TOKEN_COOKIE,
+  hasLegacyAuthCookies,
+  hasLegacyLocaleCookies,
   migrateLegacyCartCookies,
   MIRZA_COUNTRY_COOKIE,
   MIRZA_LOCALE_COOKIE,
@@ -131,14 +129,10 @@ function nextWithLocaleContext(
   // allowing upstream CDNs (Vercel, Cloudflare) to cache catalog responses cleanly.
   const currentCountry = request.cookies.get(MIRZA_COUNTRY_COOKIE)?.value;
   const currentLocale = request.cookies.get(MIRZA_LOCALE_COOKIE)?.value;
-  const hasLegacyCountryLocale =
-    request.cookies.has(LEGACY_COUNTRY_COOKIE) ||
-    request.cookies.has(LEGACY_LOCALE_COOKIE);
-
   if (
     currentCountry !== country ||
     currentLocale !== locale ||
-    hasLegacyCountryLocale
+    hasLegacyLocaleCookies(request)
   ) {
     setLocaleCookies(response, country, locale);
   }
@@ -152,7 +146,7 @@ function nextWithLocaleContext(
  * - Detecting locale from cookies → accept-language → default
  * - Syncing mirza_country / mirza_locale cookies with URL segments
  * - Seamlessly migrating legacy cart and locale cookies
- * - Expiring legacy Spree auth cookies immediately
+ * - Expiring legacy auth cookies immediately
  * - Guarding protected account routes via Supabase verified claims
  * - Ensuring private/authenticated responses are not publicly cached
  */
@@ -260,10 +254,7 @@ export function createStorefrontMiddleware(
         const response = nextWithLocaleContext(request, country, locale);
         copySupabaseResponseCookies(authResult.response, response);
 
-        if (
-          request.cookies.has(LEGACY_ACCESS_TOKEN_COOKIE) ||
-          request.cookies.has(LEGACY_REFRESH_TOKEN_COOKIE)
-        ) {
+        if (hasLegacyAuthCookies(request)) {
           expireLegacyAuthCookies(response, request);
         }
 
@@ -293,10 +284,7 @@ export function createStorefrontMiddleware(
 
       // Public catalog routes: bypass auth verification completely (0 auth overhead)
       const response = nextWithLocaleContext(request, country, locale);
-      if (
-        request.cookies.has(LEGACY_ACCESS_TOKEN_COOKIE) ||
-        request.cookies.has(LEGACY_REFRESH_TOKEN_COOKIE)
-      ) {
+      if (hasLegacyAuthCookies(request)) {
         expireLegacyAuthCookies(response, request);
       }
       return response;

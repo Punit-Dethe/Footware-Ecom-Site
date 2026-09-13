@@ -20,16 +20,13 @@ export {
 // Legacy cookie migration bridge
 export {
   CART_TOKEN_MAX_AGE,
+  clearLegacyCartCookies,
+  clearLegacyCartToken,
   expireLegacyAuthCookies,
   expireLegacyLocaleCookies,
-  LEGACY_ACCESS_TOKEN_COOKIE,
-  LEGACY_CART_ID_COOKIE,
-  LEGACY_CART_TOKEN_COOKIE,
-  LEGACY_COUNTRY_COOKIE,
-  LEGACY_LOCALE_COOKIE,
-  LEGACY_REFRESH_TOKEN_COOKIE,
-  LEGACY_WHOLESALE_CART_ID_COOKIE,
-  LEGACY_WHOLESALE_CART_TOKEN_COOKIE,
+  hasLegacyAuthCookies,
+  hasLegacyCartCookies,
+  hasLegacyLocaleCookies,
   migrateLegacyCartCookies,
   MIRZA_CART_ID_COOKIE,
   MIRZA_CART_TOKEN_COOKIE,
@@ -37,10 +34,12 @@ export {
   MIRZA_LOCALE_COOKIE,
   MIRZA_WHOLESALE_CART_ID_COOKIE,
   MIRZA_WHOLESALE_CART_TOKEN_COOKIE,
+  resolveCartCookieState,
   resolveCartId,
   resolveCartToken,
   resolveCountry,
   resolveLocale,
+  type ResolvedCartCookieState,
 } from "./legacy-cookie-migration";
 
 // Locale resolution (reads country/locale from cookies)

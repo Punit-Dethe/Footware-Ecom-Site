@@ -10,7 +10,7 @@ import {
   updateAddress as dbUpdateAddress,
 } from "@/lib/db/address";
 import { createClient } from "@/lib/supabase/server";
-import { adaptDbAddressToSpree } from "./address-adapter";
+import { adaptDbAddressToCommerceAddress } from "./address-adapter";
 import { actionResult } from "./utils";
 
 /**
@@ -89,7 +89,7 @@ export async function getAddresses(): Promise<{ data: Address[] }> {
     return { data: [] };
   }
   const rows = await dbListAddresses(userId);
-  return { data: rows.map(adaptDbAddressToSpree) };
+  return { data: rows.map(adaptDbAddressToCommerceAddress) };
 }
 
 /**
@@ -108,7 +108,7 @@ export async function getAddress(id: string): Promise<Address | null> {
     return null;
   }
   const row = await dbGetAddress(userId, id);
-  return row ? adaptDbAddressToSpree(row) : null;
+  return row ? adaptDbAddressToCommerceAddress(row) : null;
 }
 
 /**
@@ -140,7 +140,7 @@ export async function createAddress(address: AddressParams) {
       is_default_billing: address.is_default_billing,
     });
 
-    return { address: adaptDbAddressToSpree(row) };
+    return { address: adaptDbAddressToCommerceAddress(row) };
   }, "Failed to create address");
 }
 
@@ -176,7 +176,7 @@ export async function updateAddress(
       is_default_billing: address.is_default_billing,
     });
 
-    return { address: adaptDbAddressToSpree(row) };
+    return { address: adaptDbAddressToCommerceAddress(row) };
   }, "Failed to update address");
 }
 

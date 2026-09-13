@@ -44,7 +44,7 @@ interface StoreHreflangCluster {
 }
 
 /**
- * Produce a stable comparison value for fields translated by Spree/Mobility.
+ * Produce a stable comparison value for translated fields.
  * The Store API falls back to the Store default locale when a translation is
  * absent, so resource alternates are published only when their translated
  * fields differ from that fallback payload.
@@ -140,7 +140,7 @@ function withLocalePrefix(
  * en-CA) to avoid duplicate language keys.
  *
  * Resource pages provide a stable-ID resolver and fingerprints of translated
- * fields. This prevents Spree's default-locale fallback from being mistaken
+ * fields. This prevents default-locale fallback from being mistaken
  * for a real translation. Resolver failures are omitted without failing all
  * metadata generation.
  */

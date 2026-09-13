@@ -31,7 +31,7 @@ export class AdminAuthError extends Error {
  *   - client-supplied metadata or claims
  *   - client AuthContext role
  *   - cookies or headers other than verified session tokens
- *   - legacy Spree tokens
+ *   - legacy tokens
  *
  * Semantics:
  *   - Anonymous / expired / customer -> returns null

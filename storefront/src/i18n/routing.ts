@@ -1,5 +1,5 @@
-export const REQUEST_PATHNAME_HEADER = "x-spree-request-pathname";
-export const REQUEST_SEARCH_HEADER = "x-spree-request-search";
+export const REQUEST_PATHNAME_HEADER = "x-mirza-request-pathname";
+export const REQUEST_SEARCH_HEADER = "x-mirza-request-search";
 
 interface LocalizedRedirectParams {
   country: string;

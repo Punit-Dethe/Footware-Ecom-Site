@@ -28,26 +28,31 @@ cd4d99bc17c59ba20e8c0626c22a0ad64eb1f128
 
 B1 through B9 are **COMPLETE / MERGED / PRODUCTION VERIFIED**.
 
-B10 is **IMPLEMENTATION COMPLETE / READY FOR REVIEW**.
+B10.1 is **IMPLEMENTATION COMPLETE / READY FOR INDEPENDENT REVIEW**.
 Branch: `backend/b10-final-migration-cleanup`
+Accepted-for-fix base: `1a4ec01d716abdf46129b109c181fdf6f71a9b77`
+Base main: `cd4d99bc17c59ba20e8c0626c22a0ad64eb1f128`
 
-Accepted B10 validation baseline:
+Accepted B10.1 validation baseline:
 
-* 61 suites / 641 tests passing (100% pass)
-* 18/18 architectural invariants verified by `b10-architecture-audit.test.ts`
+* 61 suites / 660 tests passing (100% pass)
+* 22/22 architectural invariants verified by `b10-architecture-audit.test.ts`
 * 21/21 architectural invariants verified by `b9-architecture-audit.test.ts`
 * 18/18 architectural invariants verified by `b8-architecture-audit.test.ts`
-* Zero imports from `@/lib/spree` or `src/lib/spree` (directory absent)
-* Zero legacy JWT authentication calls
-* Zero `spreeToken` production identifiers
-* Zero dead payment packages (`@adyen/adyen-web`, `@paypal/react-paypal-js`, `@stripe/react-stripe-js`, `@stripe/stripe-js`, `react-svg-credit-card-payment-icons` uninstalled)
-* Zero runtime references to `/products/` static media
-* Legacy cookie literals isolated strictly to `legacy-cookie-migration.ts` and its tests
+* Cart cookie namespace mixing eliminated: atomic resolution via `resolveCartCookieState`
+* Zero namespace crossing: new ID + legacy token = impossible; legacy ID + new token = impossible
+* `setCartCookies` unconditionally expires legacy ID and token cookies
+* Full test coverage for mixed and legacy cart states (cases A through G)
+* Production references to `LEGACY_*` cookie constants outside bridge = 0
+* Renamed `adaptDbCartToSpreeCart` to `adaptDbCartToCommerceCart` (guard: 0 references)
+* Renamed `adaptDbAddressToSpree` to `adaptDbAddressToCommerceAddress` (guard: 0 references)
+* Request headers neutralized: `x-mirza-request-pathname` / `x-mirza-request-search` (0 `x-spree-request-*`)
+* Production source Spree identifiers/comments outside migration bridge = 0
+* Environment example updated: `SUPABASE_SECRET_KEY=your_supabase_secret_key # server-only`
 * TypeScript `tsc --noEmit` clean (0 errors)
-* Biome lint clean (0 errors, 0 warnings)
+* Biome lint clean (0 errors, 0 warnings across 320 files)
 * Next.js production build: 106 static pages successfully generated
 * Playwright first-party smoke E2E: 2 passed / 2 total (100%)
-```
 
 Merge commit to `main`:
 

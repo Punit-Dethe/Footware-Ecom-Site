@@ -107,6 +107,28 @@ describe("B10 Architecture Audit — Final Migration Cleanup & Neutral Naming", 
       expect(offendingFiles).toEqual([]);
     });
 
+    it("proves 0 references to adaptDbCartToSpreeCart across codebase", () => {
+      const offendingFiles: string[] = [];
+      for (const file of allSourceFiles) {
+        const content = fs.readFileSync(file, "utf8");
+        if (/\badaptDbCartToSpreeCart\b/.test(content)) {
+          offendingFiles.push(path.relative(srcDir, file));
+        }
+      }
+      expect(offendingFiles).toEqual([]);
+    });
+
+    it("proves 0 references to adaptDbAddressToSpree across codebase", () => {
+      const offendingFiles: string[] = [];
+      for (const file of allSourceFiles) {
+        const content = fs.readFileSync(file, "utf8");
+        if (/\badaptDbAddressToSpree\b/.test(content)) {
+          offendingFiles.push(path.relative(srcDir, file));
+        }
+      }
+      expect(offendingFiles).toEqual([]);
+    });
+
     it("proves 0 references to spreeToken identifier in production source", () => {
       const offendingFiles: string[] = [];
       for (const file of productionFiles) {
@@ -229,7 +251,9 @@ describe("B10 Architecture Audit — Final Migration Cleanup & Neutral Naming", 
 
   describe("7. Legacy cookie literal isolation", () => {
     const legacyCookieLiterals = [
+      "_spree_cart_id",
       "_spree_cart_token",
+      "_spree_wholesale_cart_id",
       "_spree_wholesale_cart_token",
       "spree_country",
       "spree_locale",
@@ -260,6 +284,32 @@ describe("B10 Architecture Audit — Final Migration Cleanup & Neutral Naming", 
       }
 
       expect(offendingOccurrences).toEqual([]);
+    });
+
+    it("proves 0 references to LEGACY_* cookie constants in production source outside legacy-cookie-migration.ts", () => {
+      const legacyConstRegex = /\bLEGACY_[A-Z0-9_]*\b/;
+      const bridgeFile = path.normalize("lib/storefront/legacy-cookie-migration.ts");
+      const offendingFiles: string[] = [];
+      for (const file of productionFiles) {
+        const relPath = path.normalize(path.relative(srcDir, file));
+        if (relPath === bridgeFile) continue;
+        const content = fs.readFileSync(file, "utf8");
+        if (legacyConstRegex.test(content)) {
+          offendingFiles.push(relPath);
+        }
+      }
+      expect(offendingFiles).toEqual([]);
+    });
+
+    it("proves 0 production source references to x-spree-request-* headers", () => {
+      const offendingFiles: string[] = [];
+      for (const file of productionFiles) {
+        const content = fs.readFileSync(file, "utf8");
+        if (/x-spree-request-/i.test(content)) {
+          offendingFiles.push(path.relative(srcDir, file));
+        }
+      }
+      expect(offendingFiles).toEqual([]);
     });
   });
 });

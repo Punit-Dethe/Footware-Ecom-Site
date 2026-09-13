@@ -8,13 +8,15 @@ vi.mock("@/lib/supabase/proxy", () => ({
   verifyProxySession: (req: NextRequest) => mockVerifyProxySession(req),
 }));
 
+import { createStorefrontMiddleware } from "../middleware";
 import {
-  createStorefrontMiddleware,
-  LEGACY_ACCESS_TOKEN_COOKIE,
-  LEGACY_REFRESH_TOKEN_COOKIE,
   MIRZA_COUNTRY_COOKIE,
   MIRZA_LOCALE_COOKIE,
 } from "@/lib/storefront";
+import {
+  LEGACY_ACCESS_TOKEN_COOKIE,
+  LEGACY_REFRESH_TOKEN_COOKIE,
+} from "../legacy-cookie-migration";
 
 const middleware = createStorefrontMiddleware({
   defaultCountry: "us",
@@ -102,10 +104,10 @@ describe("Storefront locale & auth middleware", () => {
     );
 
     expect(
-      response.headers.get("x-middleware-request-x-spree-request-pathname"),
+      response.headers.get("x-middleware-request-x-mirza-request-pathname"),
     ).toBe("/ar/en/products/coffee");
     expect(
-      response.headers.get("x-middleware-request-x-spree-request-search"),
+      response.headers.get("x-middleware-request-x-mirza-request-search"),
     ).toBe("?sort=price");
   });
 

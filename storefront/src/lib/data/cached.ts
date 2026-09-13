@@ -21,8 +21,8 @@ export const PRODUCT_METADATA_EXPAND = ["primary_media"];
 
 /**
  * Minimal set of Product fields required to render a <ProductCard> and
- * fire listing analytics. Passed via the SDK's `fields` param on listing
- * fetches so Spree returns a narrowed payload — this shrinks the cached
+ * fire listing analytics. Passed via the `fields` param on listing
+ * fetches to return a narrowed payload — this shrinks the cached
  * entry, the RSC→client serialization, and the streaming HTML size.
  *
  * `categories` is included so `mapProductToGA4Item` can populate the

@@ -64,7 +64,7 @@ async function getVerifiedUserId(options?: {
 
 /**
  * Retrieve paginated order history for the authenticated user from PostgreSQL public.orders.
- * Zero Spree backend calls, zero Spree fallback.
+ * Zero external backend calls, zero legacy fallback.
  */
 export async function getOrders(params?: OrderListParams): Promise<{
   data: Order[];
@@ -131,7 +131,7 @@ export async function getOrders(params?: OrderListParams): Promise<{
 
 /**
  * Retrieve a single order by ID or order number, scoped strictly to the authenticated user.
- * Zero Spree backend calls, zero Spree fallback.
+ * Zero external backend calls, zero legacy fallback.
  */
 export async function getOrder(
   id: string,

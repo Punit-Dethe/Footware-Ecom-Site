@@ -127,11 +127,11 @@ async function getVerifiedUserId(): Promise<string | null> {
 }
 
 /**
- * Adapts a persistent PostgreSQL cart and its line items into the Spree SDK Cart shape.
+ * Adapts a persistent PostgreSQL cart and its line items into the commerce Cart shape.
  * Catalog attributes, prices, and thumbnails are derived live from the static catalog.
  * Unknown SKUs are never priced at $0; adaptation fails closed with an error.
  */
-async function adaptDbCartToSpreeCart(
+async function adaptDbCartToCommerceCart(
   cart: DbCart,
   items: DbCartItem[],
   surface: Surface,
@@ -254,7 +254,7 @@ async function dropSurfaceCartCookies(surface: Surface): Promise<void> {
 /**
  * Get the current authorized cart for a surface.
  * Returns null if no cart exists, or if cart ID does not match the caller's authorization.
- * Persistent PostgreSQL cart is the sole source of truth; zero Spree SDK cart read fallbacks.
+ * Persistent PostgreSQL cart is the sole source of truth; zero legacy cart read fallbacks.
  */
 export async function getCart(
   explicitCartId?: string,
@@ -297,7 +297,7 @@ export async function getCart(
     }
 
     const items = await loadCartItems(userCart.id);
-    return await adaptDbCartToSpreeCart(userCart, items, surface);
+    return await adaptDbCartToCommerceCart(userCart, items, surface);
   }
 
   // Anonymous guest flow
@@ -322,7 +322,7 @@ export async function getCart(
   }
 
   const items = await loadCartItems(guestCart.id);
-  return await adaptDbCartToSpreeCart(guestCart, items, surface);
+  return await adaptDbCartToCommerceCart(guestCart, items, surface);
 }
 
 /**
@@ -347,7 +347,7 @@ export async function getOrCreateCart(
     } catch {
       // Best effort
     }
-    return await adaptDbCartToSpreeCart(userCart, [], surface);
+    return await adaptDbCartToCommerceCart(userCart, [], surface);
   }
 
   // Generate secure 256-bit guest token
@@ -361,7 +361,7 @@ export async function getOrCreateCart(
     // Best effort
   }
 
-  return await adaptDbCartToSpreeCart(guestCart, [], surface);
+  return await adaptDbCartToCommerceCart(guestCart, [], surface);
 }
 
 /**
