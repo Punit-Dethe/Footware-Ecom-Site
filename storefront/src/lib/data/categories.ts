@@ -1,8 +1,14 @@
 "use server";
 
-import type { CategoryListParams, ProductListParams } from "@spree/sdk";
+import type {
+  Category,
+  CategoryListParams,
+  PaginatedResponse,
+  Product,
+  ProductListParams,
+} from "@/types/commerce";
 import { cacheLife, cacheTag } from "next/cache";
-import { getAccessToken, type getClient, getLocaleOptions } from "@/lib/spree";
+import { getAccessToken, getLocaleOptions } from "@/lib/spree";
 
 import {
   getCategoryByPermalinkOrId,
@@ -21,7 +27,7 @@ export async function cachedListCategories(
   return {
     data: categories,
     meta: { count: categories.length, total_count: categories.length },
-  } as unknown as ReturnType<ReturnType<typeof getClient>["categories"]["list"]>;
+  };
 }
 
 export async function getCategories(
@@ -42,9 +48,7 @@ export async function cachedGetCategory(
   cacheTag("catalog-public", "category");
   const local = await getCategoryByPermalinkOrId(idOrPermalink);
   if (local) {
-    return local as unknown as ReturnType<
-      ReturnType<typeof getClient>["categories"]["get"]
-    >;
+    return local as Category;
   }
   throw new Error(`Category not found: ${idOrPermalink}`);
 }
@@ -94,9 +98,7 @@ export async function cachedListCategoryProducts(
     q,
     sort,
   });
-  return result as unknown as ReturnType<
-    ReturnType<typeof getClient>["products"]["list"]
-  >;
+  return result as unknown as PaginatedResponse<Product>;
 }
 
 export async function getCategoryProducts(

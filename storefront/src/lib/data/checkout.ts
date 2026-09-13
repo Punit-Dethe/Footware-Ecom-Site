@@ -1,21 +1,21 @@
 "use server";
 
 import crypto from "node:crypto";
-import type { AddressParams, Cart } from "@spree/sdk";
-import { SpreeError } from "@spree/sdk";
 import { updateTag } from "next/cache";
 import {
   cacheTagSuffix,
   getCartId,
-  getCartOptions,
   getCartToken,
-  getClientForSurface,
   isWholesaleEnabled,
-  requireCartId,
   type Surface,
 } from "@/lib/spree";
-import { findCartById, updateAuthorizedCartCheckoutData } from "@/lib/db/cart";
+import {
+  findCartById,
+  updateAuthorizedCartCheckoutData,
+  updateAuthorizedCartCurrency,
+} from "@/lib/db/cart";
 import { getOrderBySourceCartAuthorized } from "@/lib/db/order";
+import type { AddressParams, Cart } from "@/types/commerce";
 import { getCart, verifyAuthSession } from "./cart";
 import { adaptDbOrderToCart } from "./order-adapter";
 import { actionResult } from "./utils";
@@ -184,140 +184,52 @@ export async function updateOrderAddresses(
       throw new Error("Failed to update cart checkout data: cart not found or unauthorized");
     }
 
-    const options = await getCartOptions(surface);
-    const id = await requireCartId(surface);
-    const cart = await getClientForSurface(surface).carts.update(
-      id,
-      addresses,
-      options,
-    );
+    // Single mutation authority: PostgreSQL is the sole backend
+    const cart = await getCart(cartId, surface);
+    if (!cart) {
+      throw new Error("Failed to retrieve updated cart");
+    }
+
     updateTag(checkoutTag(surface));
+    updateTag(cartTag(surface));
     return { cart };
   }, "Failed to update addresses");
 }
 
 export async function updateCartMarket(
   cartId: string,
-  params: { currency: string; locale: string },
+  params: { currency: string; locale?: string },
 ) {
   return actionResult(async () => {
     const surface = await resolveSurfaceForCart(cartId);
-    const options = await getCartOptions(surface);
-    const id = await requireCartId(surface);
-    const cart = await getClientForSurface(surface).carts.update(
-      id,
-      params,
-      options,
-    );
+    const authSession = await verifyAuthSession();
+
+    let userId: string | null = null;
+    let guestTokenHash: string | null = null;
+
+    if (authSession.status === "authenticated") {
+      userId = authSession.userId;
+    } else {
+      const rawToken = await getCartToken(surface);
+      if (rawToken) {
+        guestTokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+      }
+    }
+
+    if (!userId && !guestTokenHash) {
+      throw new Error("Unauthorized to update cart market");
+    }
+
+    await updateAuthorizedCartCurrency({
+      cartId,
+      surface,
+      auth: { userId, guestTokenHash },
+      currency: params.currency,
+    });
+
+    const cart = await getCart(cartId, surface);
     updateTag(checkoutTag(surface));
+    updateTag(cartTag(surface));
     return { cart };
   }, "Failed to update order market");
-}
-
-export async function selectDeliveryRate(
-  cartId: string,
-  fulfillmentId: string,
-  deliveryRateId: string,
-) {
-  return actionResult(async () => {
-    const surface = await resolveSurfaceForCart(cartId);
-    const options = await getCartOptions(surface);
-    const id = await requireCartId(surface);
-    const cart = await getClientForSurface(surface).carts.fulfillments.update(
-      id,
-      fulfillmentId,
-      { selected_delivery_rate_id: deliveryRateId },
-      options,
-    );
-    updateTag(checkoutTag(surface));
-    return { cart };
-  }, "Failed to select delivery rate");
-}
-
-/**
- * Apply a code to the cart — tries discount code first, then gift card.
- * Single input field on checkout, backend determines the type.
- */
-export async function applyCode(cartId: string, code: string) {
-  const surface = await resolveSurfaceForCart(cartId);
-  const options = await getCartOptions(surface);
-  const id = await requireCartId(surface);
-  const client = getClientForSurface(surface);
-
-  // Try discount code first (more common)
-  try {
-    const cart = await client.carts.discountCodes.apply(id, code, options);
-    updateTag(checkoutTag(surface));
-    updateTag(cartTag(surface));
-    return { success: true, cart, type: "discount" as const };
-  } catch (discountError) {
-    // Only fall back to gift card if the discount code was not found (422/404).
-    // Network errors, 500s, etc. should surface the backend message directly.
-    const isNotFound =
-      discountError instanceof SpreeError &&
-      (discountError.status === 422 || discountError.status === 404);
-
-    if (!isNotFound) {
-      return { success: false, error: errorMessage(discountError) } as const;
-    }
-
-    // Discount code not found — try gift card
-    try {
-      const cart = await client.carts.giftCards.apply(id, code, options);
-      updateTag(checkoutTag(surface));
-      updateTag(cartTag(surface));
-      return { success: true, cart, type: "gift_card" as const };
-    } catch (giftCardError) {
-      // Gift card also failed. If it's a specific error (expired, redeemed, etc.)
-      // show the backend message. If both are just "not found", show the
-      // discount error (the more common scenario).
-      const isGiftCardNotFound =
-        giftCardError instanceof SpreeError &&
-        (giftCardError.code === "gift_card_not_found" ||
-          giftCardError.code === "record_not_found");
-
-      return {
-        success: false,
-        error: isGiftCardNotFound
-          ? errorMessage(discountError)
-          : errorMessage(giftCardError),
-      } as const;
-    }
-  }
-}
-
-function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : "The entered code is not valid";
-}
-
-export async function removeDiscountCode(cartId: string, code: string) {
-  return actionResult(async () => {
-    const surface = await resolveSurfaceForCart(cartId);
-    const options = await getCartOptions(surface);
-    const id = await requireCartId(surface);
-    const cart = await getClientForSurface(surface).carts.discountCodes.remove(
-      id,
-      code,
-      options,
-    );
-    updateTag(checkoutTag(surface));
-    updateTag(cartTag(surface));
-    return { cart };
-  }, "Failed to remove discount code");
-}
-
-export async function removeGiftCard(cartId: string, giftCardId: string) {
-  return actionResult(async () => {
-    const surface = await resolveSurfaceForCart(cartId);
-    const options = await getCartOptions(surface);
-    const id = await requireCartId(surface);
-    const cart = await getClientForSurface(surface).carts.giftCards.remove(
-      id,
-      giftCardId,
-      options,
-    );
-    updateTag(checkoutTag(surface));
-    updateTag(cartTag(surface));
-    return { cart };
-  }, "Failed to remove gift card");
 }

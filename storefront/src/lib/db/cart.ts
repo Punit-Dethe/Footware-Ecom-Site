@@ -459,3 +459,34 @@ export async function updateAuthorizedCartCheckoutData(params: {
   return (res.rowCount ?? 0) > 0;
 }
 
+export async function updateAuthorizedCartCurrency(params: {
+  cartId: string;
+  surface: CartSurface;
+  auth: { userId?: string | null; guestTokenHash?: string | null };
+  currency: string;
+}): Promise<boolean> {
+  const { cartId, surface, auth, currency } = params;
+  if (!auth.userId && !auth.guestTokenHash) return false;
+
+  const values: unknown[] = [currency, cartId, surface];
+  let authClause: string;
+  if (auth.userId) {
+    values.push(auth.userId);
+    authClause = `user_id = $${values.length}`;
+  } else {
+    values.push(auth.guestTokenHash);
+    authClause = `guest_token_hash = $${values.length}`;
+  }
+
+  const res = await query(
+    `UPDATE public.carts
+     SET currency = $1, updated_at = NOW()
+     WHERE id = $2
+       AND surface = $3
+       AND status = 'active'
+       AND ${authClause};`,
+    values,
+  );
+
+  return (res.rowCount ?? 0) > 0;
+}

@@ -1,6 +1,6 @@
 "use client";
 
-import type { GiftCard } from "@spree/sdk";
+import type { GiftCard } from "@/types/commerce";
 import { Check, ClipboardCopy } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useState } from "react";

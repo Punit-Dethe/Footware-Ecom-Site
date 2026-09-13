@@ -1,4 +1,4 @@
-import type { AddressParams } from "@spree/sdk";
+import type { AddressParams } from "@/types/commerce";
 
 export interface AddressFormData {
   first_name: string;
@@ -30,17 +30,17 @@ export const emptyAddress: AddressFormData = {
 
 export function addressToFormData(
   address?: {
-    first_name: string | null;
-    last_name: string | null;
-    address1: string | null;
-    address2: string | null;
-    city: string | null;
-    postal_code: string | null;
-    phone: string | null;
-    company: string | null;
-    country_iso: string;
-    state_abbr: string | null;
-    state_name: string | null;
+    first_name?: string | null;
+    last_name?: string | null;
+    address1?: string | null;
+    address2?: string | null;
+    city?: string | null;
+    postal_code?: string | null;
+    phone?: string | null;
+    company?: string | null;
+    country_iso?: string | null;
+    state_abbr?: string | null;
+    state_name?: string | null;
   } | null,
 ): AddressFormData {
   if (!address) return { ...emptyAddress };

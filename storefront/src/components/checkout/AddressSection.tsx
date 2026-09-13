@@ -1,6 +1,6 @@
 "use client";
 
-import type { Address, AddressParams, Cart, Country, State } from "@spree/sdk";
+import type { Address, AddressParams, Cart, Country, State } from "@/types/commerce";
 import { Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";

@@ -1,27 +1,34 @@
 "use server";
 
-import { type Policy, SpreeError } from "@spree/sdk";
 import { cacheLife, cacheTag } from "next/cache";
-import { getClient, getLocaleOptions } from "@/lib/spree";
+import { POLICIES } from "@/lib/catalog/store-config";
+import type { Policy } from "@/types/commerce";
 
 export async function cachedGetPolicy(
   slugOrId: string,
-  options: { locale?: string; country?: string },
+  _options?: { locale?: string; country?: string },
 ): Promise<Policy | null> {
   "use cache: remote";
   cacheLife("tenMinutes");
   cacheTag("policies", `policy:${slugOrId}`);
-  try {
-    return await getClient().policies.get(slugOrId, options);
-  } catch (error) {
-    if (error instanceof SpreeError && error.status === 404) return null;
-    throw error;
-  }
+
+  const found = POLICIES.find(
+    (p) => p.slug === slugOrId || p.id === slugOrId,
+  );
+  if (!found) return null;
+
+  return {
+    id: found.id,
+    name: found.title,
+    slug: found.slug,
+    body: found.body,
+    body_html: null,
+  };
 }
 
 export async function getPolicy(
   slugOrId: string,
   options?: { locale?: string; country?: string },
 ): Promise<Policy | null> {
-  return cachedGetPolicy(slugOrId, options ?? (await getLocaleOptions()));
+  return cachedGetPolicy(slugOrId, options);
 }

@@ -23,42 +23,40 @@
 Current `origin/main`:
 
 ```text
-e64631d90ef52bc7470f79b780cbe9dcb7e98aa2
+43323a7e56b401c2a7f060e53903abb93d714269
 ```
 
-This is the accepted B7 production merge commit.
+B1 through B8.1 are **COMPLETE**.
 
-Its parents are:
+B8 / B8.1 is **COMPLETE / READY FOR REVIEW**.
 
-```text
-6d630e4caef89c295bcec2cfbe0d51ea4b5b3d3a
-1e09b19c17315b7fb66395b94508052df50b1271
-```
+Accepted B8.1 baseline:
 
-B1 through B7 are **COMPLETE**.
-
-B7 is **COMPLETE / MERGED / DEPLOYED / PRODUCTION VERIFIED**.
-
-B8 is **NEXT**.
-
-Accepted B7 baseline:
-
-* 64 suites / 643 tests accepted at B7 closure
-* 113 generated pages
-* production media now served from clean Supabase Storage `product-media` bucket
+* 60 suites / 606 tests accepted at B8.1 closure (100% pass)
+* 18/18 architectural invariants verified by `b8-architecture-audit.test.ts` (SDK/BFF removal + zero fake payment/delivery successes)
+* Zero runtime dependency on `@spree/sdk` (package uninstalled)
+* Zero runtime dependency on `/api/v3/store/[...spree]` fake BFF (deleted)
+* Zero runtime dependency on `@spree/sdk/webhooks` or `/api/webhooks/spree` (deleted)
+* Zero fake payment session methods (`createCheckoutPaymentSession`, `updateCheckoutPaymentSession`, `completeCheckoutPaymentSession`, `createDirectPayment`, `confirmPaymentAndCompleteCart` deleted)
+* Zero fake payment sentinels (`direct_payment_session`, `"direct_payment"` deleted)
+* Zero legacy gateway callback routes (`confirm-payment` deleted)
+* Zero fake delivery rate mutations (`selectDeliveryRate` deleted)
+* Direct first-party DAL & Server Actions (`storefront/src/lib/data/` + `storefront/src/lib/db/` + `storefront/src/lib/catalog/`)
+* Direct first-party domain types (`storefront/src/types/commerce.ts`)
+* TypeScript `tsc --noEmit` clean (0 errors)
+* Biome lint clean (0 errors, 0 warnings)
+* Next.js production build: 110 static pages successfully generated
 * categories: 2
 * products: 38
 * variants: 152
 * product_images: 38
 * hero rows: 38
-* production admin count intentionally 0 (demoted per security preflight)
-* `SUPABASE_SECRET_KEY` added server-side to Vercel Production & Preview
-* clean database PostgreSQL password rotation remains deferred operator housekeeping and is NOT blocking B8
+* clean database: `hkncfdsvgjopkujmmxem` (legacy project `nmddtxibpsbtswxnienm` untouched)
 
-Accepted B7 branch:
+Accepted B8 branch:
 
 ```text
-backend/b7-media
+backend/b8-spree-compat-removal
 ```
 
 Accepted B7 head:
@@ -1123,6 +1121,52 @@ Do not assume older `ARCHITECTURE.md`, old specification docs, or old performanc
 ---
 
 ## 16. Rolling change log
+
+### 2026-09-13 — B8.1 complete: fake unsupported checkout successes removed
+
+Recorded:
+
+- Semantic closure resolving independent audit finding: unsupported inherited Spree functionality must be removed or explicitly unavailable, NOT simulated as successful;
+- Removed fake payment session methods from `storefront/src/lib/data/payment.ts`: `createCheckoutPaymentSession`, `updateCheckoutPaymentSession`, `completeCheckoutPaymentSession`, `createDirectPayment`, and `confirmPaymentAndCompleteCart`;
+- Eliminated fake runtime sentinels `direct_payment_session` and `"direct_payment"`;
+- Deleted obsolete legacy gateway callback route `storefront/src/app/[country]/[locale]/(checkout)/confirm-payment` (`[id]/page.tsx` and test);
+- Removed fake delivery selection mutation `selectDeliveryRate` from `storefront/src/lib/data/checkout.ts`, `DeliveryMethodSection.tsx`, and `CheckoutPageContent.tsx`;
+- Preserved authoritative first-party order placement `completeCheckoutOrder` (`placeOrderFromCart` into PostgreSQL with bearer-token/auth validation);
+- Updated `storefront/src/lib/__tests__/b8-architecture-audit.test.ts` with 10 new B8.1 semantic audit checks (18/18 total passing);
+- Verification:
+  * 0 `@spree/sdk` imports across all production code;
+  * 0 runtime `@spree/sdk` client calls (`getClient()`, `getClientForSurface()`, `withAuthRefresh()`);
+  * 0 references to fake BFF `/api/v3/store`;
+  * 0 references to `direct_payment_session` or fake `direct_payment` sentinels;
+  * 0 references to `paymentSessions` runtime APIs;
+  * 0 references to `confirmPaymentAndCompleteCart` or `createCheckoutPaymentSession`;
+  * 0 runtime callers for `selectDeliveryRate`;
+  * 0 legacy gateway callback routes (`confirm-payment` deleted);
+  * 60 test suites / 606 tests passing (100%);
+  * Biome lint: 0 errors, 0 warnings;
+  * TypeScript `tsc --noEmit`: 0 errors;
+  * Next.js production build: 110 static pages successfully generated.
+- next phase = review/approval of B8 + B8.1 before merge to `main`.
+
+### 2026-09-13 — B8 complete: Spree SDK & fake BFF compatibility layer removed
+
+Recorded:
+
+- Uninstalled `@spree/sdk` from dependencies;
+- Deleted fake BFF route `/api/v3/store/[...spree]` and webhook routes `/api/webhooks/spree`;
+- Deleted dead Spree auth helpers, express checkout components (`ExpressCheckoutButton`, `CouponCode`, `StripePaymentForm`, `PayPalPaymentForm`, `AdyenPaymentForm`, `express-checkout-flow.ts`, `confirm-payment` route);
+- Introduced first-party domain commerce types in `storefront/src/types/commerce.ts` replacing SDK type imports across 62 files;
+- Implemented direct first-party checkout write and order placement (`checkout.ts`, `payment.ts`), with 100% in-process lookups for `countries.ts`, `markets.ts`, `policies.ts`, `sitemap.ts`;
+- Reworked test suites to eliminate legacy BFF tests and added comprehensive architectural audit test `b8-architecture-audit.test.ts` (8/8 passing);
+- Verification:
+  * 0 `@spree/sdk` imports across all production code;
+  * 0 runtime `@spree/sdk` client calls (`getClient()`, `getClientForSurface()`, `withAuthRefresh()`);
+  * 0 references to fake BFF `/api/v3/store`;
+  * 61 test suites / 605 tests passing (100%);
+  * Biome lint: 0 errors, 0 warnings;
+  * TypeScript `tsc --noEmit`: 0 errors;
+  * Next.js production build: 112 static pages successfully generated.
+- next phase = B9 — Render / Rails backend infrastructure cleanup.
 
 ### 2026-09-13 — B7 complete / production verified
 

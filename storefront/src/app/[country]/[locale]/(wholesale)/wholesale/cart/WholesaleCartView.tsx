@@ -1,6 +1,6 @@
 "use client";
 
-import type { LineItem } from "@spree/sdk";
+import type { LineItem } from "@/types/commerce";
 import { ShoppingBag } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";

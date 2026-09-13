@@ -1,4 +1,4 @@
-import type { Address } from "@spree/sdk";
+import type { Address } from "@/types/commerce";
 
 interface AddressBlockProps {
   address: Address;

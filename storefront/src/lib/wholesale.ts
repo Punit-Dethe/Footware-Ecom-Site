@@ -1,4 +1,3 @@
-import type { Customer } from "@spree/sdk";
 import type { AppUser } from "@/lib/data/customer";
 import { INTERNAL_ORIGIN, resolveLocalPath } from "@/lib/utils/path";
 
@@ -19,12 +18,10 @@ export const WHOLESALE_GROUP_NAME = "Wholesale";
 export const WHOLESALE_MIN_QUANTITY = 10;
 
 /** Whether a customer is an approved wholesale buyer. */
-export function isWholesaleApproved(
-  customer: AppUser | Customer | null,
-): boolean {
+export function isWholesaleApproved(customer: AppUser | null): boolean {
   if (!customer) return false;
-  if ("customer_groups" in customer && Array.isArray(customer.customer_groups)) {
-    return customer.customer_groups.some((g) => g.name === WHOLESALE_GROUP_NAME);
+  if ("customer_groups" in customer && Array.isArray((customer as any).customer_groups)) {
+    return (customer as any).customer_groups.some((g: any) => g.name === WHOLESALE_GROUP_NAME);
   }
   return false;
 }

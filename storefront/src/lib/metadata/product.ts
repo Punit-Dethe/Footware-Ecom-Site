@@ -107,11 +107,11 @@ export async function generateProductMetadata({
 function productTranslationFingerprint(product: {
   name: string;
   slug: string;
-  description: string | null;
-  description_html: string | null;
-  meta_title: string | null;
-  meta_description: string | null;
-  meta_keywords: string | null;
+  description?: string | null;
+  description_html?: string | null;
+  meta_title?: string | null;
+  meta_description?: string | null;
+  meta_keywords?: string | null;
 }): string {
   return translationFingerprint(
     product.name,

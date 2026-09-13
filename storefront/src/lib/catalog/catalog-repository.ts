@@ -33,6 +33,7 @@ export interface CatalogMedia {
   xlarge_url?: string;
   small_url?: string;
   mini_url?: string;
+  og_image_url?: string | null;
   variant_ids?: string[];
   focal_point_x?: number;
   focal_point_y?: number;
@@ -93,6 +94,7 @@ export interface CatalogCategory {
   permalink: string;
   description: string;
   parent_id: string | null;
+  is_root?: boolean;
   children: CatalogCategory[];
   ancestors: CatalogCategory[];
 }

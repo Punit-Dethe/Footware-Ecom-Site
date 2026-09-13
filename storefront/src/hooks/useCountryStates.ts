@@ -1,4 +1,4 @@
-import type { State } from "@spree/sdk";
+import type { State } from "@/types/commerce";
 import { useEffect, useState, useTransition } from "react";
 
 /**

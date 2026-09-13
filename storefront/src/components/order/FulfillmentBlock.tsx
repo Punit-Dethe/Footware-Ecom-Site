@@ -1,6 +1,6 @@
 "use client";
 
-import type { Address, Fulfillment, Order } from "@spree/sdk";
+import type { Address, Fulfillment, Order } from "@/types/commerce";
 import { CircleAlert } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { AddressBlock } from "@/components/order/AddressBlock";
@@ -51,7 +51,7 @@ export function FulfillmentBlock({
                 </p>
               )}
               <span
-                className={`inline-flex items-center mt-2 px-2.5 py-0.5 rounded-lg text-xs font-medium capitalize ${getFulfillmentStatusColor(fulfillment.status)}`}
+                className={`inline-flex items-center mt-2 px-2.5 py-0.5 rounded-lg text-xs font-medium capitalize ${getFulfillmentStatusColor(fulfillment.status ?? null)}`}
               >
                 {fulfillment.status}
               </span>

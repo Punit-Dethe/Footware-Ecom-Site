@@ -1,6 +1,6 @@
 "use client";
 
-import type { Product } from "@spree/sdk";
+import type { Product } from "@/types/commerce";
 import { Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";

@@ -1,6 +1,6 @@
 "use client";
 
-import type { Address, Country, State } from "@spree/sdk";
+import type { Address, Country, State } from "@/types/commerce";
 import { MapPin } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useCallback, useMemo } from "react";

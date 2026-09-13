@@ -295,7 +295,7 @@ function appendProductEntries(
         ? {
             images: product.media
               .map((image) => image.original_url || image.large_url)
-              .filter((url: string | null): url is string => url != null),
+              .filter((url): url is string => Boolean(url)),
           }
         : {}),
     });

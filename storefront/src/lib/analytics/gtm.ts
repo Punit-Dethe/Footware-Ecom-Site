@@ -1,5 +1,5 @@
 import { sendGTMEvent } from "@next/third-parties/google";
-import type { Cart, LineItem, Order, Product, Variant } from "@spree/sdk";
+import type { Cart, LineItem, Order, Product, Variant } from "@/types/commerce";
 
 interface GA4Item {
   item_id: string;
@@ -22,9 +22,25 @@ interface ItemMappingOptions {
   variant?: Variant | null;
 }
 
-function safeParseFloat(value: string | undefined | null): number {
-  const parsed = parseFloat(value as string);
-  return Number.isFinite(parsed) ? parsed : 0;
+function safeParseFloat(value: unknown): number {
+  if (value == null) return 0;
+  if (typeof value === "number") return value;
+  if (typeof value === "string") {
+    const parsed = parseFloat(value.replace(/[^0-9.-]/g, ""));
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  if (typeof value === "object") {
+    if ("amount" in value && typeof (value as any).amount === "string") {
+      return safeParseFloat((value as any).amount);
+    }
+    if ("display_amount" in value && typeof (value as any).display_amount === "string") {
+      return safeParseFloat((value as any).display_amount);
+    }
+    if ("amount_in_cents" in value && typeof (value as any).amount_in_cents === "number") {
+      return (value as any).amount_in_cents / 100;
+    }
+  }
+  return 0;
 }
 
 export function mapProductToGA4Item(
@@ -219,7 +235,9 @@ function buildOrderEcommercePayload(
   order: Cart | Order,
   extras?: Record<string, unknown>,
 ): Record<string, unknown> {
-  const coupon = order.discounts?.find((d) => d.code)?.code;
+  const coupon =
+    (order as any).coupon_code ||
+    (order.discounts as any[])?.find((d: any) => d.code)?.code;
   return {
     currency: order.currency,
     value: safeParseFloat(order.total),

@@ -1,4 +1,4 @@
-import type { Category } from "@spree/sdk";
+import type { Category } from "@/types/commerce";
 import { cacheLife, cacheTag } from "next/cache";
 import Link from "next/link";
 import { Breadcrumbs } from "@/components/navigation/Breadcrumbs";

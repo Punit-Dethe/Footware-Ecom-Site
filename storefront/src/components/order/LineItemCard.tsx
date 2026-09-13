@@ -1,6 +1,6 @@
 "use client";
 
-import type { Order } from "@spree/sdk";
+import type { Order } from "@/types/commerce";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { ProductImage } from "@/components/ui/product-image";

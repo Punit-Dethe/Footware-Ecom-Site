@@ -1,4 +1,4 @@
-import type { Market } from "@spree/sdk";
+import type { Market } from "@/types/commerce";
 import {
   DEFAULT_LOCALE,
   resolveSupportedLocale,

@@ -1,6 +1,6 @@
 "use client";
 
-import type { Media } from "@spree/sdk";
+import type { Media } from "@/types/commerce";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import Image from "next/image";
 import { useTranslations } from "next-intl";

@@ -1,4 +1,4 @@
-import type { CustomField } from "@spree/sdk";
+import type { CustomField } from "@/types/commerce";
 import { useTranslations } from "next-intl";
 
 interface ProductCustomFieldsProps {

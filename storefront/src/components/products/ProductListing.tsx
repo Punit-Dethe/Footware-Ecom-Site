@@ -3,7 +3,7 @@ import type {
   Product,
   ProductFiltersResponse,
   ProductListParams,
-} from "@spree/sdk";
+} from "@/types/commerce";
 import { Search } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 import { type ReactElement, Suspense } from "react";
@@ -130,7 +130,9 @@ async function ProductListingInner({
 
   const products = productsResponse.data;
   const totalCount =
-    (productsResponse.meta as any).total_count ?? productsResponse.meta.count;
+    (productsResponse.meta as any)?.total_count ??
+    productsResponse.meta?.count ??
+    products.length;
 
   const hasResults = products.length > 0;
 

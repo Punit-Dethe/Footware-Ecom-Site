@@ -1,5 +1,4 @@
 import { cookies } from "next/headers";
-import { getConfig } from "./config";
 import {
   cartCookieBaseName,
   DEFAULT_SURFACE,
@@ -32,11 +31,7 @@ export async function canPersistCookies(): Promise<boolean> {
 
 function getCartCookieName(surface: Surface = DEFAULT_SURFACE): string {
   if (surface === "wholesale") return cartCookieBaseName(surface);
-  try {
-    return getConfig().cartCookieName ?? DEFAULT_CART_COOKIE;
-  } catch {
-    return DEFAULT_CART_COOKIE;
-  }
+  return DEFAULT_CART_COOKIE;
 }
 
 function getCartIdCookieName(surface: Surface = DEFAULT_SURFACE): string {
@@ -44,11 +39,7 @@ function getCartIdCookieName(surface: Surface = DEFAULT_SURFACE): string {
 }
 
 function getAccessTokenCookieName(): string {
-  try {
-    return getConfig().accessTokenCookieName ?? DEFAULT_ACCESS_TOKEN_COOKIE;
-  } catch {
-    return DEFAULT_ACCESS_TOKEN_COOKIE;
-  }
+  return DEFAULT_ACCESS_TOKEN_COOKIE;
 }
 
 // --- Cart Cookies (token + ID always managed together) ---
@@ -186,6 +177,15 @@ export async function getCartOptions(
   return { spreeToken, token };
 }
 
+export async function clearAuthCookies(): Promise<void> {
+  try {
+    await clearAccessToken();
+    await clearRefreshToken();
+  } catch {
+    // Cookie clears are best-effort — not writable during a Server Component render.
+  }
+}
+
 // --- Cart ID (required) ---
 
 export async function requireCartId(
@@ -196,20 +196,6 @@ export async function requireCartId(
   // (pre-channel-scoped-listing poisoning); fall through to re-resolve cleanly.
   if (cartId && !(await isPoisonedDtcCartId(cartId, surface))) {
     return cartId;
-  }
-
-  // Authenticated user without a (valid) cart ID cookie — resolve via
-  // carts.list() through the surface's client. carts.list is channel-scoped on
-  // the backend, so it only returns carts for this surface's channel.
-  const token = await getAccessToken();
-  if (token) {
-    const { getClientForSurface } = await import("./config");
-    const response = await getClientForSurface(surface).carts.list({ token });
-    if (response.data.length > 0) {
-      const cart = response.data[0];
-      await setCartCookies(cart.id, cart.token, surface);
-      return cart.id;
-    }
   }
 
   throw new Error("No cart found");

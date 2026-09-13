@@ -1,6 +1,6 @@
 "use client";
 
-import type { Product } from "@spree/sdk";
+import type { Product } from "@/types/commerce";
 import { getImageProps } from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";

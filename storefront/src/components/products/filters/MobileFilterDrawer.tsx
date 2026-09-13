@@ -4,7 +4,7 @@ import type {
   AvailabilityFilter,
   OptionFilter,
   ProductFiltersResponse,
-} from "@spree/sdk";
+} from "@/types/commerce";
 import { Check, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";

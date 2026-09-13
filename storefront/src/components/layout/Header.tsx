@@ -1,4 +1,4 @@
-import type { Category } from "@spree/sdk";
+import type { Category } from "@/types/commerce";
 import { User } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";

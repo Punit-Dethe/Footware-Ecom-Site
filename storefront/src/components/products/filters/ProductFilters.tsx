@@ -5,7 +5,7 @@ import type {
   OptionFilter,
   PriceRangeFilter,
   ProductFiltersResponse,
-} from "@spree/sdk";
+} from "@/types/commerce";
 import { SlidersHorizontal } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import type { JSX } from "react";
@@ -101,7 +101,7 @@ export const FilterBar = memo(function FilterBar({
     return generatePriceBuckets(
       priceFilter.min,
       priceFilter.max,
-      priceFilter.currency,
+      priceFilter.currency || "USD",
       { t, locale },
     );
   }, [filtersData, t, locale]);
@@ -156,7 +156,7 @@ export const FilterBar = memo(function FilterBar({
           {optionFilters.map((filter) => (
             <FilterDropdown
               key={filter.id}
-              label={filter.label}
+              label={filter.label || filter.name}
               badgeCount={badgeCounts[filter.id]}
               isOpen={openDropdownId === filter.id}
               onToggle={() => toggleDropdown(filter.id)}
@@ -251,7 +251,7 @@ export const FilterBar = memo(function FilterBar({
             align="right"
           >
             <SortDropdownContent
-              sortOptions={filtersData.sort_options}
+              sortOptions={filtersData.sort_options || []}
               activeSortBy={activeSortBy}
               onSortChange={handleSortChange}
             />

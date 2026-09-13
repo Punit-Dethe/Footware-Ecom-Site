@@ -1,4 +1,4 @@
-import type { Category } from "@spree/sdk";
+import type { Category } from "@/types/commerce";
 import { ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";

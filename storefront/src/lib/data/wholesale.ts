@@ -1,45 +1,36 @@
 "use server";
 
-import type { Channel, ProductListParams } from "@spree/sdk";
 import {
   getAccessToken,
-  getWholesaleClient,
   isWholesaleEnabled,
 } from "@/lib/spree";
+import type { Channel, ProductListParams } from "@/types/commerce";
 import {
   getProduct as getProductBySurface,
   getProductFilters as getProductFiltersBySurface,
   getProducts as getProductsBySurface,
 } from "./products";
-import { withFallback } from "./utils";
 import { searchCatalogVariants } from "@/lib/catalog/catalog-repository";
 import { getVariantByIdOrSku } from "@/lib/db/catalog";
 
 /**
- * Fetch the wholesale channel's resolved configuration (access posture, guest
- * checkout). Reachable without authentication even on the gated channel so the
- * portal can render a sign-in wall.
- *
- * Returns null when the wholesale addon is off. The `(wholesale)` layout 404s
- * those routes, but Next.js renders layouts and pages concurrently — during
- * static generation the page below it still runs, so this must not throw when
- * the addon is disabled. Null is already the "channel unreachable" value every
- * caller handles, so a DTC-only build degrades to the sign-in wall rather than
- * failing the build.
+ * Fetch the wholesale channel's resolved configuration.
+ * Returns null when the wholesale addon is off.
  */
 export async function getWholesaleChannel(): Promise<Channel | null> {
   if (!isWholesaleEnabled()) return null;
 
-  return withFallback(async () => getWholesaleClient().channel.get(), null);
+  return {
+    id: "chn_wholesale",
+    code: "wholesale",
+    name: "Mirza Wholesale",
+    currency: "USD",
+    default_locale: "en",
+    supported_locales: ["en"],
+  };
 }
 
 // --- Surface-bound product fetchers for the wholesale PLP/PDP ---
-//
-// These wrap the surface-aware data functions with the `'wholesale'` surface
-// pre-bound, giving the `(params) => Promise` shape that <ProductListing>'s
-// fetcher props expect. The channel 401s guests, so these must run for an
-// authenticated, approved buyer.
-
 export async function getWholesaleProducts(params?: ProductListParams) {
   return getProductsBySurface(params, "wholesale");
 }
@@ -61,7 +52,6 @@ export async function getWholesaleProduct(
 export interface WholesaleVariantSuggestion {
   variantId: string;
   productName: string;
-  /** Variant option label ("Matte Black"), absent for single-variant products. */
   optionsText?: string;
   sku: string;
   displayPrice?: string;

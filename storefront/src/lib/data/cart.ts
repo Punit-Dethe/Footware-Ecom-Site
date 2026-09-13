@@ -1,7 +1,7 @@
 "use server";
 
 import crypto from "node:crypto";
-import type { Cart, CreateCartParams } from "@spree/sdk";
+import type { Cart, CreateCartParams } from "@/types/commerce";
 import { cookies } from "next/headers";
 import {
   getPublicCatalogSnapshot,
@@ -232,7 +232,7 @@ async function adaptDbCartToSpreeCart(
     total_amount: { display_amount: formattedTotal, amount_in_cents: totalCents },
     ship_total: { display_amount: "$0.00", amount_in_cents: 0 },
     display_ship_total: "$0.00",
-    tax_total: { display_amount: "$0.00", amount_in_cents: 0 },
+    tax_total: "0.00",
     display_tax_total: "$0.00",
     promo_total: { display_amount: "$0.00", amount_in_cents: 0 },
     display_promo_total: "$0.00",

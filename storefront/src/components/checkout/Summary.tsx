@@ -1,6 +1,6 @@
 "use client";
 
-import type { Cart } from "@spree/sdk";
+import type { Cart } from "@/types/commerce";
 import { useTranslations } from "next-intl";
 import { ProductImage } from "@/components/ui/product-image";
 
@@ -12,7 +12,7 @@ export function Summary({ cart }: SummaryProps) {
   const tc = useTranslations("common");
   const t = useTranslations("checkout");
   const items = cart.items || [];
-  const hasShipping = (cart.fulfillments?.length ?? 0) > 0;
+  const hasShipping = Boolean(cart.display_delivery_total) || (cart.fulfillments?.length ?? 0) > 0;
 
   return (
     <div>
