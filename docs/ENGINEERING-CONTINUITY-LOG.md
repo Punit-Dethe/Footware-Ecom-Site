@@ -23,51 +23,66 @@
 Current `origin/main`:
 
 ```text
-cd4d99bc17c59ba20e8c0626c22a0ad64eb1f128
+3367ea2f05fac795cc8df616d4e7a4b59859ef7e
 ```
 
-B1 through B9 are **COMPLETE / MERGED / PRODUCTION VERIFIED**.
+B1 through B10 are **COMPLETE / MERGED / DEPLOYED / PRODUCTION VERIFIED**.
 
-B10.1 is **IMPLEMENTATION COMPLETE / READY FOR INDEPENDENT REVIEW**.
-Branch: `backend/b10-final-migration-cleanup`
-Accepted-for-fix base: `1a4ec01d716abdf46129b109c181fdf6f71a9b77`
-Base main: `cd4d99bc17c59ba20e8c0626c22a0ad64eb1f128`
+**BACKEND MIGRATION COMPLETE**.
 
-Accepted B10.1 validation baseline:
+Canonical B10 references:
+* B10.1 accepted SHA: `5d858a1fe6aff98479eda39baa3305ae8d208104`
+* B10 merge SHA: `3367ea2f05fac795cc8df616d4e7a4b59859ef7e`
+* Vercel deployment ID: `dpl_9vTuvjoiNtThD93xSSDpMb4aZxGB`
+* Deployed application SHA: `3367ea2f05fac795cc8df616d4e7a4b59859ef7e`
+* Production URL: `https://mirzafootwear.vercel.app`
+* Production deployment status: `READY / Production Verified`
+
+Accepted B10 validation baseline:
 
 * 61 suites / 660 tests passing (100% pass)
 * 22/22 architectural invariants verified by `b10-architecture-audit.test.ts`
 * 21/21 architectural invariants verified by `b9-architecture-audit.test.ts`
 * 18/18 architectural invariants verified by `b8-architecture-audit.test.ts`
-* Cart cookie namespace mixing eliminated: atomic resolution via `resolveCartCookieState`
-* Zero namespace crossing: new ID + legacy token = impossible; legacy ID + new token = impossible
-* `setCartCookies` unconditionally expires legacy ID and token cookies
-* Full test coverage for mixed and legacy cart states (cases A through G)
-* Production references to `LEGACY_*` cookie constants outside bridge = 0
-* Renamed `adaptDbCartToSpreeCart` to `adaptDbCartToCommerceCart` (guard: 0 references)
-* Renamed `adaptDbAddressToSpree` to `adaptDbAddressToCommerceAddress` (guard: 0 references)
-* Request headers neutralized: `x-mirza-request-pathname` / `x-mirza-request-search` (0 `x-spree-request-*`)
-* Production source Spree identifiers/comments outside migration bridge = 0
-* Environment example updated: `SUPABASE_SECRET_KEY=your_supabase_secret_key # server-only`
 * TypeScript `tsc --noEmit` clean (0 errors)
 * Biome lint clean (0 errors, 0 warnings across 320 files)
 * Next.js production build: 106 static pages successfully generated
 * Playwright first-party smoke E2E: 2 passed / 2 total (100%)
 
-Merge commit to `main`:
+Verified on merged main:
+* `src/lib/spree` absent
+* `@/lib/spree` imports = 0
+* Legacy JWT auth = 0
+* Spree middleware/config/runtime identifiers = 0 outside deliberate cookie migration compatibility
+* Dead Stripe/PayPal/Adyen packages = 0
+* Public static product tree absent
+* Old seed scripts absent
+* Old operational `SPREE_*` configuration = 0
+* `adaptDbCartToSpreeCart`, `adaptDbOrderToSpree`, `adaptDbAddressToSpree` = 0
+* Supabase verified claims remain authentication authority
+* Mirza/legacy cart-cookie mixed-state tests remain green
+* Zero namespace crossing: new ID + legacy token = impossible; legacy ID + new token = impossible
+* `setCartCookies` unconditionally expires legacy ID and token cookies
+* Full test coverage for mixed and legacy cart states (cases A through G)
+* Production references to `LEGACY_*` cookie constants outside bridge = 0
+* Request headers neutralized: `x-mirza-request-pathname` / `x-mirza-request-search` (0 `x-spree-request-*`)
 
+Production smoke verification:
+* Homepage (`/us/en`): 200 OK
+* PLP (`/us/en/products`): 200 OK (38 products rendered, active links, filter state)
+* PDP (`/us/en/products/office-footwear-01`): 200 OK
+* Supabase product media delivery: active storage assets verified
+* Zero legacy Spree/Rails/Render infrastructure
+* Live legacy-cookie migration: tested with legacy `_spree_cart_token` and `_spree_cart_token_id`; verified first-party copy to `_mirza_cart_token` and `_mirza_cart_id`, with immediate expiration of legacy cookies
+* Live mixed-state isolation: verified legacy `_spree_cart_token` is expired without contaminating `_mirza_cart_id` namespace
+* Live legacy auth distrust: verified `_spree_jwt` is not accepted for protected routes (`/account/orders` redirects to login) and legacy auth cookies are expired
+* Anonymous visitor invariant: S8 0 set-cookie headers preserved on warm visitor
+
+Next phase:
 ```text
-4cbf62fbc926bff96f7f405e6353afc5be3d0d39
+FINAL UI IMPLEMENTATION
 ```
-
-Vercel Production Deployment:
-
-```text
-Deployment ID:  dpl_CJRqscwaxv5Vz92WHM8vQVBqHkKF
-Production URL: https://mirzafootwear.vercel.app
-Deployed SHA:   4cbf62fbc926bff96f7f405e6353afc5be3d0d39
-Status:         READY / Production Verified
-```
+(Do not start Media Contract v1 or performance optimization).
 
 ---
 
@@ -1098,22 +1113,31 @@ Do not assume older `ARCHITECTURE.md`, old specification docs, or old performanc
 
 ## 16. Rolling change log
 
-### 2026-09-13 — B10 complete: Final migration cleanup, neutral naming & stale compatibility removal
+### 2026-09-13 — B10 complete: Final migration cleanup, neutral naming & backend migration complete
 
 Recorded:
 
 - B10 CODE: COMPLETE
-- B10 STATUS: IMPLEMENTATION COMPLETE / READY FOR REVIEW (Do NOT merge or deploy until independent audit)
+- B10.1 SEMANTIC CLOSURE: COMPLETE (`5d858a1fe6aff98479eda39baa3305ae8d208104`)
+- B10 MERGED: COMPLETE (`3367ea2f05fac795cc8df616d4e7a4b59859ef7e`)
+- B10 DEPLOYED: COMPLETE (`dpl_9vTuvjoiNtThD93xSSDpMb4aZxGB`)
+- B10 PRODUCTION VERIFIED: COMPLETE (`https://mirzafootwear.vercel.app`)
+- BACKEND MIGRATION COMPLETE
 - Starting main: `cd4d99bc17c59ba20e8c0626c22a0ad64eb1f128` (B9 application merge `8fb4af3cbc2b42cde4896e4627689c71e0a56c34`, production verified)
 - Branch: `backend/b10-final-migration-cleanup`
+- B10.1 accepted SHA: `5d858a1fe6aff98479eda39baa3305ae8d208104`
+- B10 merge SHA: `3367ea2f05fac795cc8df616d4e7a4b59859ef7e`
+- Vercel Deployment ID: `dpl_9vTuvjoiNtThD93xSSDpMb4aZxGB`
+- Deployed Application SHA: `3367ea2f05fac795cc8df616d4e7a4b59859ef7e`
 - Scope: complete removal of internal Spree compatibility layer, neutral first-party naming, seamless cart cookie migration bridge, removal of obsolete static assets, uninstallation of dead payment packages, and configuration cleanup.
 
 1. Cookie migration bridge (`src/lib/storefront/legacy-cookie-migration.ts`):
    - Preserves existing carts exactly: reads `_mirza_cart_*` first, falls back to legacy `_spree_*`, copies existing tokens/IDs, and defensively expires legacy cookies when writable.
    - Preserves existing guest bearer tokens without recreating or re-hashing them.
-   - Isolates all legacy cookie literals (`_spree_cart_token`, `_spree_wholesale_cart_token`, `spree_country`, `spree_locale`, `_spree_jwt`, `_spree_refresh_token`) strictly to `legacy-cookie-migration.ts` and its dedicated test suite.
+   - Isolates all legacy cookie literals (`_spree_cart_token`, `_spree_cart_token_id`, `_spree_wholesale_cart_token`, `_spree_wholesale_cart_token_id`, `spree_country`, `spree_locale`, `_spree_jwt`, `_spree_refresh_token`) strictly to `legacy-cookie-migration.ts` and its dedicated test suite.
    - Neutral cookie names established: `_mirza_cart_token`, `_mirza_cart_id`, `_mirza_wholesale_cart_token`, `_mirza_wholesale_cart_id`, `mirza_country`, `mirza_locale`.
    - Legacy auth cookies (`_spree_jwt`, `_spree_refresh_token`) are strictly expired without migrating into Supabase Auth.
+   - B10.1 semantic closure: eliminated cart cookie namespace mixing via atomic `resolveCartCookieState` (zero cross-contamination between `_mirza_*` and `_spree_*`).
 
 2. Supabase Auth sole authority:
    - Completely deleted legacy JWT authentication helpers and endpoints.
@@ -1142,6 +1166,8 @@ Recorded:
    - Created first-party modules: `surface.ts`, `config.ts`, `locale.ts`, `cookies.ts`, `middleware.ts`, `legacy-cookie-migration.ts`.
    - Renamed `createSpreeMiddleware` -> `createStorefrontMiddleware`, `SpreeMiddlewareConfig` -> `StorefrontMiddlewareConfig`.
    - Renamed `adaptDbOrderToSpree` -> `adaptDbOrderToCommerceOrder`.
+   - Renamed `adaptDbCartToSpreeCart` -> `adaptDbCartToCommerceCart`.
+   - Renamed `adaptDbAddressToSpree` -> `adaptDbAddressToCommerceAddress`.
    - Discarded dead Spree wrappers (`SpreeNextConfig`, `SpreeNextOptions`, `getCartOptions`, `spreeToken`).
 
 7. Operational environment & docs cleanup:
@@ -1150,26 +1176,25 @@ Recorded:
    - Updated `storefront/CLAUDE.md`, `storefront/README.md`, and root `README.md` for first-party architecture.
    - Preserved genuine historical material in ledger, paper evidence, perf, and continuity records.
 
-8. Comprehensive architectural audit test:
-   - Created `storefront/src/lib/__tests__/b10-architecture-audit.test.ts` with 18 assertions validating:
-     * `src/lib/spree` absent
-     * `@/lib/spree` imports = 0
-     * `SpreeMiddleware*` = 0, `SpreeNext*` = 0
-     * `adaptDbOrderToSpree` = 0
-     * `spreeToken` = 0 in production source
-     * Runtime legacy JWT calls = 0
-     * Operational `SPREE_*` env vars = 0
-     * Dead gateway packages = 0
-     * Obsolete static assets / seed dirs absent
-     * Legacy cookie literals isolated strictly to `legacy-cookie-migration.ts` and its test suite.
+8. Comprehensive architectural audits passing:
+   - B10 (`b10-architecture-audit.test.ts`): 22/22 invariants passing
+   - B9 (`b9-architecture-audit.test.ts`): 21/21 invariants passing
+   - B8 (`b8-architecture-audit.test.ts`): 18/18 invariants passing
+   - Full test suite: 61 suites / 660 tests passing (100%).
 
-9. Strict verification results:
+9. Verification & production smoke totals:
    - TypeScript `tsc --noEmit`: 0 errors;
    - Biome lint: 0 errors, 0 warnings (320 files checked);
-   - Vitest: 61 test suites / 641 tests passing (100%);
+   - Vitest: 61 test suites / 660 tests passing (100%);
    - Playwright first-party smoke: 2 passed / 2 total (100%);
    - Next.js production build: 106 static pages successfully compiled;
-   - Next phase: Independent audit of B10. (Do NOT merge, deploy, or mark BACKEND MIGRATION COMPLETE until audit passes).
+   - Vercel production deployment: `dpl_9vTuvjoiNtThD93xSSDpMb4aZxGB` (READY);
+   - Live smoke: homepage (200), PLP (200, 38 catalog shoes), PDP (200), Supabase media delivery (`product-media`), 0 Spree/Render/Rails traffic;
+   - Live legacy-cookie migration: tested with legacy `_spree_cart_token` and `_spree_cart_token_id`; verified first-party copy to `_mirza_cart_token` and `_mirza_cart_id`, with immediate expiration of legacy cookies;
+   - Live mixed-state isolation: verified legacy `_spree_cart_token` is expired without contaminating `_mirza_cart_id` namespace;
+   - Live auth distrust: verified `_spree_jwt` is not accepted for protected routes (`/account/orders` redirects to login) and legacy auth cookies are expired;
+   - S8 performance invariant: warm visitor has 0 `Set-Cookie` headers;
+   - Next phase: FINAL UI IMPLEMENTATION. (Do not start Media Contract v1 or performance optimization until requested).
 
 ### 2026-09-13 — B9 complete: Render / Rails / Spree backend infrastructure removed & verified
 
