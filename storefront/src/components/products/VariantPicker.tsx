@@ -1,15 +1,19 @@
 "use client";
 
-import type { OptionType, Variant } from "@/types/commerce";
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
+import type { OptionType, Variant } from "@/types/commerce";
 
 interface VariantPickerProps {
   variants: Variant[];
   optionTypes: OptionType[];
   selectedVariant: Variant | null;
   onVariantChange: (variant: Variant | null) => void;
+  className?: string;
+  sizeGuideHref?: string;
+  compactSizes?: boolean;
 }
 
 export function VariantPicker({
@@ -17,6 +21,9 @@ export function VariantPicker({
   optionTypes,
   selectedVariant,
   onVariantChange,
+  className,
+  sizeGuideHref,
+  compactSizes = false,
 }: VariantPickerProps) {
   const t = useTranslations("products");
   const optionValuesMap = useMemo(() => {
@@ -127,7 +134,7 @@ export function VariantPicker({
   }
 
   return (
-    <div className="space-y-6">
+    <div className={`space-y-6 ${className ?? ""}`}>
       {optionTypes.map((optionType) => {
         const values = Array.from(optionValuesMap[optionType.id] || []);
         const selectedValue = selectedOptions[optionType.id];
@@ -135,20 +142,35 @@ export function VariantPicker({
 
         return (
           <div key={optionType.id}>
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-sm font-medium text-gray-900">
+            <div className="variant-picker__heading flex items-center gap-2 mb-3">
+              <span className="variant-picker__label text-sm font-medium text-gray-900">
                 {optionType.label}
               </span>
-              {selectedValue && (
-                <span className="text-sm text-gray-500">
+              {selectedValue && (isColor || !compactSizes) && (
+                <span className="variant-picker__value text-sm text-gray-500">
                   {getOptionValueDetails(optionType.id, selectedValue)?.label ||
                     selectedValue}
                 </span>
               )}
+              {sizeGuideHref && /size/i.test(optionType.name) && (
+                <Link
+                  className="variant-picker__guide"
+                  href={sizeGuideHref}
+                  onClick={() => {
+                    if (!sizeGuideHref.startsWith("#")) return;
+                    const guide = document.getElementById(
+                      sizeGuideHref.slice(1),
+                    );
+                    if (guide instanceof HTMLDetailsElement) guide.open = true;
+                  }}
+                >
+                  {t("sizeGuide")}
+                </Link>
+              )}
             </div>
 
             {isColor ? (
-              <div className="flex flex-wrap gap-2">
+              <div className="variant-picker__choices variant-picker__choices--color flex flex-wrap gap-2">
                 {values.map((value) => {
                   const optionValue = getOptionValueDetails(
                     optionType.id,
@@ -169,7 +191,7 @@ export function VariantPicker({
                       disabled={!isAvailable}
                       title={optionValue?.label || value}
                       className={`
-                        w-10 h-10 rounded-lg border transition-all relative overflow-hidden
+                        variant-picker__swatch w-10 h-10 border transition-all relative overflow-hidden
                         ${isSelected ? "border-2 border-gray-900" : "border-gray-200"}
                         ${!isAvailable ? "opacity-30 cursor-not-allowed" : "cursor-pointer"}
                         ${!isPurchasable && isAvailable ? "opacity-50" : ""}
@@ -195,7 +217,7 @@ export function VariantPicker({
                 })}
               </div>
             ) : (
-              <div className="flex flex-wrap gap-2">
+              <div className="variant-picker__choices variant-picker__choices--size flex flex-wrap gap-2">
                 {values.map((value) => {
                   const optionValue = getOptionValueDetails(
                     optionType.id,
@@ -213,15 +235,13 @@ export function VariantPicker({
                       type="button"
                       key={value}
                       variant="outline"
+                      className={`variant-picker__option${isSelected ? " is-selected" : ""}`}
                       onClick={() => handleOptionSelect(optionType.id, value)}
                       disabled={!isAvailable}
-                      className={
-                        isSelected
-                          ? "border-2 border-gray-900 font-semibold"
-                          : ""
-                      }
                     >
-                      {optionValue?.label || value}
+                      {compactSizes && /size/i.test(optionType.name)
+                        ? value
+                        : optionValue?.label || value}
                       {!isPurchasable && isAvailable && (
                         <span className="ml-1 text-xs text-gray-400">
                           {t("outOfStockVariant")}

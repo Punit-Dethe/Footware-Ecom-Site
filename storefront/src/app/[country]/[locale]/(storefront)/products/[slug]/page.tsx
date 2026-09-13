@@ -1,17 +1,22 @@
-import type { Category } from "@/types/commerce";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
+import { getTranslations } from "next-intl/server";
+import { Suspense } from "react";
 import { Breadcrumbs } from "@/components/navigation/Breadcrumbs";
 import { JsonLd } from "@/components/seo/JsonLd";
+import { listCatalogProducts } from "@/lib/catalog/catalog-repository";
 import { getCachedProduct, PRODUCT_PAGE_EXPAND } from "@/lib/data/cached";
+import { getProductMedia } from "@/lib/media/catalog-images";
 import { generateProductMetadata } from "@/lib/metadata/product";
 import {
   buildBreadcrumbJsonLd,
   buildCanonicalUrl,
   buildProductJsonLd,
 } from "@/lib/seo";
-import { getStoreUrl } from "@/lib/store";
-import { getProductMedia } from "@/lib/media/catalog-images";
+import { getDefaultCountry, getDefaultLocale, getStoreUrl } from "@/lib/store";
+import type { Category } from "@/types/commerce";
 import { ProductDetails } from "./ProductDetails";
 
 interface ProductPageProps {
@@ -24,9 +29,6 @@ interface ProductPageProps {
     category_id?: string;
   }>;
 }
-
-import { listCatalogProducts } from "@/lib/catalog/catalog-repository";
-import { getDefaultCountry, getDefaultLocale } from "@/lib/store";
 
 export async function generateStaticParams() {
   const country = getDefaultCountry();
@@ -59,18 +61,16 @@ function findBreadcrumbCategory(
   return categories[0];
 }
 
-import { Suspense } from "react";
-
 function ProductPageSkeleton() {
   return (
-    <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-pulse">
-      <div className="h-4 w-48 bg-stone-100 rounded mb-6" />
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div className="aspect-square bg-stone-100 rounded-xl" />
-        <div className="space-y-4">
-          <div className="h-8 w-3/4 bg-stone-100 rounded" />
-          <div className="h-6 w-1/4 bg-stone-100 rounded" />
-          <div className="h-24 w-full bg-stone-100 rounded" />
+    <div className="pdp-page animate-pulse" aria-busy="true">
+      <div className="pdp-breadcrumbs h-4 bg-stone-100" />
+      <div className="pdp-overview">
+        <div className="aspect-square bg-stone-100" />
+        <div className="space-y-4 p-8">
+          <div className="h-8 w-3/4 bg-stone-100" />
+          <div className="h-6 w-1/4 bg-stone-100" />
+          <div className="h-24 w-full bg-stone-100" />
         </div>
       </div>
     </div>
@@ -85,10 +85,7 @@ export default function ProductPage(props: ProductPageProps) {
   );
 }
 
-async function ProductPageContent({
-  params,
-  searchParams,
-}: ProductPageProps) {
+async function ProductPageContent({ params, searchParams }: ProductPageProps) {
   const [{ country, locale, slug }, { category_id }] = await Promise.all([
     params,
     searchParams,
@@ -118,6 +115,42 @@ async function ProductPageContent({
     product.categories || [],
     category_id,
   );
+  const catalogProducts = await listCatalogProducts();
+  const categoryProducts = breadcrumbCategory
+    ? catalogProducts.filter((candidate) =>
+        candidate.categories.some(
+          (category) => category.id === breadcrumbCategory.id,
+        ),
+      )
+    : catalogProducts;
+  const currentIndex = categoryProducts.findIndex(
+    (candidate) => candidate.id === product.id,
+  );
+  const previousProduct =
+    currentIndex >= 0 && categoryProducts.length > 1
+      ? categoryProducts[
+          (currentIndex - 1 + categoryProducts.length) % categoryProducts.length
+        ]
+      : null;
+  const nextProduct =
+    currentIndex >= 0 && categoryProducts.length > 1
+      ? categoryProducts[(currentIndex + 1) % categoryProducts.length]
+      : null;
+  const t = await getTranslations({
+    locale: locale as Locale,
+    namespace: "products",
+  });
+  const relatedProducts = catalogProducts
+    .filter(
+      (candidate) =>
+        candidate.id !== product.id &&
+        candidate.categories.some((category) =>
+          product.categories.some(
+            (ownCategory) => ownCategory.id === category.id,
+          ),
+        ),
+    )
+    .slice(0, 4);
 
   return (
     <>
@@ -132,21 +165,43 @@ async function ProductPageContent({
           })}
         />
       )}
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8 pt-6">
-        {breadcrumbCategory && (
-          <Breadcrumbs
-            category={breadcrumbCategory}
-            basePath={basePath}
-            productName={product.name}
-            locale={locale}
-          />
-        )}
+      <div className="pdp-page">
+        <div className="pdp-breadcrumbs">
+          <div className="pdp-breadcrumbs__trail">
+            {breadcrumbCategory && (
+              <Breadcrumbs
+                category={breadcrumbCategory}
+                basePath={basePath}
+                productName={product.name}
+                locale={locale}
+              />
+            )}
+          </div>
+          {previousProduct && nextProduct && (
+            <nav
+              className="pdp-product-navigation"
+              aria-label={t("productNavigation")}
+            >
+              <Link href={`${basePath}/products/${previousProduct.slug}`}>
+                <ChevronLeft aria-hidden="true" /> {t("previousProduct")}
+              </Link>
+              <Link href={`${basePath}/products/${nextProduct.slug}`}>
+                {t("nextProduct")} <ChevronRight aria-hidden="true" />
+              </Link>
+            </nav>
+          )}
+        </div>
+        <ProductDetails
+          product={product}
+          media={
+            product.product_media ||
+            getProductMedia(product.slug, product.thumbnail_url)
+          }
+          basePath={basePath}
+          editorial
+          relatedProducts={relatedProducts}
+        />
       </div>
-      <ProductDetails
-        product={product}
-        media={(product as any).product_media || getProductMedia(product.slug, product.thumbnail_url)}
-        basePath={basePath}
-      />
     </>
   );
 }

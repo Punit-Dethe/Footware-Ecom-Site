@@ -1,91 +1,92 @@
 "use client";
 
-import type { Media, Product, Variant } from "@/types/commerce";
-import { CircleCheckBig, CircleX, Loader2, ShoppingBag } from "lucide-react";
+import { Loader2, Plus } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useState } from "react";
 import { QuantityPickerField } from "@/components/cart/QuantityPickerField";
 import { HiddenPricePrompt } from "@/components/products/HiddenPricePrompt";
 import { MediaGallery } from "@/components/products/MediaGallery";
+import { ProductCard } from "@/components/products/ProductCard";
 import { ProductCustomFields } from "@/components/products/ProductCustomFields";
 import { VariantPicker } from "@/components/products/VariantPicker";
 import { Button } from "@/components/ui/button";
+import { ProductImage } from "@/components/ui/product-image";
 import { useCart } from "@/contexts/CartContext";
 import { useHiddenPricing } from "@/contexts/HiddenPricingContext";
 import { useStore } from "@/contexts/StoreContext";
 import { trackAddToCart, trackViewItem } from "@/lib/analytics/gtm";
 import type { ProductMedia } from "@/lib/media/types";
+import type { Media, Product, Variant } from "@/types/commerce";
 
 interface ProductDetailsProps {
   product: Product;
   media?: ProductMedia;
   basePath: string;
+  editorial?: boolean;
+  relatedProducts?: Product[];
 }
 
-export function ProductDetails({ product, media: mediaProp, basePath }: ProductDetailsProps) {
+export function ProductDetails({
+  product,
+  media: mediaProp,
+  basePath,
+  editorial = false,
+  relatedProducts = [],
+}: ProductDetailsProps) {
   const { addItem } = useCart();
   const { currency } = useStore();
   const t = useTranslations("products");
+  const th = useTranslations("home");
+  const tc = useTranslations("common");
+  const tp = useTranslations("policies");
   const tw = useTranslations("wholesale");
-  const media: ProductMedia = mediaProp || (product as any).product_media || {
-    mainUrl: product.thumbnail_url || null,
-    dominantColor: "#f5f5f5",
-  };
-  // Non-null inside a HiddenPricingProvider (wholesale `prices_hidden`, guest
-  // view): prices are null on purpose, and ordering is gated behind sign-in.
+  const media: ProductMedia = mediaProp ||
+    product.product_media || {
+      mainUrl: product.thumbnail_url || "",
+      dominantColor: "#fff",
+    };
   const hiddenPricing = useHiddenPricing();
   const pricesHidden = hiddenPricing !== null;
 
-  // Filter variants list
-  const variants = useMemo(() => {
-    return (product.variants || []).filter(Boolean);
-  }, [product.variants]);
-
+  const variants = useMemo(
+    () => (product.variants || []).filter(Boolean),
+    [product.variants],
+  );
   const hasVariants = variants.length > 0;
   const optionTypes = product.option_types || [];
 
-  // Initialize with default variant or first available variant
   const [selectedVariant, setSelectedVariant] = useState<Variant | null>(() => {
-    if (product.default_variant) {
-      return product.default_variant;
-    }
-    if (hasVariants) {
-      return variants.find((v) => v.purchasable) || variants[0];
-    }
-    // For products without variants, use default variant
-    return product.default_variant || null;
+    if (product.default_variant) return product.default_variant;
+    if (hasVariants)
+      return variants.find((variant) => variant.purchasable) || variants[0];
+    return null;
   });
-
   const [quantity, setQuantity] = useState(1);
   const [loading, setLoading] = useState(false);
 
-  // Track product view (analytics - client-only side effect)
   useEffect(() => {
     trackViewItem(product, currency);
   }, [product, currency]);
 
   const galleryImages = useMemo((): Media[] => {
-    if (product.media && product.media.length > 0) {
-      return product.media;
-    }
-    if (media.mainUrl) {
-      return [
-        {
-          id: `img_${product.id}`,
-          url: media.mainUrl,
-          alt: product.name,
-          position: 1,
-        } as unknown as Media,
-      ];
-    }
-    return [];
+    if (product.media?.length) return product.media;
+    if (!media.mainUrl) return [];
+    return [
+      {
+        id: `img_${product.id}`,
+        url: media.mainUrl,
+        alt: product.name,
+        position: 1,
+      } as Media,
+    ];
   }, [product.media, product.id, product.name, media.mainUrl]);
 
   const variantImageIndex = useMemo((): number | null => {
     if (!selectedVariant) return null;
-    const index = galleryImages.findIndex((m) =>
-      m.variant_ids?.includes(selectedVariant.id),
+    const index = galleryImages.findIndex((image) =>
+      image.variant_ids?.includes(selectedVariant.id),
     );
     return index >= 0 ? index : null;
   }, [selectedVariant, galleryImages]);
@@ -94,7 +95,6 @@ export function ProductDetails({ product, media: mediaProp, basePath }: ProductD
   const originalPrice =
     selectedVariant?.original_price ?? product.original_price;
   const displayPrice = price?.display_amount;
-
   const currentAmountCents = price?.amount_in_cents;
   const originalAmountCents = originalPrice?.amount_in_cents;
   const compareAtAmountCents = price?.compare_at_amount_in_cents;
@@ -105,191 +105,263 @@ export function ProductDetails({ product, media: mediaProp, basePath }: ProductD
     (compareAtAmountCents != null &&
       currentAmountCents != null &&
       currentAmountCents < compareAtAmountCents);
-
   const strikethroughPrice = onSale
     ? ((originalPrice?.display_amount &&
       originalPrice.display_amount !== displayPrice
         ? originalPrice.display_amount
         : price?.display_compare_at_amount) ?? null)
     : null;
-
-  const sku = selectedVariant?.sku ?? product.default_variant?.sku;
-
-  // Purchasability
+  const sku =
+    selectedVariant?.sku ?? product.default_variant?.sku ?? product.sku;
   const isPurchasable = hasVariants
     ? (selectedVariant?.purchasable ?? false)
     : (product.purchasable ?? false);
-
   const inStock = hasVariants
     ? (selectedVariant?.in_stock ?? false)
     : (product.in_stock ?? false);
+  const category = product.categories?.[0];
+  const policyBasePath = basePath.replace(/\/wholesale$/, "");
 
   const handleAddToCart = async () => {
     const variantId =
       selectedVariant?.id ||
       product.default_variant?.id ||
       product.default_variant_id;
-    if (!variantId) {
-      throw new Error("No variant selected");
-    }
+    if (!variantId) return;
 
     setLoading(true);
-    await addItem(variantId, quantity);
-    setLoading(false);
-    trackAddToCart(product, selectedVariant, quantity, currency);
+    try {
+      await addItem(variantId, quantity);
+      trackAddToCart(product, selectedVariant, quantity, currency);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <div className="container mx-auto px-4 sm:px-6 lg:px-8  py-8">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-        {/* Media Gallery */}
-        <div>
-          <MediaGallery
-            images={galleryImages}
-            productName={product.name}
-            activeIndex={variantImageIndex}
-          />
-        </div>
+    <div className={`pdp-product${editorial ? " pdp-product--editorial" : ""}`}>
+      <section className="pdp-overview" aria-label={product.name}>
+        <MediaGallery
+          images={galleryImages}
+          productName={product.name}
+          activeIndex={variantImageIndex}
+          editorial={editorial}
+        />
 
-        {/* Product Info */}
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">{product.name}</h1>
-
-          {/* Price */}
-          <div className="mt-4 flex items-center gap-4">
+        <div className="pdp-summary">
+          <p className="pdp-kicker">{category?.name || t("allProducts")}</p>
+          <h1>{product.name}</h1>
+          <div className="pdp-price-row">
             {displayPrice ? (
-              <span className="text-3xl font-bold text-gray-900">
-                {displayPrice}
-              </span>
+              <span className="pdp-price">{displayPrice}</span>
             ) : (
-              <HiddenPricePrompt className="inline-flex items-center gap-1.5 text-base font-medium text-slate-600 underline underline-offset-4 hover:text-slate-900" />
+              <HiddenPricePrompt className="underline underline-offset-4" />
             )}
             {onSale && strikethroughPrice && (
               <>
-                <span className="text-xl text-gray-500 line-through">
-                  {strikethroughPrice}
-                </span>
-                <span className="bg-red-100 text-red-800 text-sm font-medium px-2.5 py-0.5 rounded">
-                  {t("sale")}
-                </span>
+                <span className="pdp-price--old">{strikethroughPrice}</span>
+                <span className="pdp-sale">{t("sale")}</span>
               </>
             )}
           </div>
+          {product.description && (
+            <p className="pdp-summary__description">{product.description}</p>
+          )}
 
-          {/* Stock Status */}
-          <div className="mt-4">
-            {inStock ? (
-              <span className="inline-flex items-center gap-1.5 text-green-600">
-                <CircleCheckBig className="w-5 h-5" />
-                {t("inStock")}
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1.5 text-red-600">
-                <CircleX className="w-5 h-5" />
-                {t("outOfStock")}
-              </span>
-            )}
-          </div>
-
-          {/* Variant Picker */}
-          {hasVariants && optionTypes.length > 0 && (
-            <div className="mt-8">
+          <div className="pdp-summary__selectors">
+            {hasVariants && optionTypes.length > 0 && (
               <VariantPicker
                 variants={variants}
                 optionTypes={optionTypes}
                 selectedVariant={selectedVariant}
                 onVariantChange={setSelectedVariant}
+                className={editorial ? "pdp-variant-picker" : undefined}
+                sizeGuideHref={editorial ? "#size-guide" : undefined}
+                compactSizes={editorial}
               />
-            </div>
-          )}
+            )}
 
-          {/* Quantity & Add to Cart */}
-          <div className="mt-8">
+            {!pricesHidden && (
+              <div className="pdp-quantity">
+                <span className="pdp-field-label">{tc("quantity")}</span>
+                <div className="pdp-quantity__control">
+                  <QuantityPickerField
+                    quantity={quantity}
+                    onQuantityChange={setQuantity}
+                    disabled={!isPurchasable}
+                    size="lg"
+                  />
+                </div>
+              </div>
+            )}
+
             {pricesHidden ? (
-              // Guest on a prices-hidden channel: no pricing, no ordering —
-              // route them through the wholesale sign-in first.
-              <Button asChild size="lg">
+              <Button asChild className="pdp-add-button" size="lg">
                 <Link href={hiddenPricing.signInHref}>
                   {tw("hiddenPrice.signInToOrder")}
                 </Link>
               </Button>
             ) : (
-              <div className="flex gap-4">
-                <QuantityPickerField
-                  quantity={quantity}
-                  onQuantityChange={setQuantity}
-                  size="lg"
-                />
-
-                {/* Add to Cart Button */}
-                <Button
-                  size="lg"
-                  onClick={handleAddToCart}
-                  disabled={loading || !isPurchasable}
-                >
-                  {loading ? (
-                    <>
-                      <Loader2 className="animate-spin h-5 w-5" />
-                      {t("adding")}
-                    </>
-                  ) : isPurchasable ? (
-                    <>
-                      <ShoppingBag className="w-5 h-5" />
-                      {t("addToCart")}
-                    </>
-                  ) : (
-                    t("outOfStock")
-                  )}
-                </Button>
-              </div>
+              <Button
+                className="pdp-add-button"
+                size="lg"
+                onClick={handleAddToCart}
+                disabled={loading || !isPurchasable}
+              >
+                {loading && (
+                  <Loader2 className="animate-spin" aria-hidden="true" />
+                )}
+                {loading
+                  ? t("adding")
+                  : isPurchasable
+                    ? t("addToCart")
+                    : t("outOfStock")}
+              </Button>
             )}
-          </div>
 
-          {/* Description */}
-          {(product.description_html || product.description) && (
-            <div className="mt-10 border-t pt-8">
-              <h2 className="text-lg font-medium text-gray-900 mb-4">
-                {t("description")}
-              </h2>
-              {/* Description is admin-authored safe HTML generated by first-party catalog admin */}
-              <div
-                className="text-gray-600 prose prose-sm max-w-none"
-                dangerouslySetInnerHTML={{
-                  __html:
-                    product.description_html ||
-                    `<p>${product.description}</p>`,
-                }}
+            <p className="pdp-stock" aria-live="polite">
+              <span
+                className={`pdp-stock__dot${inStock ? "" : " pdp-stock__dot--empty"}`}
               />
-            </div>
-          )}
-
-          {/* Custom Fields */}
-          <ProductCustomFields customFields={product.custom_fields} />
-
-          {/* Product Details */}
-          <div className="mt-8 border-t pt-8">
-            <h2 className="text-lg font-medium text-gray-900 mb-4">
-              {t("details")}
-            </h2>
-            <dl className="space-y-3">
-              {sku && (
-                <div className="flex">
-                  <dt className="w-32 text-gray-500 text-sm">{t("sku")}</dt>
-                  <dd className="text-gray-900 text-sm">{sku}</dd>
-                </div>
-              )}
-              {selectedVariant?.options_text && (
-                <div className="flex">
-                  <dt className="w-32 text-gray-500 text-sm">{t("options")}</dt>
-                  <dd className="text-gray-900 text-sm">
-                    {selectedVariant.options_text}
-                  </dd>
-                </div>
-              )}
-            </dl>
+              {inStock ? t("inStock") : t("outOfStock")}
+            </p>
           </div>
         </div>
-      </div>
+      </section>
+
+      <section
+        className={`pdp-information${editorial ? "" : " pdp-information--trade"}`}
+      >
+        {editorial && (
+          <div className="pdp-story">
+            <p className="pdp-kicker">{th("craftLabel")}</p>
+            <h2>{t("productStoryTitle")}</h2>
+            <p>{th("heritageDescription")}</p>
+          </div>
+        )}
+
+        {editorial && media.mainUrl && (
+          <div className="pdp-detail-photo">
+            <div className="pdp-detail-photo__frame">
+              <ProductImage
+                src={media.mainUrl}
+                alt={t("detailImageAlt", { product: product.name })}
+                fill
+                className="object-cover"
+                sizes="(max-width: 760px) 100vw, 24vw"
+              />
+            </div>
+            <span className="pdp-kicker">{t("detailCaption")}</span>
+          </div>
+        )}
+
+        <div className="pdp-specifications">
+          <h2 className="pdp-kicker">{t("details")}</h2>
+          <dl className="pdp-specifications__list">
+            {category && (
+              <div>
+                <dt>{t("categories")}</dt>
+                <dd>{category.name}</dd>
+              </div>
+            )}
+            {sku && (
+              <div>
+                <dt>{t("sku")}</dt>
+                <dd>{sku}</dd>
+              </div>
+            )}
+            {selectedVariant?.options_text && (
+              <div>
+                <dt>{t("options")}</dt>
+                <dd>{selectedVariant.options_text}</dd>
+              </div>
+            )}
+            <div>
+              <dt>{t("availability")}</dt>
+              <dd>{inStock ? t("inStock") : t("outOfStock")}</dd>
+            </div>
+          </dl>
+
+          <ProductCustomFields customFields={product.custom_fields} />
+
+          <div className="pdp-accordions">
+            <details>
+              <summary>
+                {t("shippingReturns")}
+                <Plus aria-hidden="true" />
+              </summary>
+              <div className="pdp-accordions__content">
+                <Link href={`${policyBasePath}/policies/shipping-policy`}>
+                  {tp("shippingPolicy")}
+                </Link>
+                <Link href={`${policyBasePath}/policies/return-policy`}>
+                  {tp("returnsPolicy")}
+                </Link>
+              </div>
+            </details>
+            <details>
+              <summary>
+                {t("careGuide")}
+                <Plus aria-hidden="true" />
+              </summary>
+              <p className="pdp-accordions__content">{t("careAdvice")}</p>
+            </details>
+            <details id="size-guide">
+              <summary>
+                {t("sizeGuide")}
+                <Plus aria-hidden="true" />
+              </summary>
+              <p className="pdp-accordions__content">{t("sizeAdvice")}</p>
+            </details>
+          </div>
+        </div>
+      </section>
+
+      {editorial && (
+        <section className="pdp-campaign" aria-labelledby="pdp-campaign-title">
+          <Image
+            src="/editorial/craft-hands.webp"
+            alt=""
+            fill
+            sizes="100vw"
+            className="object-cover"
+          />
+          <div className="pdp-campaign__content">
+            <p className="pdp-kicker">{th("heritageLabel")}</p>
+            <h2 id="pdp-campaign-title">{th("heritageTitle")}</h2>
+            <Link href={`${basePath}/#heritage`}>
+              {t("discoverStory")} <span aria-hidden="true">→</span>
+            </Link>
+          </div>
+        </section>
+      )}
+
+      {editorial && relatedProducts.length > 0 && (
+        <section className="pdp-related" aria-labelledby="pdp-related-title">
+          <div className="pdp-related__heading">
+            <h2 id="pdp-related-title" className="pdp-kicker">
+              {t("youMayAlsoLike")}
+            </h2>
+            <Link href={`${basePath}/products`}>
+              {th("viewAll")} <span aria-hidden="true">→</span>
+            </Link>
+          </div>
+          <div className="pdp-related__grid">
+            {relatedProducts.map((related, index) => (
+              <ProductCard
+                key={related.id}
+                product={related}
+                basePath={basePath}
+                categoryId={related.categories?.[0]?.id}
+                index={index}
+                listId="related-products"
+                listName="Related Products"
+                currency={currency}
+              />
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

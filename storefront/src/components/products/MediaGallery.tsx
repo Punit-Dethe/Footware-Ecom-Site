@@ -1,11 +1,11 @@
 "use client";
 
-import type { Media } from "@/types/commerce";
 import { ZoomIn } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useTranslations } from "next-intl";
 import { useCallback, useRef, useState } from "react";
 import { ProductImage } from "@/components/ui/product-image";
+import type { Media } from "@/types/commerce";
 
 const SWIPE_THRESHOLD_PX = 50;
 const SWIPE_MAX_VERTICAL_PX = 75;
@@ -34,6 +34,7 @@ interface MediaGalleryProps {
   images: Media[];
   productName: string;
   activeIndex?: number | null;
+  editorial?: boolean;
 }
 
 /** Prefer pre-sized media URLs over the full-resolution original,
@@ -70,6 +71,7 @@ function MediaGalleryInner({
   images,
   productName,
   activeIndex,
+  editorial = false,
 }: MediaGalleryProps) {
   const t = useTranslations("products");
   const [selectedIndex, setSelectedIndex] = useState(activeIndex ?? 0);
@@ -121,7 +123,9 @@ function MediaGalleryInner({
 
   if (images.length === 0) {
     return (
-      <div className="relative aspect-square bg-gray-100 rounded-xl overflow-hidden">
+      <div
+        className={`relative aspect-square overflow-hidden ${editorial ? "bg-white" : "bg-gray-100 rounded-xl"}`}
+      >
         <ProductImage
           src={null}
           alt={productName}
@@ -142,11 +146,13 @@ function MediaGalleryInner({
   const showMainImage = mainImageUrl && mainImageErrorUrl !== mainImageUrl;
 
   return (
-    <div className="flex flex-col gap-4">
+    <div
+      className={`media-gallery${editorial ? " media-gallery--editorial" : ""}${images.length === 1 ? " media-gallery--single" : ""}`}
+    >
       {/* Main Image */}
       <button
         type="button"
-        className="relative aspect-square bg-gray-100 rounded-xl overflow-hidden cursor-zoom-in w-full touch-pan-y"
+        className={`media-gallery__main relative aspect-square overflow-hidden cursor-zoom-in w-full touch-pan-y ${editorial ? "bg-white" : "bg-gray-100 rounded-xl"}`}
         onClick={() => {
           if (suppressClickRef.current) {
             suppressClickRef.current = false;
@@ -164,7 +170,7 @@ function MediaGalleryInner({
           src={mainImageUrl}
           alt={selectedImage?.alt || productName}
           fill
-          className="object-cover"
+          className={editorial ? "object-contain" : "object-cover"}
           fetchPriority="high"
           loading="eager"
           priority
@@ -177,16 +183,16 @@ function MediaGalleryInner({
         />
         {/* Zoom hint */}
         {showMainImage && (
-          <div className="absolute bottom-4 right-4 bg-white/80 backdrop-blur-sm px-3 py-1.5 rounded-lg text-sm text-gray-600 flex items-center gap-1.5">
-            <ZoomIn className="w-4 h-4" />
-            {t("clickToZoom")}
+          <div className="media-gallery__zoom absolute bottom-4 right-4 bg-white/80 px-3 py-1.5 text-sm text-gray-600 flex items-center gap-1.5">
+            <ZoomIn className="w-4 h-4" aria-hidden="true" />
+            <span>{t("clickToZoom")}</span>
           </div>
         )}
       </button>
 
       {/* Thumbnails */}
       {images.length > 1 && (
-        <div className="flex gap-2 overflow-x-auto pb-2">
+        <div className="media-gallery__thumbs flex gap-2 overflow-x-auto pb-2">
           {images.map((image, index) => {
             const thumbUrl = getThumbImageUrl(image);
             return (
@@ -194,7 +200,9 @@ function MediaGalleryInner({
                 type="button"
                 key={image.id}
                 onClick={() => selectImage(index)}
-                className={`relative w-20 h-20 flex-shrink-0 rounded-xl overflow-hidden border-2 transition-colors bg-gray-100 ${
+                aria-label={`${productName} ${index + 1}`}
+                aria-pressed={index === safeIndex}
+                className={`media-gallery__thumb relative w-20 h-20 flex-shrink-0 overflow-hidden border-2 transition-colors ${editorial ? "bg-white" : "bg-gray-100 rounded-xl"} ${
                   index === safeIndex
                     ? "border-gray-600"
                     : "border-transparent hover:border-gray-300"
@@ -204,7 +212,7 @@ function MediaGalleryInner({
                   src={thumbUrl}
                   alt={image.alt || `${productName} ${index + 1}`}
                   fill
-                  className="object-cover"
+                  className={editorial ? "object-contain" : "object-cover"}
                   sizes="80px"
                 />
               </button>
