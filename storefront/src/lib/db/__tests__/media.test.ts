@@ -17,6 +17,7 @@ import {
   reorderProductMedia,
   setHeroMediaAtomic,
   updateMediaAltText,
+  MediaDomainError,
 } from "../media";
 
 const TEST_PROD_ID = "11111111-1111-4111-8111-111111111111";
@@ -359,6 +360,19 @@ describe("Media DAL Tests", () => {
         `products/${TEST_PROD_ID}/shared.webp`,
         `products/${TEST_PROD_ID}/thumb.webp`,
       ]);
+    });
+
+    it("throws typed MediaDomainError when media does not belong to product", async () => {
+      const mockClient = {
+        query: vi.fn(),
+      };
+
+      mockDb.transaction.mockImplementation(async (cb: any) => cb(mockClient));
+      mockClient.query.mockResolvedValueOnce({ rows: [] }); // not found
+
+      await expect(
+        deleteProductMedia(TEST_PROD_ID, "foreign-media-id"),
+      ).rejects.toThrow(MediaDomainError);
     });
   });
 });

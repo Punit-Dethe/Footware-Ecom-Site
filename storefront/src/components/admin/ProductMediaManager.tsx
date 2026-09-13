@@ -172,7 +172,7 @@ export function ProductMediaManager({
       if (!res.success) {
         setError(res.error || "Failed to delete image.");
       } else {
-        setSuccess("Image deleted.");
+        setSuccess(res.warning || "Image deleted.");
         setMediaList((prev) => prev.filter((m) => m.id !== mediaId));
         router.refresh();
       }

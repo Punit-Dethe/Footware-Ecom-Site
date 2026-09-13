@@ -1,41 +1,8 @@
-import dns from "node:dns";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createClient } from "@supabase/supabase-js";
 import pg from "pg";
-
-// In-process DNS fallback for environments where local router fails to resolve cloud endpoints.
-// Does NOT modify Windows system DNS, adapter settings, or global network configuration.
-const originalLookup = dns.lookup;
-try {
-  dns.setServers(["8.8.8.8", "1.1.1.1"]);
-  dns.lookup = function (hostname, options, callback) {
-    if (typeof options === "function") {
-      callback = options;
-      options = {};
-    }
-    if (hostname.endsWith(".supabase.co")) {
-      dns.resolve4(hostname, (err, addresses) => {
-        if (err || !addresses || addresses.length === 0) {
-          return originalLookup(hostname, options, callback);
-        }
-        if (options && options.all) {
-          callback(
-            null,
-            addresses.map((a) => ({ address: a, family: 4 })),
-          );
-        } else {
-          callback(null, addresses[0], 4);
-        }
-      });
-    } else {
-      originalLookup(hostname, options, callback);
-    }
-  };
-} catch {
-  // Proceed with default resolver if custom lookup setup fails
-}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -85,8 +52,7 @@ if (!isLocalhostDb && !caBase64) {
 }
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const secretKey =
-  process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+const secretKey = process.env.SUPABASE_SECRET_KEY;
 
 if (!supabaseUrl || !secretKey) {
   console.error(

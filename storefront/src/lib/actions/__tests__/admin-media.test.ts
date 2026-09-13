@@ -75,6 +75,7 @@ import {
   setHeroMediaAction,
   updateMediaAltTextAction,
 } from "../admin-media";
+import { AdminAuthError } from "@/lib/auth/admin";
 
 const VALID_PROD_ID = "11111111-1111-4111-8111-111111111111";
 const VALID_MEDIA_ID = "22222222-2222-4222-8222-222222222222";
@@ -89,7 +90,9 @@ describe("Admin Media Server Actions", () => {
 
   describe("requestProductMediaUploadAction", () => {
     it("denies anonymous user", async () => {
-      mockRequireAdmin.mockRejectedValueOnce(new Error("Admin authorization required."));
+      mockRequireAdmin.mockRejectedValueOnce(
+        new AdminAuthError("Admin authorization required.", "FORBIDDEN"),
+      );
 
       const res = await requestProductMediaUploadAction(
         VALID_PROD_ID,
@@ -103,7 +106,9 @@ describe("Admin Media Server Actions", () => {
     });
 
     it("denies normal customer without admin role", async () => {
-      mockRequireAdmin.mockRejectedValueOnce(new Error("Unauthorized: Admin role required"));
+      mockRequireAdmin.mockRejectedValueOnce(
+        new AdminAuthError("Admin authorization required.", "FORBIDDEN"),
+      );
 
       const res = await requestProductMediaUploadAction(
         VALID_PROD_ID,
@@ -140,6 +145,23 @@ describe("Admin Media Server Actions", () => {
 
       expect(res.success).toBe(false);
       expect(res.error).toContain("does not exist");
+    });
+
+    it("sanitizes raw database infrastructure error and does not leak schema or table names", async () => {
+      mockQuery.mockRejectedValueOnce(
+        new Error('relation "public.products" does not exist'),
+      );
+
+      const res = await requestProductMediaUploadAction(
+        VALID_PROD_ID,
+        "shoe.jpg",
+        "image/jpeg",
+        1024,
+      );
+
+      expect(res.success).toBe(false);
+      expect(res.error).toBe("An unexpected system error occurred. Media changes were not saved.");
+      expect(res.error).not.toContain('relation "public.products" does not exist');
     });
 
     it("rejects zero, negative, NaN, and infinite file sizes", async () => {
@@ -356,6 +378,92 @@ describe("Admin Media Server Actions", () => {
       ]);
     });
 
+    it("sanitizes Storage download errors and does not leak internal Storage SQL/error details to browser", async () => {
+      mockDownloadStorageObject.mockRejectedValueOnce(
+        new Error("bucket product-media internal SQL error XYZ"),
+      );
+
+      const res = await finalizeProductMediaUploadAction({
+        productId: VALID_PROD_ID,
+        mediaId: VALID_MEDIA_ID,
+        storagePath: validStoragePath,
+        originalFilename: "shoe.webp",
+        mimeType: "image/webp",
+      });
+
+      expect(res.success).toBe(false);
+      expect(res.error).toBe("Uploaded image could not be retrieved. Please retry the upload.");
+      expect(res.error).not.toContain("bucket product-media internal SQL error XYZ");
+      expect(mockUpdateTag).not.toHaveBeenCalled();
+    });
+
+    it("sanitizes raw database infrastructure errors and does not leak table/schema names to browser", async () => {
+      mockQuery.mockRejectedValueOnce(
+        new Error('relation "public.products" does not exist'),
+      );
+
+      const res = await finalizeProductMediaUploadAction({
+        productId: VALID_PROD_ID,
+        mediaId: VALID_MEDIA_ID,
+        storagePath: validStoragePath,
+        originalFilename: "shoe.webp",
+        mimeType: "image/webp",
+      });
+
+      expect(res.success).toBe(false);
+      expect(res.error).toBe("An unexpected system error occurred. Media changes were not saved.");
+      expect(res.error).not.toContain('relation "public.products" does not exist');
+      expect(mockUpdateTag).not.toHaveBeenCalled();
+    });
+
+    it("rejects when path extension is .jpg but decoded bytes are PNG (even if client declares image/png)", async () => {
+      const jpgPath = `products/${VALID_PROD_ID}/${VALID_MEDIA_ID}/original.jpg`;
+      mockDownloadStorageObject.mockResolvedValueOnce(Buffer.from("png-bytes"));
+      setupSharpMock({ width: 800, height: 600, format: "png" });
+
+      const res = await finalizeProductMediaUploadAction({
+        productId: VALID_PROD_ID,
+        mediaId: VALID_MEDIA_ID,
+        storagePath: jpgPath,
+        originalFilename: "fake.jpg",
+        mimeType: "image/png",
+      });
+
+      expect(res.success).toBe(false);
+      expect(res.error).toContain("MIME type mismatch");
+      expect(mockDeleteStorageObjects).toHaveBeenCalledWith([jpgPath]);
+      expect(mockInsertProductMedia).not.toHaveBeenCalled();
+      expect(mockUpdateTag).not.toHaveBeenCalled();
+    });
+
+    it("passes when path extension is .webp, decoded bytes are WebP, and declared MIME is image/webp", async () => {
+      mockDownloadStorageObject.mockResolvedValueOnce(Buffer.from("valid-webp-bytes"));
+      setupSharpMock({ width: 800, height: 600, format: "webp" });
+      mockInsertProductMedia.mockResolvedValueOnce({ id: VALID_MEDIA_ID });
+
+      const res = await finalizeProductMediaUploadAction({
+        productId: VALID_PROD_ID,
+        mediaId: VALID_MEDIA_ID,
+        storagePath: validStoragePath,
+        originalFilename: "derby.webp",
+        mimeType: "image/webp",
+      });
+
+      expect(res.success).toBe(true);
+      expect(res.mediaId).toBe(VALID_MEDIA_ID);
+      expect(mockInsertProductMedia).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: VALID_MEDIA_ID,
+          productId: VALID_PROD_ID,
+          storagePath: validStoragePath,
+          mimeType: "image/webp",
+          width: 800,
+          height: 600,
+        }),
+      );
+      expect(mockUpdateTag).toHaveBeenCalledWith("catalog-public");
+    });
+
     it("cleans up storage object if database insertion fails", async () => {
       mockDownloadStorageObject.mockResolvedValueOnce(Buffer.from("valid-webp-bytes"));
       setupSharpMock({ width: 800, height: 600, format: "webp" });
@@ -370,6 +478,7 @@ describe("Admin Media Server Actions", () => {
       });
 
       expect(res.success).toBe(false);
+      expect(res.error).toBe("An unexpected system error occurred. Media changes were not saved.");
       expect(mockDeleteStorageObjects).toHaveBeenCalledWith([validStoragePath]);
     });
 
@@ -472,6 +581,33 @@ describe("Admin Media Server Actions", () => {
       const res = await deleteProductMediaAction(VALID_PROD_ID, VALID_MEDIA_ID);
       // DB was already committed, action succeeds with warning logged server-side
       expect(res.success).toBe(true);
+      expect(res.warning).toBe(
+        "Image was removed from the storefront, but background media cleanup requires attention.",
+      );
+      expect(mockUpdateTag).toHaveBeenCalledWith("catalog-public");
+    });
+
+    it("returns success: true with safe warning when DB delete succeeds but Storage cleanup fails", async () => {
+      mockDeleteProductMedia.mockResolvedValueOnce({
+        deletedMediaId: VALID_MEDIA_ID,
+        storagePathsToDelete: [`products/${VALID_PROD_ID}/${VALID_MEDIA_ID}/original.webp`],
+        newHeroId: null,
+      });
+      mockDeleteStorageObjects.mockResolvedValueOnce({
+        success: false,
+        failedPaths: [`products/${VALID_PROD_ID}/${VALID_MEDIA_ID}/original.webp`],
+        error: "bucket product-media internal SQL error XYZ",
+      });
+
+      const res = await deleteProductMediaAction(VALID_PROD_ID, VALID_MEDIA_ID);
+
+      expect(res.success).toBe(true);
+      expect(res.warning).toBe(
+        "Image was removed from the storefront, but background media cleanup requires attention.",
+      );
+      expect(res.error).toBeUndefined();
+      expect(JSON.stringify(res)).not.toContain("bucket product-media internal SQL error XYZ");
+      expect(JSON.stringify(res)).not.toContain("products/");
       expect(mockUpdateTag).toHaveBeenCalledWith("catalog-public");
     });
   });

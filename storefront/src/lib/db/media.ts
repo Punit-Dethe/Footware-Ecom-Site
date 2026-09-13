@@ -3,6 +3,9 @@ import "server-only";
 import type { PoolClient } from "pg";
 import { query, transaction } from "./index";
 import type { ResponsiveVariantsSchema } from "@/lib/media/delivery";
+import { MediaDomainError } from "@/lib/media/errors";
+
+export { MediaDomainError };
 
 export interface DbProductImageRow {
   id: string;
@@ -73,7 +76,7 @@ export async function insertProductMedia(
       [input.productId],
     );
     if (prodCheck.rows.length === 0) {
-      throw new Error(`Cannot add media: Product '${input.productId}' does not exist.`);
+      throw new MediaDomainError(`Cannot add media: Product '${input.productId}' does not exist.`);
     }
 
     // 2. Determine max position and hero status
@@ -172,7 +175,7 @@ export async function setHeroMediaAtomic(
       [mediaId, productId],
     );
     if (check.rows.length === 0) {
-      throw new Error(`Media '${mediaId}' does not belong to product '${productId}'.`);
+      throw new MediaDomainError(`Media '${mediaId}' does not belong to product '${productId}'.`);
     }
 
     // Atomically clear hero and set new hero
@@ -207,17 +210,17 @@ export async function reorderProductMedia(
 
     // Guard against duplicate IDs in submitted payload (e.g. [A, A, C])
     if (new Set(mediaIds).size !== mediaIds.length) {
-      throw new Error("Reorder rejected: submitted media IDs contain duplicates.");
+      throw new MediaDomainError("Reorder rejected: submitted media IDs contain duplicates.");
     }
 
     // Exact length and set equality check
     if (mediaIds.length !== existingIds.size) {
-      throw new Error("Reorder rejected: provided media IDs count does not match product media count.");
+      throw new MediaDomainError("Reorder rejected: provided media IDs count does not match product media count.");
     }
 
     for (const id of mediaIds) {
       if (!existingIds.has(id)) {
-        throw new Error(`Reorder rejected: media ID '${id}' does not belong to product '${productId}'.`);
+        throw new MediaDomainError(`Reorder rejected: media ID '${id}' does not belong to product '${productId}'.`);
       }
     }
 
@@ -247,7 +250,7 @@ export async function updateMediaAltText(
   );
 
   if (res.rowCount === 0) {
-    throw new Error(`Media '${mediaId}' does not belong to product '${productId}'.`);
+    throw new MediaDomainError(`Media '${mediaId}' does not belong to product '${productId}'.`);
   }
 }
 
@@ -274,7 +277,7 @@ export async function deleteProductMedia(
     );
 
     if (mediaRes.rows.length === 0) {
-      throw new Error(`Cannot delete: Media '${mediaId}' does not belong to product '${productId}'.`);
+      throw new MediaDomainError(`Cannot delete: Media '${mediaId}' does not belong to product '${productId}'.`);
     }
 
     const targetMedia = mediaRes.rows[0];
