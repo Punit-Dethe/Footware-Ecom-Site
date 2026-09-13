@@ -23,12 +23,12 @@
 Current `origin/main`:
 
 ```text
-43323a7e56b401c2a7f060e53903abb93d714269
+4cbf62fbc926bff96f7f405e6353afc5be3d0d39
 ```
 
 B1 through B8.1 are **COMPLETE**.
 
-B8 / B8.1 is **COMPLETE / READY FOR REVIEW**.
+B8 / B8.1 is **COMPLETE / MERGED / PRODUCTION VERIFIED**.
 
 Accepted B8.1 baseline:
 
@@ -53,37 +53,25 @@ Accepted B8.1 baseline:
 * hero rows: 38
 * clean database: `hkncfdsvgjopkujmmxem` (legacy project `nmddtxibpsbtswxnienm` untouched)
 
-Accepted B8 branch:
+Accepted B8 lineage:
 
 ```text
-backend/b8-spree-compat-removal
-```
-
-Accepted B7 head:
-
-```text
-1e09b19c17315b7fb66395b94508052df50b1271
-```
-
-B7 lineage:
-
-```text
-92f44fd16460235a1db4e40c7a3fe566bff5be63  B7 initial media ownership migration
-5553f40adecb03c967c1bb1f0c0c79153de32bc3  B7.1 media ownership / Storage closure
-1e09b19c17315b7fb66395b94508052df50b1271  B7.2 error / MIME / cleanup closure
+9283a01a7041382411e67d8890a9563d4abd83ac  B8 initial Spree SDK / BFF removal
+c1223ebb2a92a16a56c334ac74ef6597f2b067ce  B8.1 semantic closure (zero fake checkout successes)
 ```
 
 Merge commit to `main`:
 
 ```text
-e64631d90ef52bc7470f79b780cbe9dcb7e98aa2
+4cbf62fbc926bff96f7f405e6353afc5be3d0d39
 ```
 
 Vercel Production Deployment:
 
 ```text
-Deployment ID:  dpl_FiDAYjzgYHKZaVXceMyb2BPfSHH9
+Deployment ID:  dpl_CJRqscwaxv5Vz92WHM8vQVBqHkKF
 Production URL: https://mirzafootwear.vercel.app
+Deployed SHA:   4cbf62fbc926bff96f7f405e6353afc5be3d0d39
 Status:         READY / Production Verified
 ```
 
@@ -1146,7 +1134,12 @@ Recorded:
   * Biome lint: 0 errors, 0 warnings;
   * TypeScript `tsc --noEmit`: 0 errors;
   * Next.js production build: 110 static pages successfully generated.
-- next phase = review/approval of B8 + B8.1 before merge to `main`.
+- Production deployment: `dpl_CJRqscwaxv5Vz92WHM8vQVBqHkKF` (READY on `https://mirzafootwear.vercel.app`);
+- B8 CODE: COMPLETE;
+- B8.1 SEMANTIC CLOSURE: COMPLETE;
+- B8 MERGED: COMPLETE (`4cbf62fbc926bff96f7f405e6353afc5be3d0d39`);
+- B8 PRODUCTION VERIFICATION: COMPLETE;
+- next phase = B9: NEXT — remove Render / Rails leftovers.
 
 ### 2026-09-13 — B8 complete: Spree SDK & fake BFF compatibility layer removed
 
