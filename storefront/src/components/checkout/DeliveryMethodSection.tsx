@@ -1,6 +1,6 @@
 "use client";
 
-import type { Fulfillment } from "@spree/sdk";
+import type { Fulfillment } from "@/types/commerce";
 import { useTranslations } from "next-intl";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
@@ -39,8 +39,16 @@ export function DeliveryMethodSection({
       )}
 
       {fulfillments.length === 0 ? (
-        <div className="rounded-sm bg-gray-100 px-4 py-3.5 text-sm text-gray-500">
-          {t("enterShippingAddressForMethods")}
+        <div className="rounded-sm border bg-gray-50 px-4 py-3.5 flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-gray-900">
+              Complimentary Express Delivery
+            </p>
+            <p className="text-xs text-gray-500">
+              Insured express courier delivery included with every order
+            </p>
+          </div>
+          <span className="text-sm font-semibold text-gray-900">Free</span>
         </div>
       ) : (
         <div className="space-y-2">

@@ -1,6 +1,6 @@
 "use client";
 
-import type { Media } from "@spree/sdk";
+import type { Media } from "@/types/commerce";
 import { ZoomIn } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useTranslations } from "next-intl";

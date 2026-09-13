@@ -1,6 +1,6 @@
 "use client";
 
-import type { Category } from "@spree/sdk";
+import type { Category } from "@/types/commerce";
 import { ArrowLeft, ChevronRight, X } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";

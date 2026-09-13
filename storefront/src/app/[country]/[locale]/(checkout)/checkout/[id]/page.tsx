@@ -1,4 +1,4 @@
-import type { Address, Cart, Country } from "@spree/sdk";
+import type { Address, Cart, Country } from "@/types/commerce";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";

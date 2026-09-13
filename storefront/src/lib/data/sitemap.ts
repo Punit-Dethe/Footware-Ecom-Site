@@ -1,13 +1,12 @@
 "use server";
 
-import type { Category, Media, Product } from "@spree/sdk";
 import { cacheLife, cacheTag } from "next/cache";
-import { getClient } from "@/lib/spree";
 import {
   listCatalogCategories,
   queryProducts,
 } from "@/lib/catalog/catalog-repository";
 import { MARKETS } from "@/lib/catalog/store-config";
+import type { Category, Market, Media, Product } from "@/types/commerce";
 
 interface LocaleOptions {
   locale: string;
@@ -25,15 +24,11 @@ export type SitemapCategory = Category & {
 
 export type SitemapResource = "products" | "categories";
 
-export async function getSitemapMarkets(options: LocaleOptions) {
+export async function getSitemapMarkets(_options?: LocaleOptions): Promise<Market[]> {
   "use cache: remote";
   cacheLife("hours");
   cacheTag("markets", "sitemap");
-  try {
-    return (await getClient().markets.list(options)).data;
-  } catch (_error) {
-    return MARKETS as unknown as ReturnType<ReturnType<typeof getClient>["markets"]["list"]> extends Promise<{ data: infer D }> ? D : never;
-  }
+  return MARKETS as Market[];
 }
 
 export async function getSitemapResourceCount(

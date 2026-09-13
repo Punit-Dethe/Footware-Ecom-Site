@@ -1,4 +1,4 @@
-import type { Country, Market } from "@spree/sdk";
+import type { Country, Market } from "@/types/commerce";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { REQUEST_PATHNAME_HEADER, REQUEST_SEARCH_HEADER } from "@/i18n/routing";
 

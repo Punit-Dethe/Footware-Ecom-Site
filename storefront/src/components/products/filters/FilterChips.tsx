@@ -1,6 +1,6 @@
 "use client";
 
-import type { OptionFilter, ProductFiltersResponse } from "@spree/sdk";
+import type { OptionFilter, ProductFiltersResponse } from "@/types/commerce";
 import { X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
@@ -47,8 +47,8 @@ export function FilterChips({
           chips.push({
             key: `option-${optionValueId}`,
             label: t("optionFilterChip", {
-              filter: optionFilter.label,
-              value: option.label,
+              filter: optionFilter.label || optionFilter.name,
+              value: option.label || option.name,
             }),
             onRemove: () => onRemoveOptionValue(optionValueId),
           });

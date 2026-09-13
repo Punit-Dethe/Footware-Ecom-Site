@@ -1,6 +1,6 @@
 "use client";
 
-import type { OptionType, Variant } from "@spree/sdk";
+import type { OptionType, Variant } from "@/types/commerce";
 import { useTranslations } from "next-intl";
 import { useMemo } from "react";
 import { Button } from "@/components/ui/button";

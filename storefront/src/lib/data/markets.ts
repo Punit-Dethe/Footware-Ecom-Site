@@ -1,9 +1,8 @@
 "use server";
 
-import type { Country, Market } from "@spree/sdk";
 import { cacheLife, cacheTag } from "next/cache";
 import { COUNTRIES, MARKETS } from "@/lib/catalog/store-config";
-import { getLocaleOptions } from "@/lib/spree";
+import type { Country, Market } from "@/types/commerce";
 
 async function cachedListMarkets(_options?: {
   locale?: string;
@@ -12,7 +11,7 @@ async function cachedListMarkets(_options?: {
   "use cache: remote";
   cacheLife("hours");
   cacheTag("markets");
-  return { data: MARKETS as unknown as Market[] };
+  return { data: MARKETS as Market[] };
 }
 
 async function cachedResolveMarket(
@@ -24,7 +23,7 @@ async function cachedResolveMarket(
   cacheTag("resolved-market");
   const found =
     MARKETS.find((m) => m.code === country.toLowerCase()) || MARKETS[0];
-  return found as unknown as Market;
+  return found as Market;
 }
 
 async function cachedListMarketCountries(
@@ -34,25 +33,22 @@ async function cachedListMarketCountries(
   "use cache: remote";
   cacheLife("hours");
   cacheTag("market-countries");
-  return { data: COUNTRIES as unknown as Country[] };
+  return { data: COUNTRIES as Country[] };
 }
 
 export async function getMarkets(options?: {
   locale?: string;
   country?: string;
 }): Promise<{ data: Market[] }> {
-  const resolvedOptions = options ?? (await getLocaleOptions());
-  return cachedListMarkets(resolvedOptions);
+  return cachedListMarkets(options);
 }
 
 export async function resolveMarket(country: string) {
-  const options = await getLocaleOptions();
-  return cachedResolveMarket(country, options);
+  return cachedResolveMarket(country);
 }
 
 export async function getMarketCountries(marketId: string) {
-  const options = await getLocaleOptions();
-  return cachedListMarketCountries(marketId, options);
+  return cachedListMarketCountries(marketId);
 }
 
 /**

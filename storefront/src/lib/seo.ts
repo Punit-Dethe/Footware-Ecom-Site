@@ -1,4 +1,4 @@
-import type { Category, Media, Product } from "@spree/sdk";
+import type { Category, Media, Product } from "@/types/commerce";
 import { ensureProtocol, getStoreName, getStoreUrl } from "@/lib/store";
 
 /**

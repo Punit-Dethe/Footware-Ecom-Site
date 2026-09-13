@@ -1,24 +1,11 @@
 "use server";
 
-import type { GiftCard } from "@spree/sdk";
-import { getClient, withAuthRefresh } from "@/lib/spree";
-import { withFallback } from "./utils";
+import type { GiftCard } from "@/types/commerce";
 
-export async function getGiftCards() {
-  return withFallback(
-    async () => {
-      return withAuthRefresh(async (options) => {
-        return getClient().customer.giftCards.list(undefined, options);
-      });
-    },
-    { data: [] } as { data: GiftCard[] },
-  );
+export async function getGiftCards(): Promise<{ data: GiftCard[] }> {
+  return { data: [] };
 }
 
-export async function getGiftCard(id: string) {
-  return withFallback(async () => {
-    return withAuthRefresh(async (options) => {
-      return getClient().customer.giftCards.get(id, options);
-    });
-  }, null);
+export async function getGiftCard(_id: string): Promise<GiftCard | null> {
+  return null;
 }

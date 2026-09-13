@@ -1,4 +1,4 @@
-import type { Product } from "@spree/sdk";
+import type { Product } from "@/types/commerce";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ProductCard } from "@/components/products/ProductCard";

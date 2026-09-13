@@ -1,12 +1,11 @@
 "use client";
 
-import type { LineItem } from "@spree/sdk";
+import type { LineItem } from "@/types/commerce";
 import { ShoppingBag } from "lucide-react";
-import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { QuantityPickerField } from "@/components/cart/QuantityPickerField";
 import { Button } from "@/components/ui/button";
 import { ProductImage } from "@/components/ui/product-image";
@@ -14,17 +13,9 @@ import { useCart } from "@/contexts/CartContext";
 import { trackRemoveFromCart, trackViewCart } from "@/lib/analytics/gtm";
 import { extractBasePath } from "@/lib/utils/path";
 
-const ExpressCheckoutButton = dynamic(
-  () =>
-    import("@/components/checkout/ExpressCheckoutButton").then((m) => ({
-      default: m.ExpressCheckoutButton,
-    })),
-  { ssr: false },
-);
-
 export default function CartPage() {
   const { cart, loading, updating, updateItem, removeItem } = useCart();
-  const [expressProcessing, setExpressProcessing] = useState(false);
+
   const pathname = usePathname();
   const basePath = extractBasePath(pathname);
   const viewCartFiredRef = useRef(false);
@@ -221,28 +212,16 @@ export default function CartPage() {
             </dl>
 
             <div className="mt-6 space-y-3">
-              {parseFloat(cart.total ?? "0") > 0 && (
-                <ExpressCheckoutButton
-                  cart={cart}
-                  basePath={basePath}
-                  onComplete={() => {}}
-                  onProcessingChange={setExpressProcessing}
-                />
-              )}
-              {!expressProcessing && (
-                <>
-                  <Button size="lg" asChild className="w-full">
-                    <Link href={`${basePath}/checkout/${cart.id}`}>
-                      {t("proceedToCheckout")}
-                    </Link>
-                  </Button>
-                  <Button variant="link" asChild className="w-full">
-                    <Link href={`${basePath}/products`}>
-                      {tc("continueShopping")}
-                    </Link>
-                  </Button>
-                </>
-              )}
+              <Button size="lg" asChild className="w-full">
+                <Link href={`${basePath}/checkout/${cart.id}`}>
+                  {t("proceedToCheckout")}
+                </Link>
+              </Button>
+              <Button variant="link" asChild className="w-full">
+                <Link href={`${basePath}/products`}>
+                  {tc("continueShopping")}
+                </Link>
+              </Button>
             </div>
           </div>
         </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import type { Country, State } from "@spree/sdk";
+import type { Address, Country, State } from "@/types/commerce";
 import { CircleAlert } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
@@ -19,20 +19,7 @@ import {
 import { AddressFormFields } from "./AddressFormFields";
 
 interface AddressEditModalProps {
-  address: {
-    id?: string;
-    first_name: string | null;
-    last_name: string | null;
-    address1: string | null;
-    address2: string | null;
-    city: string | null;
-    postal_code: string | null;
-    phone: string | null;
-    company: string | null;
-    country_iso: string;
-    state_abbr: string | null;
-    state_name: string | null;
-  } | null;
+  address: Partial<Address> | null;
   countries: Country[];
   fetchStates: (countryIso: string) => Promise<State[]>;
   onSave: (

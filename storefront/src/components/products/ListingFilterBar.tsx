@@ -1,6 +1,6 @@
 "use client";
 
-import type { ProductFiltersResponse } from "@spree/sdk";
+import type { ProductFiltersResponse } from "@/types/commerce";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useTransition } from "react";
 import { FilterBar } from "@/components/products/filters";

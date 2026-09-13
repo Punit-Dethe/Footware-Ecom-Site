@@ -1,4 +1,4 @@
-import type { ProductListParams } from "@spree/sdk";
+import type { ProductListParams } from "@/types/commerce";
 import type { ActiveFilters } from "@/types/filters";
 
 /**

@@ -1,8 +1,7 @@
 "use client";
 
-import type { Address, AddressParams, Cart, Country } from "@spree/sdk";
+import type { Address, AddressParams, Cart, Country } from "@/types/commerce";
 import { CircleAlert, Loader2 } from "lucide-react";
-import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -33,31 +32,18 @@ import {
 } from "@/lib/analytics/gtm";
 import { getAddresses, updateAddress } from "@/lib/data/addresses";
 import {
-  applyCode,
   getCheckoutOrder,
-  removeDiscountCode,
-  removeGiftCard,
   selectDeliveryRate,
   updateOrderAddresses,
 } from "@/lib/data/checkout";
 import { isAuthenticated as checkAuth } from "@/lib/data/cookies";
 import { getCountry } from "@/lib/data/countries";
 import { getMarketCountries, resolveMarket } from "@/lib/data/markets";
-import {
-  completeCheckoutOrder,
-  completeCheckoutPaymentSession,
-} from "@/lib/data/payment";
+import { completeCheckoutOrder } from "@/lib/data/payment";
 import { extractBasePath } from "@/lib/utils/path";
 import { CheckoutSidebar } from "./CheckoutSidebar";
 import type { CheckoutInitialData } from "./page";
 
-const ExpressCheckoutButton = dynamic(
-  () =>
-    import("@/components/checkout/ExpressCheckoutButton").then((m) => ({
-      default: m.ExpressCheckoutButton,
-    })),
-  { ssr: false },
-);
 
 // Fingerprint of line-item state only. Used to detect when CartContext
 // has a different set of line items than our local checkout cart —
@@ -113,14 +99,13 @@ function CheckoutPageContentInner({
   const [loading, setLoading] = useState(!initialData);
   const [error, setError] = useState<string | null>(paymentError);
   const [processing, setProcessing] = useState(false);
-  const [expressAvailable, setExpressAvailable] = useState(false);
   const [saving, setSaving] = useState(false);
   const [sectionErrors, setSectionErrors] = useState<Record<string, string[]>>(
     {},
   );
   const [policyConsent, setPolicyConsent] = useState(false);
   const [policyError, setPolicyError] = useState(false);
-  const [isSessionPayment, setIsSessionPayment] = useState(true);
+  const [isSessionPayment, setIsSessionPayment] = useState(false);
 
   const fulfillments = cart?.fulfillments ?? [];
 
@@ -133,65 +118,15 @@ function CheckoutPageContentInner({
   const beginCheckoutFiredRef = useRef(false);
   const paymentRef = useRef<PaymentSectionHandle>(null);
 
-  // Handle code application (discount code or gift card — single input field)
-  const handleApplyCode = useCallback(async (code: string) => {
-    const currentOrder = cartRef.current;
-    if (!currentOrder)
-      return { success: false, error: tRef.current("noOrder") };
-
-    const result = await applyCode(currentOrder.id, code);
-    if (result.success && result.cart) {
-      setCart(result.cart);
-    }
-    return result;
-  }, []);
-
-  const handleRemoveDiscount = useCallback(async (discountCode: string) => {
-    const currentOrder = cartRef.current;
-    if (!currentOrder)
-      return { success: false, error: tRef.current("noOrder") };
-
-    const result = await removeDiscountCode(currentOrder.id, discountCode);
-    if (result.success && result.cart) {
-      setCart(result.cart);
-    }
-    return result;
-  }, []);
-
-  const handleRemoveGiftCard = useCallback(async (giftCardId: string) => {
-    const currentOrder = cartRef.current;
-    if (!currentOrder)
-      return { success: false, error: tRef.current("noOrder") };
-
-    const result = await removeGiftCard(currentOrder.id, giftCardId);
-    if (result.success && result.cart) {
-      setCart(result.cart);
-    }
-    return result;
-  }, []);
-
   // useLayoutEffect so the sidebar renders on the first paint (before the
   // browser paints the empty slot). Always re-publish when `cart` changes.
   useLayoutEffect(() => {
     if (cart) {
-      setSummaryContent(
-        <CheckoutSidebar
-          cart={cart}
-          onApplyCode={handleApplyCode}
-          onRemoveDiscount={handleRemoveDiscount}
-          onRemoveGiftCard={handleRemoveGiftCard}
-        />,
-      );
+      setSummaryContent(<CheckoutSidebar cart={cart} />);
     } else {
       setSummaryContent(null);
     }
-  }, [
-    cart,
-    setSummaryContent,
-    handleApplyCode,
-    handleRemoveDiscount,
-    handleRemoveGiftCard,
-  ]);
+  }, [cart, setSummaryContent]);
 
   // Refresh cart data (used after coupon changes, express checkout, etc.)
   const loadOrder = useCallback(async () => {
@@ -443,42 +378,19 @@ function CheckoutPageContentInner({
 
   // Handle payment completion (called by PaymentSection after payment is confirmed)
   const handlePaymentComplete = useCallback(
-    async (result: PaymentCompleteResult) => {
+    async (_result: PaymentCompleteResult) => {
       const currentOrder = cartRef.current;
       if (!currentOrder) return;
 
       setError(null);
 
       try {
-        // For session-based payments, complete the payment session first
-        if (result.type === "session") {
-          const sessionResult = await completeCheckoutPaymentSession(
-            currentOrder.id,
-            result.sessionId,
-            result.sessionResult
-              ? { session_result: result.sessionResult }
-              : undefined,
-          );
-
-          if (!sessionResult.success) {
-            setError(
-              sessionResult.error ||
-                tRef.current("failedToCompletePaymentSession"),
-            );
-            setProcessing(false);
-            return;
-          }
-        }
-        // For direct payments, the payment was already created in PaymentSection
-
         try {
           trackAddPaymentInfo(currentOrder);
         } catch {
           // Analytics should never break checkout flow
         }
 
-        // Complete the order — if the backend already completed it during
-        // session completion, completeCheckoutOrder handles 403/422 gracefully.
         const completeResult = await completeCheckoutOrder(currentOrder.id);
         if (!completeResult.success) {
           setError(
@@ -669,27 +581,6 @@ function CheckoutPageContentInner({
         </Alert>
       )}
 
-      {/* Express checkout for guests */}
-      {!isAuthenticated && parseFloat(cart.total ?? "0") > 0 && (
-        <div className={expressAvailable ? "mb-4" : ""}>
-          {expressAvailable && (
-            <h2 className="text-lg font-bold text-gray-900 mb-3">
-              Express checkout
-            </h2>
-          )}
-          <ExpressCheckoutButton
-            cart={cart}
-            basePath={basePath}
-            onComplete={async () => {
-              await loadOrder();
-            }}
-            onProcessingChange={setProcessing}
-            onAvailabilityChange={setExpressAvailable}
-            maxColumns={2}
-            showDivider
-          />
-        </div>
-      )}
 
       {/* Checkout form sections — dimmed & disabled during express checkout */}
       <div

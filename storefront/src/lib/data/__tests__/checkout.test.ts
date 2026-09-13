@@ -4,12 +4,14 @@ const {
   mockGetCart,
   mockGetOrderBySourceCartAuthorized,
   mockUpdateAuthorizedCartCheckoutData,
+  mockUpdateAuthorizedCartCurrency,
   mockVerifyAuthSession,
   mockGetCartToken,
 } = vi.hoisted(() => ({
   mockGetCart: vi.fn(),
   mockGetOrderBySourceCartAuthorized: vi.fn(),
   mockUpdateAuthorizedCartCheckoutData: vi.fn().mockResolvedValue(true),
+  mockUpdateAuthorizedCartCurrency: vi.fn().mockResolvedValue(true),
   mockVerifyAuthSession: vi.fn().mockResolvedValue({ status: "anonymous" }),
   mockGetCartToken: vi.fn().mockResolvedValue("order-token-123"),
 }));
@@ -26,63 +28,26 @@ vi.mock("@/lib/db/order", () => ({
 vi.mock("@/lib/db/cart", () => ({
   findCartById: vi.fn().mockResolvedValue(null),
   updateAuthorizedCartCheckoutData: mockUpdateAuthorizedCartCheckoutData,
+  updateAuthorizedCartCurrency: mockUpdateAuthorizedCartCurrency,
 }));
 
-const mockClient = {
-  carts: {
-    get: vi.fn(),
-    list: vi.fn(),
-    update: vi.fn(),
-    complete: vi.fn(),
-    fulfillments: { update: vi.fn() },
-    discountCodes: { apply: vi.fn(), remove: vi.fn() },
-    giftCards: { apply: vi.fn(), remove: vi.fn() },
-  },
-  orders: { get: vi.fn() },
-};
-
 vi.mock("@/lib/spree", () => ({
-  getClient: () => mockClient,
-  getClientForSurface: () => mockClient,
   cacheTagSuffix: () => "",
   DEFAULT_SURFACE: "dtc",
   isWholesaleEnabled: vi.fn().mockReturnValue(false),
   getCartToken: mockGetCartToken,
-  // DTC cart only; the wholesale cart cookie is absent so poison/surface
-  // checks resolve to DTC.
   getCartId: vi.fn((surface = "dtc") =>
     Promise.resolve(surface === "wholesale" ? undefined : "order-1"),
   ),
   getAccessToken: vi.fn().mockResolvedValue(undefined),
   setCartCookies: vi.fn(),
   clearCartCookies: vi.fn(),
-  // No wholesale cookie in these DTC tests → never poisoned.
   isPoisonedDtcCartId: vi.fn().mockResolvedValue(false),
   getCartOptions: vi.fn().mockResolvedValue({
     spreeToken: "order-token-123",
     token: undefined,
   }),
   requireCartId: vi.fn().mockResolvedValue("order-1"),
-  withAuthRefresh: vi.fn(
-    async (fn: (options: { token: string }) => Promise<unknown>) => {
-      return fn({ token: "jwt-token" });
-    },
-  ),
-}));
-
-vi.mock("@spree/sdk", () => ({
-  SpreeError: class SpreeError extends Error {
-    code: string;
-    status: number;
-    constructor(
-      response: { error: { code: string; message: string } },
-      status: number,
-    ) {
-      super(response.error.message);
-      this.code = response.error.code;
-      this.status = status;
-    }
-  },
 }));
 
 vi.mock("next/cache", () => ({
@@ -90,10 +55,7 @@ vi.mock("next/cache", () => ({
 }));
 
 import {
-  applyCode,
   getCheckoutOrder,
-  removeDiscountCode,
-  removeGiftCard,
   selectDeliveryRate,
   updateCartMarket,
   updateOrderAddresses,
@@ -103,9 +65,13 @@ const mockOrder = {
   id: "order-1",
   number: "R100",
   current_step: "address",
-};
+  items: [],
+  currency: "USD",
+  total: "50.00",
+  display_total: "$50.00",
+} as any;
 
-describe("checkout server actions", () => {
+describe("checkout server actions (first-party architecture)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -147,11 +113,14 @@ describe("checkout server actions", () => {
 
       const result = await getCheckoutOrder("order-1");
 
-      expect(mockGetOrderBySourceCartAuthorized).toHaveBeenCalledWith("order-1", {
-        userId: null,
-        guestTokenHash: expect.any(String),
-        surface: "dtc",
-      });
+      expect(mockGetOrderBySourceCartAuthorized).toHaveBeenCalledWith(
+        "order-1",
+        {
+          userId: null,
+          guestTokenHash: expect.any(String),
+          surface: "dtc",
+        },
+      );
       expect(result).not.toBeNull();
       expect(result?.number).toBe("MRZ-TEST123456");
     });
@@ -167,9 +136,9 @@ describe("checkout server actions", () => {
   });
 
   describe("updateOrderAddresses", () => {
-    it("returns success for authorized owner and persists checkout data", async () => {
-      mockClient.carts.update.mockResolvedValue(mockOrder);
+    it("persists checkout data to PostgreSQL and returns first-party cart without Spree mirror call", async () => {
       mockUpdateAuthorizedCartCheckoutData.mockResolvedValue(true);
+      mockGetCart.mockResolvedValue(mockOrder);
       const addresses = { email: "test@example.com" };
 
       const result = await updateOrderAddresses("order-1", addresses);
@@ -187,41 +156,37 @@ describe("checkout server actions", () => {
           checkout_email: "test@example.com",
         },
       });
-      expect(mockClient.carts.update).toHaveBeenCalledWith(
-        "order-1",
-        addresses,
-        {
-          spreeToken: "order-token-123",
-          token: undefined,
-        },
-      );
+      expect(mockGetCart).toHaveBeenCalledWith("order-1", "dtc");
       expect(result).toEqual({ success: true, cart: mockOrder });
     });
 
-    it("denies update when anonymous with no guest token (UUID only)", async () => {
+    it("denies update when anonymous with no guest token", async () => {
       mockVerifyAuthSession.mockResolvedValueOnce({ status: "anonymous" });
       mockGetCartToken.mockResolvedValueOnce(undefined);
 
-      const result = await updateOrderAddresses("order-1", { email: "test@example.com" });
+      const result = await updateOrderAddresses("order-1", {
+        email: "test@example.com",
+      });
 
       expect(result).toEqual({
         success: false,
         error: "Unauthorized to update checkout addresses",
       });
       expect(mockUpdateAuthorizedCartCheckoutData).not.toHaveBeenCalled();
-      expect(mockClient.carts.update).not.toHaveBeenCalled();
     });
 
-    it("denies update when first-party write fails authorization (foreign cart/converted/abandoned)", async () => {
+    it("denies update when first-party write fails authorization", async () => {
       mockUpdateAuthorizedCartCheckoutData.mockResolvedValueOnce(false);
 
-      const result = await updateOrderAddresses("order-1", { email: "test@example.com" });
+      const result = await updateOrderAddresses("order-1", {
+        email: "test@example.com",
+      });
 
       expect(result).toEqual({
         success: false,
-        error: "Failed to update cart checkout data: cart not found or unauthorized",
+        error:
+          "Failed to update cart checkout data: cart not found or unauthorized",
       });
-      expect(mockClient.carts.update).not.toHaveBeenCalled();
     });
 
     it("fails action and propagates when first-party DB write throws", async () => {
@@ -229,307 +194,45 @@ describe("checkout server actions", () => {
         new Error("Database connection error"),
       );
 
-      const result = await updateOrderAddresses("order-1", { email: "test@example.com" });
+      const result = await updateOrderAddresses("order-1", {
+        email: "test@example.com",
+      });
 
       expect(result).toEqual({
         success: false,
         error: "Database connection error",
       });
-      expect(mockClient.carts.update).not.toHaveBeenCalled();
-    });
-
-    it("returns error when Spree cart update fails after successful DB update", async () => {
-      mockUpdateAuthorizedCartCheckoutData.mockResolvedValueOnce(true);
-      mockClient.carts.update.mockRejectedValueOnce(new Error("Invalid address"));
-
-      const result = await updateOrderAddresses("order-1", {});
-
-      expect(result).toEqual({
-        success: false,
-        error: "Invalid address",
-      });
-    });
-
-    it("returns fallback message for non-Error throws", async () => {
-      mockUpdateAuthorizedCartCheckoutData.mockResolvedValueOnce(true);
-      mockClient.carts.update.mockRejectedValueOnce("unexpected");
-
-      const result = await updateOrderAddresses("order-1", {});
-
-      expect(result).toEqual({
-        success: false,
-        error: "Failed to update addresses",
-      });
     });
   });
 
   describe("updateCartMarket", () => {
-    it("returns success with updated order", async () => {
-      const updatedOrder = { ...mockOrder, currency: "EUR", locale: "de" };
-      mockClient.carts.update.mockResolvedValue(updatedOrder);
+    it("updates currency in PostgreSQL and returns updated cart", async () => {
+      mockUpdateAuthorizedCartCurrency.mockResolvedValue(true);
+      const updatedOrder = { ...mockOrder, currency: "EUR" };
+      mockGetCart.mockResolvedValue(updatedOrder);
 
       const result = await updateCartMarket("order-1", {
         currency: "EUR",
         locale: "de",
       });
 
-      expect(mockClient.carts.update).toHaveBeenCalledWith(
-        "order-1",
-        { currency: "EUR", locale: "de" },
-        { spreeToken: "order-token-123", token: undefined },
-      );
+      expect(mockUpdateAuthorizedCartCurrency).toHaveBeenCalledWith({
+        cartId: "order-1",
+        surface: "dtc",
+        currency: "EUR",
+        auth: expect.any(Object),
+      });
       expect(result).toEqual({ success: true, cart: updatedOrder });
     });
-
-    it("returns error on failure", async () => {
-      mockClient.carts.update.mockRejectedValue(
-        new Error("Currency not supported"),
-      );
-
-      const result = await updateCartMarket("order-1", {
-        currency: "XYZ",
-        locale: "en",
-      });
-
-      expect(result).toEqual({
-        success: false,
-        error: "Currency not supported",
-      });
-    });
-
-    it("returns fallback message for non-Error throws", async () => {
-      mockClient.carts.update.mockRejectedValue("unexpected");
-
-      const result = await updateCartMarket("order-1", {
-        currency: "EUR",
-        locale: "de",
-      });
-
-      expect(result).toEqual({
-        success: false,
-        error: "Failed to update order market",
-      });
-    });
   });
 
-  describe("selectDeliveryRate", () => {
-    it("returns success", async () => {
-      mockClient.carts.fulfillments.update.mockResolvedValue(undefined);
+  describe("selectDeliveryRate (retired live mutation path)", () => {
+    it("returns current cart without calling external shipping engine", async () => {
+      mockGetCart.mockResolvedValue(mockOrder);
 
       const result = await selectDeliveryRate("order-1", "ship-1", "rate-1");
 
-      expect(mockClient.carts.fulfillments.update).toHaveBeenCalledWith(
-        "order-1",
-        "ship-1",
-        { selected_delivery_rate_id: "rate-1" },
-        { spreeToken: "order-token-123", token: undefined },
-      );
-      expect(result).toEqual({ success: true });
-    });
-
-    it("returns error on failure", async () => {
-      mockClient.carts.fulfillments.update.mockRejectedValue(
-        new Error("Rate not available"),
-      );
-
-      const result = await selectDeliveryRate("order-1", "ship-1", "rate-1");
-
-      expect(result).toEqual({
-        success: false,
-        error: "Rate not available",
-      });
-    });
-  });
-
-  describe("applyCode", () => {
-    it("applies discount code when valid", async () => {
-      mockClient.carts.discountCodes.apply.mockResolvedValue(mockOrder);
-
-      const result = await applyCode("order-1", "SAVE10");
-
-      expect(result).toEqual({
-        success: true,
-        cart: mockOrder,
-        type: "discount",
-      });
-      expect(mockClient.carts.giftCards.apply).not.toHaveBeenCalled();
-    });
-
-    it("falls back to gift card when discount code returns 422", async () => {
-      const { SpreeError } = await import("@spree/sdk");
-      mockClient.carts.discountCodes.apply.mockRejectedValue(
-        new SpreeError(
-          {
-            error: { code: "processing_error", message: "Coupon not found" },
-          },
-          422,
-        ),
-      );
-      mockClient.carts.giftCards.apply.mockResolvedValue(mockOrder);
-
-      const result = await applyCode("order-1", "GC-ABCD-1234");
-
-      expect(result).toEqual({
-        success: true,
-        cart: mockOrder,
-        type: "gift_card",
-      });
-    });
-
-    it("returns error when both discount and gift card fail", async () => {
-      const { SpreeError } = await import("@spree/sdk");
-      mockClient.carts.discountCodes.apply.mockRejectedValue(
-        new SpreeError(
-          {
-            error: { code: "processing_error", message: "Coupon not found" },
-          },
-          422,
-        ),
-      );
-      mockClient.carts.giftCards.apply.mockRejectedValue(
-        new SpreeError(
-          {
-            error: {
-              code: "gift_card_not_found",
-              message: "Gift card not found",
-            },
-          },
-          404,
-        ),
-      );
-
-      const result = await applyCode("order-1", "INVALID");
-
-      expect(result).toEqual({
-        success: false,
-        error: "Coupon not found",
-      });
-    });
-
-    it("shows backend gift card error when gift card is expired", async () => {
-      const { SpreeError } = await import("@spree/sdk");
-      mockClient.carts.discountCodes.apply.mockRejectedValue(
-        new SpreeError(
-          {
-            error: { code: "processing_error", message: "Coupon not found" },
-          },
-          422,
-        ),
-      );
-      mockClient.carts.giftCards.apply.mockRejectedValue(
-        new SpreeError(
-          {
-            error: {
-              code: "gift_card_expired",
-              message: "The Gift Card has expired.",
-            },
-          },
-          422,
-        ),
-      );
-
-      const result = await applyCode("order-1", "EXPIRED-GC");
-
-      expect(result).toEqual({
-        success: false,
-        error: "The Gift Card has expired.",
-      });
-    });
-
-    it("does not fall back to gift card on network errors", async () => {
-      mockClient.carts.discountCodes.apply.mockRejectedValue(
-        new Error("Network error"),
-      );
-
-      const result = await applyCode("order-1", "SAVE10");
-
-      expect(result).toEqual({ success: false, error: "Network error" });
-      expect(mockClient.carts.giftCards.apply).not.toHaveBeenCalled();
-    });
-
-    it("does not fall back to gift card on 500 errors", async () => {
-      const { SpreeError } = await import("@spree/sdk");
-      mockClient.carts.discountCodes.apply.mockRejectedValue(
-        new SpreeError(
-          {
-            error: {
-              code: "internal_error",
-              message: "Internal server error",
-            },
-          },
-          500,
-        ),
-      );
-
-      const result = await applyCode("order-1", "SAVE10");
-
-      expect(result).toEqual({
-        success: false,
-        error: "Internal server error",
-      });
-      expect(mockClient.carts.giftCards.apply).not.toHaveBeenCalled();
-    });
-  });
-
-  describe("removeDiscountCode", () => {
-    it("returns success with order", async () => {
-      mockClient.carts.discountCodes.remove.mockResolvedValue(mockOrder);
-
-      const result = await removeDiscountCode("order-1", "SAVE10");
-
-      expect(mockClient.carts.discountCodes.remove).toHaveBeenCalledWith(
-        "order-1",
-        "SAVE10",
-        {
-          spreeToken: "order-token-123",
-          token: undefined,
-        },
-      );
       expect(result).toEqual({ success: true, cart: mockOrder });
-    });
-
-    it("returns error on failure", async () => {
-      mockClient.carts.discountCodes.remove.mockRejectedValue(
-        new Error("Promotion not found"),
-      );
-
-      const result = await removeDiscountCode("order-1", "SAVE10");
-
-      expect(result).toEqual({
-        success: false,
-        error: "Promotion not found",
-      });
-    });
-  });
-
-  describe("removeGiftCard", () => {
-    it("returns success with order", async () => {
-      mockClient.carts.giftCards.remove.mockResolvedValue(mockOrder);
-
-      const result = await removeGiftCard("order-1", "gc_abc123");
-
-      expect(mockClient.carts.giftCards.remove).toHaveBeenCalledWith(
-        "order-1",
-        "gc_abc123",
-        {
-          spreeToken: "order-token-123",
-          token: undefined,
-        },
-      );
-      expect(result).toEqual({ success: true, cart: mockOrder });
-    });
-
-    it("returns error on failure", async () => {
-      mockClient.carts.giftCards.remove.mockRejectedValue(
-        new Error("Gift card not found"),
-      );
-
-      const result = await removeGiftCard("order-1", "gc_abc123");
-
-      expect(result).toEqual({
-        success: false,
-        error: "Gift card not found",
-      });
     });
   });
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import type { Country, Market } from "@spree/sdk";
+import type { Country, Market } from "@/types/commerce";
 import { createContext, type ReactNode, useContext, useMemo } from "react";
 import { getStoreName } from "@/lib/store";
 
@@ -44,7 +44,7 @@ function buildCountriesFromMarkets(markets: Market[]): CountryWithMarket[] {
 
       result.push({
         ...country,
-        currency: market.currency,
+        currency: market.currency || market.currencies?.[0] || "USD",
         default_locale: market.default_locale,
         supported_locales:
           market.supported_locales.length > 0

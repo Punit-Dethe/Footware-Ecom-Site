@@ -1,4 +1,4 @@
-import type { Policy } from "@spree/sdk";
+import type { Policy } from "@/types/commerce";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getPolicy } from "@/lib/data/policies";
 import { buildLocalizedAlternates } from "@/lib/metadata/alternates";

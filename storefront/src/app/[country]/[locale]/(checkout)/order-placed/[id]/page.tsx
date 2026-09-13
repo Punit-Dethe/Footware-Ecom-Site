@@ -1,6 +1,6 @@
 "use client";
 
-import type { Cart } from "@spree/sdk";
+import type { Cart } from "@/types/commerce";
 import { CircleCheckBig, Package } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -135,7 +135,7 @@ function OrderPlacedContent({ params }: OrderPlacedPageProps) {
             : t("thanksForOrderAnonymous")}
         </h1>
         <p className="text-gray-500">
-          {t("orderNumber", { number: order.number })}
+          {t("orderNumber", { number: order.number || "" })}
         </p>
         <p className="text-sm text-gray-400 mt-2">{t("emailConfirmation")}</p>
       </div>

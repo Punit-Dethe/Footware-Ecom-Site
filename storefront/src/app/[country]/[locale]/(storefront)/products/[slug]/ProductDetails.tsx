@@ -1,6 +1,6 @@
 "use client";
 
-import type { Media, Product, Variant } from "@spree/sdk";
+import type { Media, Product, Variant } from "@/types/commerce";
 import { CircleCheckBig, CircleX, Loader2, ShoppingBag } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";

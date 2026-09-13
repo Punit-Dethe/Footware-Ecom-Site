@@ -1,6 +1,6 @@
 "use client";
 
-import type { CreditCard as SpreeCreditCard } from "@spree/sdk";
+import type { CreditCard as SpreeCreditCard } from "@/types/commerce";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { PaymentIcon } from "react-svg-credit-card-payment-icons";

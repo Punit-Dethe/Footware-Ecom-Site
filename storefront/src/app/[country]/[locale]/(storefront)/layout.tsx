@@ -1,4 +1,4 @@
-import type { Category } from "@spree/sdk";
+import type { Category } from "@/types/commerce";
 import Link from "next/link";
 import { cache, Suspense } from "react";
 import { Footer, FooterCategoryLinks } from "@/components/layout/Footer";

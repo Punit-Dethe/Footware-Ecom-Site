@@ -1,12 +1,11 @@
 "use server";
 
-import type { ProductListParams } from "@spree/sdk";
+import type { ProductListParams } from "@/types/commerce";
 import { cacheLife, cacheTag } from "next/cache";
 import {
   cacheTagSuffix,
   DEFAULT_SURFACE,
   getAccessToken,
-  type getClientForSurface,
   getLocaleOptions,
   type Surface,
 } from "@/lib/spree";
@@ -86,9 +85,7 @@ export async function cachedListProducts(
     in_category,
     sort,
   });
-  return result as unknown as ReturnType<
-    ReturnType<typeof getClientForSurface>["products"]["list"]
-  >;
+  return result;
 }
 
 export async function getProducts(
@@ -119,9 +116,7 @@ export async function cachedGetProduct(
   );
   const local = await getProductBySlugOrId(slugOrId);
   if (local) {
-    return local as unknown as ReturnType<
-      ReturnType<typeof getClientForSurface>["products"]["get"]
-    >;
+    return local;
   }
   throw new Error(`Product not found: ${slugOrId}`);
 }
@@ -163,9 +158,7 @@ export async function cachedGetProductFilters(
       ? (params["q[in_category]"] as string)
       : undefined;
 
-  return (await getCatalogFilters({ in_category })) as unknown as ReturnType<
-    ReturnType<typeof getClientForSurface>["products"]["filters"]
-  >;
+  return await getCatalogFilters({ in_category });
 }
 
 export async function getProductFilters(

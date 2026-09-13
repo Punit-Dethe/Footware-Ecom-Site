@@ -1,4 +1,4 @@
-import type { Address, Cart, Order } from "@spree/sdk";
+import type { Address, Cart, Order } from "@/types/commerce";
 import { COUNTRIES } from "@/lib/catalog/store-config";
 import type { DbOrder, DbOrderItem } from "@/lib/db/order";
 

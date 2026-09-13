@@ -1,4 +1,4 @@
-import type { CreditCard, Payment, StoreCredit } from "@spree/sdk";
+import type { CreditCard, Payment, StoreCredit } from "@/types/commerce";
 import { useTranslations } from "next-intl";
 import { PaymentIcon } from "react-svg-credit-card-payment-icons";
 import { getCardIconType, getCardLabel } from "@/lib/utils/credit-card";
@@ -49,7 +49,7 @@ export function PaymentInfo({ payment, storeCreditLabel }: PaymentInfoProps) {
         <p className="text-xs text-gray-500">
           {t("storeCreditApplied", {
             amount: payment.display_amount ?? "",
-            remaining: credit.display_amount_remaining,
+            remaining: credit.display_amount_remaining ?? "",
           })}
         </p>
       </div>

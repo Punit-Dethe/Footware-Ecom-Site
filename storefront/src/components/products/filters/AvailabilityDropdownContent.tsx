@@ -1,6 +1,6 @@
 "use client";
 
-import type { AvailabilityFilter } from "@spree/sdk";
+import type { AvailabilityFilter } from "@/types/commerce";
 import { useTranslations } from "next-intl";
 import {
   DropdownMenuRadioGroup,

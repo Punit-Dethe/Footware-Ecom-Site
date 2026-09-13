@@ -1,4 +1,4 @@
-import type { Product } from "@spree/sdk";
+import type { Product } from "@/types/commerce";
 import { ProductCard } from "./ProductCard";
 
 interface ProductGridProps {

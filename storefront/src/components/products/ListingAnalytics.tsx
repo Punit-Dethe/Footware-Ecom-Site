@@ -1,6 +1,6 @@
 "use client";
 
-import type { Product } from "@spree/sdk";
+import type { Product } from "@/types/commerce";
 import { useEffect, useRef } from "react";
 import { trackViewItemList, trackViewSearchResults } from "@/lib/analytics/gtm";
 

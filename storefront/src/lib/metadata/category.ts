@@ -88,11 +88,11 @@ export async function generateCategoryMetadata({
 function categoryTranslationFingerprint(category: {
   name: string;
   permalink: string;
-  description: string;
-  description_html: string;
-  meta_title: string | null;
-  meta_description: string | null;
-  meta_keywords: string | null;
+  description?: string | null;
+  description_html?: string | null;
+  meta_title?: string | null;
+  meta_description?: string | null;
+  meta_keywords?: string | null;
 }): string {
   return translationFingerprint(
     category.name,

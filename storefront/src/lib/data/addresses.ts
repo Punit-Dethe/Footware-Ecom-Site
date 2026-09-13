@@ -1,6 +1,6 @@
 "use server";
 
-import type { Address, AddressParams } from "@spree/sdk";
+import type { Address, AddressParams } from "@/types/commerce";
 import { cookies } from "next/headers";
 import {
   createAddress as dbCreateAddress,
@@ -125,16 +125,16 @@ export async function createAddress(address: AddressParams) {
     const stateAbbr = address.state_abbr?.trim() || null;
 
     const row = await dbCreateAddress(userId, {
-      first_name: address.first_name,
-      last_name: address.last_name,
+      first_name: address.first_name || "",
+      last_name: address.last_name || "",
       company: address.company,
-      address1: address.address1,
+      address1: address.address1 || "",
       address2: address.address2,
-      city: address.city,
+      city: address.city || "",
       state,
       state_abbr: stateAbbr,
-      postal_code: address.postal_code,
-      country_iso: address.country_iso,
+      postal_code: address.postal_code || "",
+      country_iso: address.country_iso || "US",
       phone: address.phone,
       is_default_shipping: address.is_default_shipping,
       is_default_billing: address.is_default_billing,

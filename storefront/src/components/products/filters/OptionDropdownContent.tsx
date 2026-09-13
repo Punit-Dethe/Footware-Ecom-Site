@@ -1,4 +1,4 @@
-import type { OptionFilter } from "@spree/sdk";
+import type { OptionFilter } from "@/types/commerce";
 import { DropdownMenuCheckboxItem } from "@/components/ui/dropdown-menu";
 
 interface OptionDropdownContentProps {

@@ -1,6 +1,6 @@
 "use client";
 
-import type { Cart, LineItem } from "@spree/sdk";
+import type { Cart, LineItem } from "@/types/commerce";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {

@@ -1,4 +1,4 @@
-import type { Order } from "@spree/sdk";
+import type { Order } from "@/types/commerce";
 import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
@@ -44,7 +44,7 @@ export async function OrderDetail({
       </p>
 
       {hasFulfillments ? (
-        order.fulfillments.map((fulfillment) => {
+        order.fulfillments?.map((fulfillment) => {
           const manifestItemIds = new Set(
             fulfillment.items?.map((i) => i.item_id) ?? [],
           );
@@ -59,7 +59,7 @@ export async function OrderDetail({
             <FulfillmentBlock
               key={fulfillment.id}
               fulfillment={fulfillment}
-              shipAddress={order.shipping_address}
+              shipAddress={order.shipping_address ?? null}
               basePath={basePath}
               lineItems={fulfillmentLineItems}
             />

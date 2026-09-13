@@ -1,4 +1,4 @@
-import type { Country, Market } from "@spree/sdk";
+import type { Country, Market } from "@/types/commerce";
 import { describe, expect, it } from "vitest";
 import {
   findMarketForCountry,
@@ -30,7 +30,7 @@ function country(iso: string): Country {
     name: iso,
     states_required: false,
     zipcode_required: false,
-  } as Country;
+  } as unknown as Country;
 }
 
 describe("Market locale routes", () => {

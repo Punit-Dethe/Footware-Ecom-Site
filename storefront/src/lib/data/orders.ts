@@ -1,6 +1,6 @@
 "use server";
 
-import type { Order, OrderListParams } from "@spree/sdk";
+import type { Order, OrderListParams } from "@/types/commerce";
 import { cookies } from "next/headers";
 import { getOrderForUser, listOrdersForUser } from "@/lib/db/order";
 import type { Surface } from "@/lib/spree";

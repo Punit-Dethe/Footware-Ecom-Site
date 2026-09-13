@@ -1,6 +1,6 @@
 "use client";
 
-import type { Country, State } from "@spree/sdk";
+import type { Country, State } from "@/types/commerce";
 import { useTranslations } from "next-intl";
 import { Input } from "@/components/ui/input";
 import {

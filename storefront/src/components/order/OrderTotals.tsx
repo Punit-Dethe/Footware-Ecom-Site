@@ -1,4 +1,4 @@
-import type { Cart, Order } from "@spree/sdk";
+import type { Cart, Order } from "@/types/commerce";
 import { useTranslations } from "next-intl";
 
 type OrderLike = Cart | Order;

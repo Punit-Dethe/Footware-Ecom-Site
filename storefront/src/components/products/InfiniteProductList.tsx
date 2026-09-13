@@ -1,6 +1,6 @@
 "use client";
 
-import type { PaginatedResponse, Product, ProductListParams } from "@spree/sdk";
+import type { PaginatedResponse, Product, ProductListParams } from "@/types/commerce";
 import { useEffect, useState } from "react";
 import { ProductCard } from "@/components/products/ProductCard";
 
