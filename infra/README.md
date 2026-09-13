@@ -6,19 +6,20 @@ This directory documents the deployment targets, environment topology, and infra
 
 ## 1. Production Topology: Vercel Serverless Architecture
 
-### Storefront & BFF: Vercel (Edge & Node.js Serverless)
-* **Production URL**: [https://storefront-three-tau.vercel.app](https://storefront-three-tau.vercel.app)
+### Storefront & Application Layer: Vercel (Edge & Node.js Serverless)
+* **Production URL**: [https://mirzafootwear.vercel.app](https://mirzafootwear.vercel.app)
 * **Framework**: Next.js 16 (App Router + Turbopack + Cache Components)
-* **Backend Model**: Next.js App Router BFF (Backend-For-Frontend)
-  * Spree-compatible Store API route handlers located at `/api/v3/store/*`.
-  * In-memory zero-latency catalog data repository with 38 catalog products and 2 categories (`Office Wear` and `Traditional`).
-  * 0ms network latency for all server-side rendering and static page generation.
+* **Architecture**: Direct first-party Data Access Layer (DAL) and React Server Actions
+  * Bounded-query catalog snapshot with zero DB queries on warm cache and maximum 4 queries on cold.
+  * Direct PostgreSQL persistence for orders, addresses, profiles, and cart domain tables.
+  * Zero dependency on any external Rails, Spree, or Render backend.
 * **Cache Architecture**:
   * Edge caching with canonical cache policies (`s-maxage=86400` for stable catalog; `s-maxage=3600` for catalog content; private `no-store` for cart/checkout).
   * 100% build-time pre-rendered catalog: All 38 product detail pages and 2 category pages pre-rendered via `generateStaticParams()`.
 * **Stateful Services**:
-  * Instant client-side & serverless cart (0ms latency).
-  * Database: Supabase PostgreSQL (`ap-south-1` / Mumbai) for persistent customer/order storage.
+  * Auth: Supabase Auth.
+  * Media: Supabase Storage `product-media` bucket.
+  * Database: Supabase PostgreSQL (`ap-south-1` / Mumbai) with direct pooled connections.
 
 ---
 
@@ -26,11 +27,10 @@ This directory documents the deployment targets, environment topology, and infra
 
 Running the application locally requires no Docker or external Rails runtime:
 ```bash
-# From repository root:
-pnpm install
+# From storefront directory:
 pnpm dev
 ```
-Both the Next.js storefront and the Spree-compatible API route handler will be immediately available on `http://localhost:3001`.
+The Next.js storefront will be immediately available on `http://localhost:3001`.
 
 ---
 

@@ -18,9 +18,7 @@
     "test:watch": "vitest",
     "check:locales": "tsx scripts/check-locale-parity.ts",
     "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui",
-    "e2e:up": "docker compose -f e2e-backend/docker-compose.yml up -d --wait && ./scripts/e2e/bootstrap-spree.sh",
-    "e2e:down": "docker compose -f e2e-backend/docker-compose.yml down -v"
+    "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
     "@adyen/adyen-web": "^6.33.0",
@@ -94,7 +92,6 @@
     "@biomejs/biome": "^2.3.14",
     "@next/bundle-analyzer": "^16.3.4",
     "@playwright/test": "^1.60.0",
-    "@spree/cli": "^2.0.0",
     "@tailwindcss/postcss": "^4",
     "@tailwindcss/typography": "^0.5.20",
     "@testing-library/jest-dom": "^6.9.1",

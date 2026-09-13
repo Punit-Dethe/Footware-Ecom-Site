@@ -115,16 +115,17 @@ The storefront lands in `apps/storefront/`.
     cp .env.local.example .env.local
     ```
 
-3. Update `.env.local` with your Spree API credentials:
+3. Update `.env.local` with your database and Supabase credentials:
 
     ```env
-    SPREE_API_URL=http://localhost:3000
-    SPREE_PUBLISHABLE_KEY=your_publishable_api_key_here
+    DATABASE_URL=postgres://postgres:[YOUR-PASSWORD]@db.your-project.supabase.co:5432/postgres
+    NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+    NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
     ```
 
-> Note: These are server-side only variables (no `NEXT_PUBLIC_` prefix needed).
+> Note: `DATABASE_URL` is a server-side only variable (never exposed to the browser).
 
-These two are all you need to boot. Optional variables cover analytics, error tracking, the wholesale portal, transactional emails, and SEO — see the [Environment Variables reference](https://spreecommerce.org/docs/developer/storefront/nextjs/environment-variables), or copy `.env.example`, which lists them all with inline comments.
+Optional variables cover analytics, error tracking, the wholesale portal, transactional emails, and SEO — see `.env.example`, which lists them all with inline comments.
 
 ### Development
 
