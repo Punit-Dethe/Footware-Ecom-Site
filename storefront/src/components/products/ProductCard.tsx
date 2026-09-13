@@ -128,15 +128,12 @@ export const ProductCard = memo(function ProductCard({
 
   return (
     <div
-      className="group relative"
+      className="product-card group relative"
       onPointerEnter={handleIntent}
       onTouchStart={handleIntent}
     >
       {/* Image */}
-      <div
-        className="relative aspect-square rounded-md overflow-hidden"
-        style={{ backgroundColor: media.dominantColor || "#f5f5f5" }}
-      >
+      <div className="product-card__image relative aspect-square overflow-hidden bg-white">
         <ProductImage
           src={imageOverrideUrl ?? imageUrl}
           alt={product.name}
@@ -157,8 +154,8 @@ export const ProductCard = memo(function ProductCard({
       </div>
 
       {/* Content */}
-      <div className="p-4">
-        <h3 className="text-sm font-medium text-gray-900 group-hover:text-primary transition-colors line-clamp-2">
+      <div className="product-card__content p-4">
+        <h3 className="product-card__name text-sm font-medium text-gray-900 group-hover:text-primary transition-colors line-clamp-2">
           {/* Stretched link: the ::after overlay keeps the whole card clickable
               without wrapping the content in an <a> — HiddenPricePrompt renders
               its own link, and anchors can't nest. */}
@@ -172,9 +169,9 @@ export const ProductCard = memo(function ProductCard({
           </Link>
         </h3>
 
-        <div className="mt-2 flex items-center gap-2">
+        <div className="product-card__prices mt-2 flex items-center gap-2">
           {displayPrice ? (
-            <span className="text-lg font-semibold text-gray-900">
+            <span className="product-card__price text-lg font-semibold text-gray-900">
               {displayPrice}
             </span>
           ) : (

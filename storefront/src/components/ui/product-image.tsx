@@ -6,7 +6,7 @@ import Image, { type ImageProps } from "next/image";
 import { useState } from "react";
 
 const DEFAULT_BLUR_DATA_URL =
-  "data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100%25' height='100%25' fill='%23f3f4f6'/%3E%3C/svg%3E";
+  "data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100%25' height='100%25' fill='%23ffffff'/%3E%3C/svg%3E";
 
 type ProductImageProps = Omit<ImageProps, "src"> & {
   src: string | null | undefined;
@@ -28,7 +28,7 @@ export function ProductImage({
 
   if (!src || hasError) {
     return (
-      <div className="absolute inset-0 flex items-center justify-center bg-gray-100 text-gray-300">
+      <div className="absolute inset-0 flex items-center justify-center bg-white text-gray-300">
         <Icon className={iconClassName} />
       </div>
     );

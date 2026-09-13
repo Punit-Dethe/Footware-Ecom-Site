@@ -4,7 +4,7 @@ import { Search, X } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 
 const SearchBar = dynamic(
@@ -40,7 +40,15 @@ export function SearchToggle({
 }: SearchToggleProps) {
   const t = useTranslations("header");
   const [searchOpen, setSearchOpen] = useState(false);
+  const [isScrolled, setIsScrolled] = useState(false);
   const searchTriggerRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const updateScroll = () => setIsScrolled(window.scrollY > 28);
+    updateScroll();
+    window.addEventListener("scroll", updateScroll, { passive: true });
+    return () => window.removeEventListener("scroll", updateScroll);
+  }, []);
 
   const closeSearch = useCallback(() => {
     setSearchOpen(false);
@@ -48,7 +56,11 @@ export function SearchToggle({
   }, []);
 
   return (
-    <header className="editorial-header sticky top-0 z-50 border-b h-[74px] relative">
+    <header
+      className={`editorial-header sticky top-0 z-50 h-[74px] border-b ${
+        isScrolled || searchOpen ? "editorial-header--solid" : ""
+      }`}
+    >
       {/* Normal header content */}
       <div
         className={`absolute inset-0 transition-all duration-300 ease-in-out ${

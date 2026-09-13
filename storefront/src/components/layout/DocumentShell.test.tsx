@@ -3,6 +3,8 @@ import { DocumentShell } from "./DocumentShell";
 
 vi.mock("next/font/google", () => ({
   Geist: () => ({ variable: "--font-geist" }),
+  Cormorant_Garamond: () => ({ variable: "--font-editorial-display" }),
+  EB_Garamond: () => ({ variable: "--font-editorial-text" }),
 }));
 
 vi.mock("@next/third-parties/google", () => ({
