@@ -28,22 +28,16 @@ export async function HeroSection({ basePath, locale }: HeroSectionProps) {
       <div className="home-hero__wash" aria-hidden="true" />
       <div className="home-hero__inner">
         <div className="home-hero__copy">
-          <p className="home-eyebrow">{t("badge")}</p>
           <h1 id="home-hero-title" className="home-display home-hero__title">
             {t("welcome")}
           </h1>
-          <span className="home-rule" aria-hidden="true" />
-          <p className="home-hero__description">{t("heroDescription")}</p>
           <Link
             className="home-button home-button--dark"
             href={`${basePath}/products`}
           >
             {t("viewCatalog")}
-            <span aria-hidden="true">→</span>
           </Link>
         </div>
-        <p className="home-hero__side-note">{t("heroSideNote")}</p>
-        <p className="home-hero__footnote">{t("heroFootnote")}</p>
       </div>
     </section>
   );

@@ -1,9 +1,8 @@
 "use client";
 
-import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { ReactElement } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { ProductCard } from "@/components/products/ProductCard";
 import type { Product } from "@/types/commerce";
 
@@ -14,9 +13,6 @@ interface ProductCarouselProps {
   currency?: string;
 }
 
-const NAV_BUTTON_BASE =
-  "absolute top-1/2 -translate-y-1/2 z-10 w-10 h-10 flex items-center justify-center cursor-pointer rounded-lg bg-white/95 backdrop-blur-xs border border-gray-300 text-gray-700 hover:bg-white hover:text-gray-900 shadow-sm transition-all duration-200 disabled:opacity-0 disabled:pointer-events-none focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary";
-
 export function ProductCarousel({
   products,
   basePath,
@@ -25,44 +21,35 @@ export function ProductCarousel({
   const t = useTranslations("products");
   const tHome = useTranslations("home");
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [isBeginning, setIsBeginning] = useState(true);
-  const [isEnd, setIsEnd] = useState(false);
-
-  const updateNavState = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-
-    const { scrollLeft, scrollWidth, clientWidth } = el;
-    setIsBeginning(scrollLeft <= 5);
-    setIsEnd(scrollLeft + clientWidth >= scrollWidth - 5);
-  }, []);
 
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
 
-    updateNavState();
+    const handleWheel = (event: WheelEvent) => {
+      // Horizontal trackpad gestures retain the browser's native behavior.
+      if (Math.abs(event.deltaX) >= Math.abs(event.deltaY)) return;
 
-    el.addEventListener("scroll", updateNavState, { passive: true });
-    window.addEventListener("resize", updateNavState);
+      const maxScroll = el.scrollWidth - el.clientWidth;
+      if (maxScroll <= 0) return;
 
-    return () => {
-      el.removeEventListener("scroll", updateNavState);
-      window.removeEventListener("resize", updateNavState);
+      const step =
+        event.deltaMode === WheelEvent.DOM_DELTA_LINE
+          ? event.deltaY * 16
+          : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
+            ? event.deltaY * el.clientWidth
+            : event.deltaY;
+      const next = Math.min(maxScroll, Math.max(0, el.scrollLeft + step));
+
+      // Let the page scroll normally once the row reaches either end.
+      if (Math.abs(next - el.scrollLeft) < 1) return;
+      event.preventDefault();
+      el.scrollLeft = next;
     };
-  }, [updateNavState]);
 
-  const handleScroll = (direction: "prev" | "next") => {
-    const el = scrollRef.current;
-    if (!el) return;
-
-    // Scroll by the width of one visible card group
-    const scrollAmount = el.clientWidth * 0.8;
-    el.scrollBy({
-      left: direction === "next" ? scrollAmount : -scrollAmount,
-      behavior: "smooth",
-    });
-  };
+    el.addEventListener("wheel", handleWheel, { passive: false });
+    return () => el.removeEventListener("wheel", handleWheel);
+  }, []);
 
   if (products.length === 0) {
     return (
@@ -73,40 +60,14 @@ export function ProductCarousel({
   }
 
   return (
-    <section
-      className="product-carousel relative group/carousel"
-      aria-roledescription="carousel"
-      aria-label={tHome("featuredProducts")}
-    >
-      <button
-        type="button"
-        aria-label={t("carouselPrev")}
-        disabled={isBeginning}
-        onClick={() => handleScroll("prev")}
-        className={`${NAV_BUTTON_BASE} -left-5 sm:-left-3`}
-      >
-        <ChevronLeft className="w-5 h-5" />
-      </button>
-
-      <button
-        type="button"
-        aria-label={t("carouselNext")}
-        disabled={isEnd}
-        onClick={() => handleScroll("next")}
-        className={`${NAV_BUTTON_BASE} -right-5 sm:-right-3`}
-      >
-        <ChevronRight className="w-5 h-5" />
-      </button>
-
-      <div
+    <div className="product-carousel">
+      <section
         ref={scrollRef}
-        className="overflow-x-auto snap-x snap-mandatory scroll-smooth no-scrollbar flex gap-6 pb-2 rounded-lg"
+        className="product-carousel__viewport"
+        aria-label={tHome("featuredProducts")}
       >
         {products.map((product, index) => (
-          <div
-            key={product.id}
-            className="flex-none snap-start w-full sm:w-[calc(50%-12px)] md:w-[calc(33.333%-16px)] lg:w-[calc(25%-18px)] p-1"
-          >
+          <div key={product.id} className="product-carousel__item">
             <ProductCard
               product={product}
               basePath={basePath}
@@ -118,7 +79,7 @@ export function ProductCarousel({
             />
           </div>
         ))}
-      </div>
-    </section>
+      </section>
+    </div>
   );
 }

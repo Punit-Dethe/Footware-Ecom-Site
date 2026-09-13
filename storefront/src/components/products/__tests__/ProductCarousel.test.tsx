@@ -1,5 +1,4 @@
-import { act, render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ProductCarousel } from "../ProductCarousel";
 
@@ -7,8 +6,6 @@ vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => {
     const translations: Record<string, string> = {
       noProductsFound: "No products found",
-      carouselPrev: "Previous products",
-      carouselNext: "Next products",
       featuredProducts: "Featured Products",
       sale: "Sale",
       outOfStock: "Out of Stock",
@@ -47,7 +44,7 @@ describe("ProductCarousel", () => {
     expect(screen.getByText("No products found")).toBeInTheDocument();
   });
 
-  it("renders carousel with products and navigation buttons", () => {
+  it("renders linked products in a horizontal scroll area without arrows", () => {
     render(
       <ProductCarousel
         products={mockProducts as any}
@@ -61,16 +58,18 @@ describe("ProductCarousel", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("The Heritage Wingtip Derby")).toBeInTheDocument();
 
-    const prevBtn = screen.getByRole("button", { name: "Previous products" });
-    const nextBtn = screen.getByRole("button", { name: "Next products" });
-
-    expect(prevBtn).toBeInTheDocument();
-    expect(nextBtn).toBeInTheDocument();
+    const scrollArea = screen.getByRole("region", {
+      name: "Featured Products",
+    });
+    expect(scrollArea).toHaveClass("product-carousel__viewport");
+    expect(
+      screen.getByRole("link", { name: "The Sovereign Cap-Toe Oxford" }),
+    ).toHaveAttribute("href", "/us/en/products/sovereign-cap-toe-oxford");
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 
-  it("triggers scrollBy on next button click", async () => {
-    const user = userEvent.setup();
-    const { container } = render(
+  it("moves vertical wheel input horizontally, then releases page scrolling at the end", () => {
+    render(
       <ProductCarousel
         products={mockProducts as any}
         basePath="/us/en"
@@ -78,9 +77,9 @@ describe("ProductCarousel", () => {
       />,
     );
 
-    const scrollContainer = container.querySelector(
-      ".overflow-x-auto",
-    ) as HTMLElement;
+    const scrollContainer = screen.getByRole("region", {
+      name: "Featured Products",
+    });
     Object.defineProperty(scrollContainer, "clientWidth", {
       configurable: true,
       value: 1000,
@@ -95,20 +94,32 @@ describe("ProductCarousel", () => {
       writable: true,
     });
 
-    scrollContainer.scrollBy = vi.fn();
-
-    // Trigger scroll listener to update isEnd with mocked dimensions
-    act(() => {
-      scrollContainer.dispatchEvent(new Event("scroll"));
+    const movingEvent = new WheelEvent("wheel", {
+      bubbles: true,
+      cancelable: true,
+      deltaY: 120,
     });
+    scrollContainer.dispatchEvent(movingEvent);
+    expect(scrollContainer.scrollLeft).toBe(120);
+    expect(movingEvent.defaultPrevented).toBe(true);
 
-    const nextBtn = screen.getByRole("button", { name: "Next products" });
-    await user.click(nextBtn);
+    scrollContainer.scrollLeft = 1000;
+    const atEndEvent = new WheelEvent("wheel", {
+      bubbles: true,
+      cancelable: true,
+      deltaY: 120,
+    });
+    scrollContainer.dispatchEvent(atEndEvent);
+    expect(scrollContainer.scrollLeft).toBe(1000);
+    expect(atEndEvent.defaultPrevented).toBe(false);
 
-    expect(scrollContainer.scrollBy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        behavior: "smooth",
-      }),
-    );
+    const reverseEvent = new WheelEvent("wheel", {
+      bubbles: true,
+      cancelable: true,
+      deltaY: -120,
+    });
+    scrollContainer.dispatchEvent(reverseEvent);
+    expect(scrollContainer.scrollLeft).toBe(880);
+    expect(reverseEvent.defaultPrevented).toBe(true);
   });
 });
