@@ -1,4 +1,10 @@
 import type { Metadata } from "next";
+import {
+  CategorySection,
+  ClosingStatement,
+  CraftSection,
+  HeritageSection,
+} from "@/components/home/EditorialSections";
 import { FeaturedProductsSection } from "@/components/home/FeaturedProductsSection";
 import { HeroSection } from "@/components/home/HeroSection";
 import { WholesaleSection } from "@/components/home/WholesaleSection";
@@ -25,7 +31,7 @@ export default async function HomePage({ params }: HomePageProps) {
   const currency = await resolveCurrency(country);
 
   return (
-    <div>
+    <div className="home-page">
       <HeroSection basePath={basePath} locale={locale} />
       <FeaturedProductsSection
         basePath={basePath}
@@ -33,7 +39,11 @@ export default async function HomePage({ params }: HomePageProps) {
         country={country}
         currency={currency}
       />
+      <CraftSection basePath={basePath} locale={locale} />
+      <HeritageSection basePath={basePath} locale={locale} />
+      <CategorySection basePath={basePath} locale={locale} />
       <WholesaleSection basePath={basePath} locale={locale} />
+      <ClosingStatement locale={locale} />
     </div>
   );
 }

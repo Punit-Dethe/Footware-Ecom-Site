@@ -1,10 +1,10 @@
-import type { Category } from "@/types/commerce";
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 import { POLICY_LINKS } from "@/lib/constants/policies";
-import { isWholesaleEnabled } from "@/lib/storefront";
 import { getStoreDescription, getStoreName } from "@/lib/store";
+import { isWholesaleEnabled } from "@/lib/storefront";
+import type { Category } from "@/types/commerce";
 import { CurrentYear } from "./CurrentYear";
 
 const storeName = getStoreName();
@@ -29,7 +29,7 @@ export function FooterCategoryLinks({
     <li key={category.id}>
       <Link
         href={`${basePath}/c/${category.permalink}`}
-        className="text-sm text-neutral-400 hover:text-neutral-200 transition-colors"
+        className="editorial-footer__link"
       >
         {category.name}
       </Link>
@@ -43,28 +43,32 @@ export async function Footer({ basePath, locale, categoryLinks }: FooterProps) {
   const wholesaleEnabled = isWholesaleEnabled();
 
   return (
-    <footer className="bg-primary text-gray-300">
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="grid grid-cols-1 gap-8 md:grid-cols-5">
-          {/* Demo-only: Remove for production. */}
+    <footer className="editorial-footer">
+      <div className="editorial-footer__inner">
+        <div className="editorial-footer__grid">
           {/* Brand */}
-          <div className="col-span-1 md:col-span-2">
-            <span className="text-xl font-bold text-white">{storeName}</span>
-            <p className="mt-4 text-sm text-neutral-400">
+          <div>
+            <Link
+              href={basePath}
+              className="editorial-footer__brand"
+              aria-label={storeName}
+            >
+              <span>MIRZA</span>
+              <small>FOOTWEAR</small>
+            </Link>
+            <p className="editorial-footer__description">
               {t("description") || storeDescription}
             </p>
           </div>
 
           {/* Links */}
           <div>
-            <h3 className="text-sm font-medium text-neutral-300">
-              {t("shop")}
-            </h3>
-            <ul className="mt-4 space-y-3">
+            <h3 className="editorial-footer__heading">{t("shop")}</h3>
+            <ul className="editorial-footer__links">
               <li>
                 <Link
                   href={`${basePath}/products`}
-                  className="text-sm text-neutral-400 hover:text-neutral-200 transition-colors"
+                  className="editorial-footer__link"
                 >
                   {t("allProducts")}
                 </Link>
@@ -75,14 +79,12 @@ export async function Footer({ basePath, locale, categoryLinks }: FooterProps) {
 
           {/* Account */}
           <div>
-            <h3 className="text-sm font-medium text-neutral-300">
-              {t("account")}
-            </h3>
-            <ul className="mt-4 space-y-3">
+            <h3 className="editorial-footer__heading">{t("account")}</h3>
+            <ul className="editorial-footer__links">
               <li>
                 <Link
                   href={`${basePath}/account`}
-                  className="text-sm text-neutral-400 hover:text-neutral-200 transition-colors"
+                  className="editorial-footer__link"
                 >
                   {t("myAccount")}
                 </Link>
@@ -90,7 +92,7 @@ export async function Footer({ basePath, locale, categoryLinks }: FooterProps) {
               <li>
                 <Link
                   href={`${basePath}/account/orders`}
-                  className="text-sm text-neutral-400 hover:text-neutral-200 transition-colors"
+                  className="editorial-footer__link"
                 >
                   {t("orderHistory")}
                 </Link>
@@ -98,7 +100,7 @@ export async function Footer({ basePath, locale, categoryLinks }: FooterProps) {
               <li>
                 <Link
                   href={`${basePath}/cart`}
-                  className="text-sm text-neutral-400 hover:text-neutral-200 transition-colors"
+                  className="editorial-footer__link"
                 >
                   {t("cart")}
                 </Link>
@@ -107,7 +109,7 @@ export async function Footer({ basePath, locale, categoryLinks }: FooterProps) {
                 <li>
                   <Link
                     href={`${basePath}/wholesale`}
-                    className="text-sm text-neutral-400 hover:text-neutral-200 transition-colors"
+                    className="editorial-footer__link"
                   >
                     {t("wholesale")}
                   </Link>
@@ -118,15 +120,13 @@ export async function Footer({ basePath, locale, categoryLinks }: FooterProps) {
 
           {/* Policies */}
           <div>
-            <h3 className="text-sm font-medium text-neutral-300">
-              {t("policies")}
-            </h3>
-            <ul className="mt-4 space-y-3">
+            <h3 className="editorial-footer__heading">{t("policies")}</h3>
+            <ul className="editorial-footer__links">
               {POLICY_LINKS.map((policy) => (
                 <li key={policy.slug}>
                   <Link
                     href={`${basePath}/policies/${policy.slug}`}
-                    className="text-sm text-neutral-400 hover:text-neutral-200 transition-colors"
+                    className="editorial-footer__link"
                   >
                     {tp(policy.nameKey)}
                   </Link>
@@ -136,7 +136,7 @@ export async function Footer({ basePath, locale, categoryLinks }: FooterProps) {
           </div>
         </div>
 
-        <div className="mt-8 pt-8 border-t border-neutral-800 text-xs text-neutral-400 text-center">
+        <div className="editorial-footer__bottom">
           <p>
             &copy; <CurrentYear /> {storeName}. All rights reserved.
           </p>

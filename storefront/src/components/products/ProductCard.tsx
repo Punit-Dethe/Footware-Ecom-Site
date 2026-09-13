@@ -1,6 +1,5 @@
 "use client";
 
-import type { Product } from "@/types/commerce";
 import { getImageProps } from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -10,11 +9,16 @@ import { HiddenPricePrompt } from "@/components/products/HiddenPricePrompt";
 import { ProductImage } from "@/components/ui/product-image";
 import { trackSelectItem } from "@/lib/analytics/gtm";
 import type { ProductMedia } from "@/lib/media/types";
+import type { Product } from "@/types/commerce";
 
 const prewarmedHeros = new Set<string>();
 
 function prewarmPdpHero(heroSrc: string) {
-  if (typeof document === "undefined" || !heroSrc || prewarmedHeros.has(heroSrc)) {
+  if (
+    typeof document === "undefined" ||
+    !heroSrc ||
+    prewarmedHeros.has(heroSrc)
+  ) {
     return;
   }
   prewarmedHeros.add(heroSrc);
@@ -44,6 +48,7 @@ function prewarmPdpHero(heroSrc: string) {
 interface ProductCardProps {
   product: Product;
   media?: ProductMedia;
+  imageOverrideUrl?: string;
   basePath?: string;
   categoryId?: string;
   index?: number;
@@ -58,6 +63,7 @@ interface ProductCardProps {
 export const ProductCard = memo(function ProductCard({
   product,
   media: mediaProp,
+  imageOverrideUrl,
   basePath = "",
   categoryId,
   index,
@@ -69,10 +75,12 @@ export const ProductCard = memo(function ProductCard({
 }: ProductCardProps) {
   const t = useTranslations("products");
   const router = useRouter();
-  const media: ProductMedia = mediaProp || (product as any).product_media || {
-    mainUrl: product.thumbnail_url || (product.primary_media as any)?.url || null,
-    dominantColor: "#f5f5f5",
-  };
+  const media: ProductMedia = mediaProp ||
+    (product as any).product_media || {
+      mainUrl:
+        product.thumbnail_url || (product.primary_media as any)?.url || null,
+      dominantColor: "#f5f5f5",
+    };
   const imageUrl = media.mainUrl;
   const productHref = `${basePath}/products/${product.slug}${categoryId ? `?category_id=${categoryId}` : ""}`;
   const isHighPriority = fetchPriority === "high" || Boolean(priority);
@@ -130,7 +138,7 @@ export const ProductCard = memo(function ProductCard({
         style={{ backgroundColor: media.dominantColor || "#f5f5f5" }}
       >
         <ProductImage
-          src={imageUrl}
+          src={imageOverrideUrl ?? imageUrl}
           alt={product.name}
           fill
           className="object-cover group-hover:scale-105 transition-transform duration-300"

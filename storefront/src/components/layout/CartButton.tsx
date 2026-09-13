@@ -21,7 +21,7 @@ export function CartButton() {
       size="icon-lg"
       onClick={openCart}
       aria-label={t("openCart")}
-      className="relative"
+      className="editorial-header__cart relative"
     >
       <ShoppingBag className="size-5" />
       {mounted && itemCount > 0 && (

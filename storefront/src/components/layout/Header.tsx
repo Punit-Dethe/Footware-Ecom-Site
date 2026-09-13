@@ -1,4 +1,3 @@
-import type { Category } from "@/types/commerce";
 import { User } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -8,6 +7,7 @@ import { CartButton } from "@/components/layout/CartButton";
 import { SearchToggle } from "@/components/layout/SearchToggle";
 import { Button } from "@/components/ui/button";
 import { isWholesaleEnabled } from "@/lib/storefront";
+import type { Category } from "@/types/commerce";
 
 const LazyMobileMenu = dynamic(
   () =>
@@ -66,18 +66,23 @@ export async function Header({
   return (
     <SearchToggle
       basePath={basePath}
-      left={mobileNavigation}
+      left={
+        <>
+          <div className="editorial-mobile-menu">{mobileNavigation}</div>
+          <nav className="editorial-nav" aria-label={t("categories")}>
+            <Link href={basePath}>{t("home")}</Link>
+            <Link href={`${basePath}/products`}>{t("allProducts")}</Link>
+            <Link href={`${basePath}/#craft`}>{t("craft")}</Link>
+          </nav>
+        </>
+      }
       center={
         <Link
           href={basePath || "/"}
-          className="group flex flex-col items-center justify-center text-center py-0.5 transition-opacity hover:opacity-85 select-none"
+          className="editorial-brand group flex flex-col items-center justify-center text-center py-0.5 transition-opacity hover:opacity-85 select-none"
         >
-          <span className="font-serif text-lg sm:text-2xl font-bold tracking-[0.22em] uppercase text-stone-900 leading-none">
-            Mirza Footwear
-          </span>
-          <span className="hidden sm:block text-[9px] tracking-[0.32em] uppercase text-stone-500 font-medium mt-1">
-            Artisanal Heritage &middot; Est. 2026
-          </span>
+          <span className="editorial-brand__name">MIRZA</span>
+          <span className="editorial-brand__descriptor">FOOTWEAR</span>
         </Link>
       }
       rightStart={
