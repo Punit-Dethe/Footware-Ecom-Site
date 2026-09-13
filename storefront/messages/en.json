@@ -142,6 +142,13 @@
   "products": {
     "allProducts": "All Products",
     "browseCollection": "Browse our complete collection",
+    "catalogEyebrow": "Footwear for a fuller life",
+    "catalogIntro": "Timeless design. Modern living. A considered collection of footwear for every occasion, made for those who appreciate the finer details in everyday life.",
+    "catalogNote": "Walk a different path",
+    "catalogSignature": "Good shoes. Better days.",
+    "editorialLabel": "People / Places / Footwear",
+    "editorialTitle": "Built for the everyday and the everywhere.",
+    "editorialAction": "Our craft",
     "searchResultsFor": "Search results for \"{query}\"",
     "productsFound": "{count, plural, one {# product} other {# products}} found",
     "noProductsFound": "No products found",

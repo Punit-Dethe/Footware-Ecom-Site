@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ProductCarousel } from "../ProductCarousel";
 
@@ -54,21 +54,22 @@ describe("ProductCarousel", () => {
     );
 
     expect(
-      screen.getByText("The Sovereign Cap-Toe Oxford"),
+      screen.getAllByText("The Sovereign Cap-Toe Oxford")[0],
     ).toBeInTheDocument();
-    expect(screen.getByText("The Heritage Wingtip Derby")).toBeInTheDocument();
+    expect(screen.getAllByText("The Heritage Wingtip Derby")[0]).toBeInTheDocument();
 
     const scrollArea = screen.getByRole("region", {
       name: "Featured Products",
     });
     expect(scrollArea).toHaveClass("product-carousel__viewport");
     expect(
-      screen.getByRole("link", { name: "The Sovereign Cap-Toe Oxford" }),
+      screen.getAllByRole("link", { name: "The Sovereign Cap-Toe Oxford" })[0],
     ).toHaveAttribute("href", "/us/en/products/sovereign-cap-toe-oxford");
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    expect(scrollArea).toHaveAttribute("tabindex", "0");
   });
 
-  it("moves vertical wheel input horizontally, then releases page scrolling at the end", () => {
+  it("drags with the mouse without following a product link", () => {
     render(
       <ProductCarousel
         products={mockProducts as any}
@@ -80,46 +81,41 @@ describe("ProductCarousel", () => {
     const scrollContainer = screen.getByRole("region", {
       name: "Featured Products",
     });
-    Object.defineProperty(scrollContainer, "clientWidth", {
-      configurable: true,
-      value: 1000,
-    });
-    Object.defineProperty(scrollContainer, "scrollWidth", {
-      configurable: true,
-      value: 2000,
-    });
     Object.defineProperty(scrollContainer, "scrollLeft", {
       configurable: true,
-      value: 0,
+      value: 500,
       writable: true,
     });
 
-    const movingEvent = new WheelEvent("wheel", {
-      bubbles: true,
-      cancelable: true,
-      deltaY: 120,
-    });
-    scrollContainer.dispatchEvent(movingEvent);
-    expect(scrollContainer.scrollLeft).toBe(120);
-    expect(movingEvent.defaultPrevented).toBe(true);
+    fireEvent.pointerDown(scrollContainer, { pointerId: 1, pointerType: "mouse", button: 0, clientX: 300 });
+    fireEvent.pointerMove(scrollContainer, { pointerId: 1, pointerType: "mouse", clientX: 240 });
+    expect(scrollContainer.scrollLeft).toBe(560);
+    expect(scrollContainer).toHaveClass("is-dragging");
+    fireEvent.pointerUp(scrollContainer, { pointerId: 1, pointerType: "mouse" });
+    expect(scrollContainer).not.toHaveClass("is-dragging");
 
-    scrollContainer.scrollLeft = 1000;
-    const atEndEvent = new WheelEvent("wheel", {
-      bubbles: true,
-      cancelable: true,
-      deltaY: 120,
-    });
-    scrollContainer.dispatchEvent(atEndEvent);
-    expect(scrollContainer.scrollLeft).toBe(1000);
-    expect(atEndEvent.defaultPrevented).toBe(false);
+    const link = screen.getAllByRole("link", { name: "The Sovereign Cap-Toe Oxford" })[0];
+    const click = new MouseEvent("click", { bubbles: true, cancelable: true });
+    link.dispatchEvent(click);
+    expect(click.defaultPrevented).toBe(true);
+  });
 
-    const reverseEvent = new WheelEvent("wheel", {
-      bubbles: true,
-      cancelable: true,
-      deltaY: -120,
+  it("wraps the repeated sequence as the viewport reaches either side", () => {
+    render(<ProductCarousel products={mockProducts as any} basePath="/us/en" />);
+    const viewport = screen.getByRole("region", { name: "Featured Products" });
+    const items = viewport.querySelectorAll(".product-carousel__item");
+    items.forEach((item, index) => {
+      Object.defineProperty(item, "offsetLeft", { configurable: true, value: index * 100 });
     });
-    scrollContainer.dispatchEvent(reverseEvent);
-    expect(scrollContainer.scrollLeft).toBe(880);
-    expect(reverseEvent.defaultPrevented).toBe(true);
+    Object.defineProperty(viewport, "scrollLeft", { configurable: true, value: 0, writable: true });
+    fireEvent(window, new Event("resize"));
+    expect(viewport.scrollLeft).toBe(600);
+
+    viewport.scrollLeft = 200;
+    fireEvent.scroll(viewport);
+    expect(viewport.scrollLeft).toBe(800);
+    viewport.scrollLeft = 1000;
+    fireEvent.scroll(viewport);
+    expect(viewport.scrollLeft).toBe(400);
   });
 });

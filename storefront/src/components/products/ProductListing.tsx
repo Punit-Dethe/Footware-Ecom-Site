@@ -48,6 +48,9 @@ interface ProductListingProps {
   ) => Promise<ProductFiltersResponse>;
   /** Shown when the fetch returns zero results. */
   emptyMessage?: string;
+  editorialBreak?: boolean;
+  editorialHref?: string;
+  editorialCopy?: { label: string; title: string; action: string };
 }
 
 /**
@@ -93,6 +96,9 @@ async function ProductListingInner({
   fetchProducts,
   fetchFilters,
   emptyMessage,
+  editorialBreak,
+  editorialHref,
+  editorialCopy,
 }: ProductListingProps): Promise<ReactElement> {
   const t = await getTranslations({ locale, namespace: "products" });
 
@@ -148,6 +154,7 @@ async function ProductListingInner({
           filterFetchParams={filterFetchParams}
           activeFilters={state.filters}
           totalCount={totalCount}
+          basePath={basePath}
         />
       </Suspense>
 
@@ -171,6 +178,9 @@ async function ProductListingInner({
             listId={listId}
             listName={listName}
             currency={currency}
+            editorialBreak={editorialBreak}
+            editorialHref={editorialHref}
+            editorialCopy={editorialCopy}
           />
           <ListingAnalytics
             products={products}
@@ -204,6 +214,7 @@ async function FilterBarAsync({
   filterFetchParams,
   activeFilters,
   totalCount,
+  basePath,
 }: {
   fetchFilters: (
     params: Record<string, unknown>,
@@ -211,6 +222,7 @@ async function FilterBarAsync({
   filterFetchParams: Record<string, unknown>;
   activeFilters: ActiveFilters;
   totalCount: number;
+  basePath: string;
 }) {
   const filtersResponse = await fetchFilters(filterFetchParams).catch(
     (error) => {
@@ -224,6 +236,7 @@ async function FilterBarAsync({
       filtersData={filtersResponse}
       activeFilters={activeFilters}
       totalCount={totalCount}
+      basePath={basePath}
     />
   );
 }

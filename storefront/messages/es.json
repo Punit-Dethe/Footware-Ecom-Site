@@ -142,6 +142,13 @@
   "products": {
     "allProducts": "Todos los productos",
     "browseCollection": "Explora nuestra coleccion completa",
+    "catalogEyebrow": "Calzado para una vida plena",
+    "catalogIntro": "Diseño atemporal. Vida moderna. Una colección de calzado para cada ocasión, pensada para quienes aprecian los detalles de cada día.",
+    "catalogNote": "Camina por un camino diferente",
+    "catalogSignature": "Buenos zapatos. Mejores días.",
+    "editorialLabel": "Personas / Lugares / Calzado",
+    "editorialTitle": "Hecho para todos los días y todos los caminos.",
+    "editorialAction": "Nuestro oficio",
     "searchResultsFor": "Resultados de busqueda para \"{query}\"",
     "productsFound": "{count, plural, one {# producto} other {# productos}} encontrados",
     "noProductsFound": "No se encontraron productos",

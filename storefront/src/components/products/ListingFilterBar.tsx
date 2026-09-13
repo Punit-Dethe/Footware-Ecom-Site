@@ -11,6 +11,7 @@ interface ListingFilterBarProps {
   filtersData: ProductFiltersResponse | null;
   activeFilters: ActiveFilters;
   totalCount: number;
+  basePath: string;
 }
 
 /**
@@ -22,6 +23,7 @@ export function ListingFilterBar({
   filtersData,
   activeFilters,
   totalCount,
+  basePath,
 }: ListingFilterBarProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -54,6 +56,7 @@ export function ListingFilterBar({
         filtersLoading={false}
         activeFilters={activeFilters}
         totalCount={totalCount}
+        basePath={basePath}
         onFilterChange={handleFilterChange}
       />
     </div>

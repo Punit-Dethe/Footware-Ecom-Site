@@ -1,7 +1,9 @@
 "use client";
 
 import type { PaginatedResponse, Product, ProductListParams } from "@/types/commerce";
-import { useEffect, useState } from "react";
+import Image from "next/image";
+import Link from "next/link";
+import { Fragment, useEffect, useState } from "react";
 import { ProductCard } from "@/components/products/ProductCard";
 
 interface InfiniteProductListProps {
@@ -16,6 +18,9 @@ interface InfiniteProductListProps {
   listId?: string;
   listName?: string;
   currency?: string;
+  editorialBreak?: boolean;
+  editorialHref?: string;
+  editorialCopy?: { label: string; title: string; action: string };
 }
 
 /**
@@ -39,6 +44,9 @@ export function InfiniteProductList({
   listId,
   listName,
   currency,
+  editorialBreak = false,
+  editorialHref,
+  editorialCopy,
 }: InfiniteProductListProps) {
   const [products, setProducts] = useState<Product[]>(initialProducts);
 
@@ -69,19 +77,38 @@ export function InfiniteProductList({
   }, [fetchRemainder, initialProducts.length, listParams, totalCount]);
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-3 gap-6">
+    <div className="catalog-products-grid grid grid-cols-2 lg:grid-cols-3 gap-6">
       {products.map((product, index) => (
-        <ProductCard
-          key={product.id}
-          product={product}
-          basePath={basePath}
-          categoryId={categoryId}
-          index={index}
-          listId={listId}
-          listName={listName}
-          fetchPriority={index === 0 ? "high" : undefined}
-          currency={currency}
-        />
+        <Fragment key={product.id}>
+          {editorialBreak && index === 8 && editorialCopy && editorialHref && (
+            <aside className="catalog-story">
+              <Image
+                src="/editorial/craft-hands.webp"
+                alt=""
+                fill
+                sizes="(max-width: 760px) 100vw, 90vw"
+                className="object-cover"
+              />
+              <div className="catalog-story__content">
+                <p>{editorialCopy.label}</p>
+                <h2>{editorialCopy.title}</h2>
+                <Link href={editorialHref}>{editorialCopy.action}</Link>
+              </div>
+            </aside>
+          )}
+          <div className="catalog-products-grid__cell">
+            <ProductCard
+              product={product}
+              basePath={basePath}
+              categoryId={categoryId}
+              index={index}
+              listId={listId}
+              listName={listName}
+              fetchPriority={index === 0 ? "high" : undefined}
+              currency={currency}
+            />
+          </div>
+        </Fragment>
       ))}
     </div>
   );

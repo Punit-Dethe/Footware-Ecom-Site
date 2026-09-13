@@ -142,6 +142,13 @@
   "products": {
     "allProducts": "Wszystkie produkty",
     "browseCollection": "Przeglądaj naszą pełną kolekcję",
+    "catalogEyebrow": "Obuwie na pełniejsze życie",
+    "catalogIntro": "Ponadczasowy styl. Współczesne życie. Przemyślana kolekcja obuwia na każdą okazję, dla tych, którzy cenią detale każdego dnia.",
+    "catalogNote": "Wybierz własną drogę",
+    "catalogSignature": "Dobre buty. Lepsze dni.",
+    "editorialLabel": "Ludzie / Miejsca / Obuwie",
+    "editorialTitle": "Na każdy dzień i każdą drogę.",
+    "editorialAction": "Nasze rzemiosło",
     "searchResultsFor": "Wyniki wyszukiwania dla \"{query}\"",
     "productsFound": "{count, plural, one {# produkt} few {# produkty} other {# produktów}}",
     "noProductsFound": "Nie znaleziono produktów",

@@ -558,6 +558,7 @@ export async function getCatalogFilters(params?: {
     return {
       id: cat.id,
       name: cat.name,
+      slug: cat.slug,
       label: cat.name,
       count,
       active:

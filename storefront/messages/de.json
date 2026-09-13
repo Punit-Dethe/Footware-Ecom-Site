@@ -142,6 +142,13 @@
   "products": {
     "allProducts": "Alle Produkte",
     "browseCollection": "Entdecken Sie unsere gesamte Kollektion",
+    "catalogEyebrow": "Schuhe für ein erfülltes Leben",
+    "catalogIntro": "Zeitloses Design. Modernes Leben. Eine durchdachte Schuhkollektion für jeden Anlass und für Menschen, die die kleinen Details des Alltags schätzen.",
+    "catalogNote": "Gehen Sie Ihren eigenen Weg",
+    "catalogSignature": "Gute Schuhe. Bessere Tage.",
+    "editorialLabel": "Menschen / Orte / Schuhe",
+    "editorialTitle": "Für jeden Tag und jeden Weg gemacht.",
+    "editorialAction": "Unser Handwerk",
     "searchResultsFor": "Suchergebnisse für \"{query}\"",
     "productsFound": "{count, plural, one {# Produkt} other {# Produkte}} gefunden",
     "noProductsFound": "Keine Produkte gefunden",

@@ -2,10 +2,12 @@
 
 import type {
   AvailabilityFilter,
+  CategoryFilter,
   OptionFilter,
   ProductFiltersResponse,
 } from "@/types/commerce";
 import { Check, X } from "lucide-react";
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -26,6 +28,7 @@ interface MobileFilterDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   filtersData: ProductFiltersResponse | null;
+  basePath?: string;
   activeFilters: ActiveFilters;
   priceBuckets: PriceBucket[];
   onApply: (filters: ActiveFilters) => void;
@@ -35,6 +38,7 @@ export function MobileFilterDrawer({
   isOpen,
   onClose,
   filtersData,
+  basePath = "",
   activeFilters,
   priceBuckets,
   onApply,
@@ -115,6 +119,26 @@ export function MobileFilterDrawer({
         <div className="flex-1 overflow-y-auto p-5 space-y-7">
           {(filtersData?.filters ?? []).map((filter) => {
             switch (filter.type) {
+              case "category":
+                return (
+                  <div key={filter.id}>
+                    <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
+                      {(filter as CategoryFilter).label || filter.name}
+                    </h3>
+                    <div className="space-y-1">
+                      {(filter as CategoryFilter).options.map((option) => (
+                        <Link
+                          key={option.id}
+                          href={`${basePath}/c/categories/${option.slug ?? option.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
+                          className="block px-3 py-2.5 text-sm"
+                          onClick={onClose}
+                        >
+                          {option.label || option.name}
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                );
               case "option":
                 return (
                   <MobileOptionSection

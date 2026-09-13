@@ -142,6 +142,13 @@
   "products": {
     "allProducts": "Tous les produits",
     "browseCollection": "Parcourez notre collection complete",
+    "catalogEyebrow": "Des chaussures pour une vie accomplie",
+    "catalogIntro": "Un style intemporel. Une vie moderne. Une collection de chaussures pour chaque occasion, pensée pour ceux qui apprécient les détails du quotidien.",
+    "catalogNote": "Suivez votre propre chemin",
+    "catalogSignature": "De belles chaussures. De beaux jours.",
+    "editorialLabel": "Personnes / Lieux / Chaussures",
+    "editorialTitle": "Pour chaque jour et chaque chemin.",
+    "editorialAction": "Notre savoir-faire",
     "searchResultsFor": "Resultats de recherche pour \"{query}\"",
     "productsFound": "{count, plural, one {# produit} other {# produits}} trouve(s)",
     "noProductsFound": "Aucun produit trouve",

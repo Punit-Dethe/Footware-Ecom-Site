@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import { getTranslations } from "next-intl/server";
+import { Suspense } from "react";
 import { ProductListing } from "@/components/products/ProductListing";
+import { ProductListingSkeleton } from "@/components/products/ProductListingSkeleton";
 import { resolveCurrency } from "@/lib/data/markets";
 import { getProductFilters, getProducts } from "@/lib/data/products";
 import { generateProductsMetadata } from "@/lib/metadata/products";
@@ -21,15 +24,12 @@ export async function generateMetadata({
   return generateProductsMetadata({ country, locale });
 }
 
-import { Suspense } from "react";
-import { ProductListingSkeleton } from "@/components/products/ProductListingSkeleton";
-
 export default function ProductsPage(props: ProductsPageProps) {
   return (
     <Suspense
       fallback={
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-pulse">
-          <div className="h-10 w-64 bg-stone-100 rounded mb-8" />
+        <div className="catalog-page catalog-page--loading" aria-busy="true">
+          <div className="catalog-hero" aria-hidden="true" />
           <ProductListingSkeleton />
         </div>
       }
@@ -64,21 +64,34 @@ async function ProductsPageContent({
   const listName = query ? "Search Results" : "All Products";
 
   return (
-    <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="mb-8">
-        {query ? (
-          <h1 className="text-3xl font-bold text-gray-900">
+    <div className="catalog-page">
+      {query ? (
+        <div className="catalog-search-heading">
+          <h1>
             {t("searchResultsFor", { query })}
           </h1>
-        ) : (
-          <>
-            <h1 className="text-3xl font-bold text-gray-900">
-              {t("allProducts")}
-            </h1>
-            <p className="mt-2 text-gray-500">{t("browseCollection")}</p>
-          </>
-        )}
-      </div>
+        </div>
+      ) : (
+        <section className="catalog-hero" aria-labelledby="catalog-title">
+          <div className="catalog-hero__copy">
+            <p className="catalog-eyebrow">{t("catalogEyebrow")}</p>
+            <h1 id="catalog-title">{t("allProducts")}</h1>
+            <p className="catalog-hero__intro">{t("catalogIntro")}</p>
+            <p className="catalog-hero__note">{t("catalogNote")}</p>
+          </div>
+          <div className="catalog-hero__visual">
+            <Image
+              src="/editorial/campaign-hero.webp"
+              alt=""
+              fill
+              priority
+              sizes="(max-width: 760px) 100vw, 50vw"
+              className="object-cover"
+            />
+            <span>{t("catalogSignature")}</span>
+          </div>
+        </section>
+      )}
 
       <ProductListing
         state={listingState}
@@ -92,6 +105,13 @@ async function ProductsPageContent({
         emptyMessage={
           query ? t("noMatchingProducts", { query }) : t("tryAdjustingFilters")
         }
+        editorialBreak={!query}
+        editorialHref={`${basePath}/#craft`}
+        editorialCopy={{
+          label: t("editorialLabel"),
+          title: t("editorialTitle"),
+          action: t("editorialAction"),
+        }}
       />
     </div>
   );

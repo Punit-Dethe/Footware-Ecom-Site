@@ -324,6 +324,7 @@ export interface GiftCard {
 export interface FilterOption {
   id: string;
   name: string;
+  slug?: string;
   label?: string;
   count?: number;
   active?: boolean;

@@ -2,11 +2,13 @@
 
 import type {
   AvailabilityFilter,
+  CategoryFilter,
   OptionFilter,
   PriceRangeFilter,
   ProductFiltersResponse,
 } from "@/types/commerce";
 import { SlidersHorizontal } from "lucide-react";
+import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import type { JSX } from "react";
 import { memo, useCallback, useMemo, useState } from "react";
@@ -18,6 +20,7 @@ import { MobileFilterDrawer } from "@/components/products/filters/MobileFilterDr
 import { OptionDropdownContent } from "@/components/products/filters/OptionDropdownContent";
 import { PriceDropdownContent } from "@/components/products/filters/PriceDropdownContent";
 import { SortDropdownContent } from "@/components/products/filters/SortDropdownContent";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { getActiveFilterCount } from "@/lib/utils/filters";
 import { generatePriceBuckets } from "@/lib/utils/price-buckets";
 import type { ActiveFilters, AvailabilityStatus } from "@/types/filters";
@@ -27,6 +30,7 @@ interface FilterBarProps {
   filtersLoading: boolean;
   activeFilters: ActiveFilters;
   totalCount: number;
+  basePath?: string;
   onFilterChange: (filters: ActiveFilters) => void;
 }
 
@@ -35,6 +39,7 @@ export const FilterBar = memo(function FilterBar({
   filtersLoading,
   activeFilters,
   totalCount,
+  basePath = "",
   onFilterChange,
 }: FilterBarProps): JSX.Element | null {
   const t = useTranslations("products");
@@ -144,15 +149,41 @@ export const FilterBar = memo(function FilterBar({
   const availabilityFilter = filtersData.filters?.find(
     (f) => f.type === "availability",
   ) as AvailabilityFilter | undefined;
+  const categoryFilter = filtersData.filters?.find(
+    (filter) => filter.type === "category",
+  ) as CategoryFilter | undefined;
+  const activeSortLabel = filtersData.sort_options?.find(
+    (option) => option.id === activeSortBy,
+  )?.label ?? filtersData.sort_options?.[0]?.label ?? t("sort");
 
   const hasPriceFilter =
     Boolean(filtersData.filters?.some((f) => f.type === "price_range")) &&
     priceBuckets.length > 0;
 
   return (
-    <div className="mb-6">
-      <div className="hidden md:flex items-center justify-between pb-4 border-b border-gray-100">
-        <div className="flex items-center gap-3">
+    <div className="catalog-filter-bar mb-6">
+      <div className="catalog-filter-bar__desktop hidden md:flex items-center justify-between gap-3 pb-4 border-b border-gray-100">
+        <div className="catalog-filter-bar__controls flex items-center gap-3">
+          <span className="catalog-filter-bar__label">{t("filters")}:</span>
+          {categoryFilter && (
+            <FilterDropdown
+              label={categoryFilter.label || categoryFilter.name}
+              isOpen={openDropdownId === "category"}
+              onToggle={() => toggleDropdown("category")}
+              onClose={closeDropdown}
+            >
+              {categoryFilter.options.map((option) => (
+                <DropdownMenuItem key={option.id} asChild>
+                  <Link
+                    href={`${basePath}/c/categories/${option.slug ?? option.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
+                    onClick={closeDropdown}
+                  >
+                    {option.label || option.name}
+                  </Link>
+                </DropdownMenuItem>
+              ))}
+            </FilterDropdown>
+          )}
           {optionFilters.map((filter) => (
             <FilterDropdown
               key={filter.id}
@@ -203,12 +234,9 @@ export const FilterBar = memo(function FilterBar({
           )}
         </div>
 
-        <div className="flex items-center gap-3">
-          <span className="text-sm text-gray-500">
-            {t("productCount", { count: totalCount })}
-          </span>
+        <div className="catalog-filter-bar__meta flex items-center gap-3">
           <FilterDropdown
-            label={t("sort")}
+            label={`${t("sort")}: ${activeSortLabel}`}
             isOpen={openDropdownId === "sort"}
             onToggle={() => toggleDropdown("sort")}
             onClose={closeDropdown}
@@ -220,10 +248,13 @@ export const FilterBar = memo(function FilterBar({
               onSortChange={handleSortChange}
             />
           </FilterDropdown>
+          <span className="catalog-filter-bar__count">
+            {t("productCount", { count: totalCount })}
+          </span>
         </div>
       </div>
 
-      <div className="flex items-center gap-3 md:hidden pb-4 border-b border-gray-100">
+      <div className="catalog-filter-bar__mobile flex items-center gap-3 md:hidden pb-4 border-b border-gray-100">
         <button
           type="button"
           onClick={() => setShowMobileDrawer(true)}
@@ -244,7 +275,7 @@ export const FilterBar = memo(function FilterBar({
 
         <div className="ml-auto">
           <FilterDropdown
-            label={t("sort")}
+            label={`${t("sort")}: ${activeSortLabel}`}
             isOpen={openDropdownId === "sort-mobile"}
             onToggle={() => toggleDropdown("sort-mobile")}
             onClose={closeDropdown}
@@ -275,6 +306,7 @@ export const FilterBar = memo(function FilterBar({
         isOpen={showMobileDrawer}
         onClose={() => setShowMobileDrawer(false)}
         filtersData={filtersData}
+        basePath={basePath}
         activeFilters={activeFilters}
         priceBuckets={priceBuckets}
         onApply={onFilterChange}
