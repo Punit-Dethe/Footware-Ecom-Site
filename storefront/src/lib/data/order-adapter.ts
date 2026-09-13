@@ -79,9 +79,9 @@ function adaptAddressSnapshot(raw: Record<string, unknown> | null | undefined): 
 
 /**
  * Pure synchronous adapter converting DbOrder + DbOrderItem[] into the
- * Spree SDK Order / Cart compatibility shape consumed by UI components.
+ * first-party Order domain shape consumed by UI components.
  */
-export function adaptDbOrderToSpree(
+export function adaptDbOrderToCommerceOrder(
   order: DbOrder,
   items: DbOrderItem[] = [],
 ): Order {
@@ -174,9 +174,9 @@ export function adaptDbOrderToCart(
   order: DbOrder,
   items: DbOrderItem[] = [],
 ): Cart {
-  const spreeOrder = adaptDbOrderToSpree(order, items);
+  const commerceOrder = adaptDbOrderToCommerceOrder(order, items);
   return {
-    ...spreeOrder,
+    ...commerceOrder,
     current_step: "complete",
     total_quantity: items.reduce((acc, i) => acc + i.quantity, 0),
   } as unknown as Cart;

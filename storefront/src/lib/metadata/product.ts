@@ -6,7 +6,7 @@ import {
   translationFingerprint,
 } from "@/lib/metadata/alternates";
 import { stripHtml } from "@/lib/seo";
-import { DEFAULT_SURFACE } from "@/lib/spree";
+import { DEFAULT_SURFACE } from "@/lib/storefront";
 import { getStoreUrl } from "@/lib/store";
 
 interface ProductMetadataParams {

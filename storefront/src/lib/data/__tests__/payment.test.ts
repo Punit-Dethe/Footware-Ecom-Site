@@ -26,7 +26,7 @@ vi.mock("@/lib/data/checkout", () => ({
   resolveSurfaceForCart: vi.fn().mockResolvedValue("dtc"),
 }));
 
-vi.mock("@/lib/spree", () => ({
+vi.mock("@/lib/storefront", () => ({
   cacheTagSuffix: () => "",
   DEFAULT_SURFACE: "dtc",
   isWholesaleEnabled: vi.fn().mockReturnValue(false),

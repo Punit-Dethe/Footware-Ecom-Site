@@ -1,7 +1,7 @@
 import type { CreditCard, Payment, StoreCredit } from "@/types/commerce";
+import { CreditCard as CreditCardIcon } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { PaymentIcon } from "react-svg-credit-card-payment-icons";
-import { getCardIconType, getCardLabel } from "@/lib/utils/credit-card";
+import { getCardLabel } from "@/lib/utils/credit-card";
 
 interface PaymentInfoProps {
   payment: Payment;
@@ -17,11 +17,9 @@ export function PaymentInfo({ payment, storeCreditLabel }: PaymentInfoProps) {
     const card = source as CreditCard;
     return (
       <div className="flex items-center gap-3">
-        <PaymentIcon
-          type={getCardIconType(card.brand)}
-          format="flatRounded"
-          width={40}
-        />
+        <div className="p-2 bg-gray-100 rounded-lg flex items-center justify-center">
+          <CreditCardIcon className="w-5 h-5 text-gray-700" />
+        </div>
         <div>
           <p className="text-sm font-medium text-gray-900">
             {t("cardEndingIn", {

@@ -1,9 +1,9 @@
 "use server";
 
 import {
-  getAccessToken,
+  getWholesaleChannelCode,
   isWholesaleEnabled,
-} from "@/lib/spree";
+} from "@/lib/storefront";
 import type { Channel, ProductListParams } from "@/types/commerce";
 import {
   getProduct as getProductBySurface,
@@ -12,6 +12,7 @@ import {
 } from "./products";
 import { searchCatalogVariants } from "@/lib/catalog/catalog-repository";
 import { getVariantByIdOrSku } from "@/lib/db/catalog";
+import { getVerifiedUserId } from "./customer";
 
 /**
  * Fetch the wholesale channel's resolved configuration.
@@ -22,7 +23,7 @@ export async function getWholesaleChannel(): Promise<Channel | null> {
 
   return {
     id: "chn_wholesale",
-    code: "wholesale",
+    code: getWholesaleChannelCode() ?? "wholesale",
     name: "Mirza Wholesale",
     currency: "USD",
     default_locale: "en",
@@ -62,7 +63,7 @@ export interface WholesaleVariantSuggestion {
  * Search the wholesale catalog for variants matching a free-text query (product
  * name or SKU), for the quick-order autocomplete. Flattens products to variants
  * so buyers can pick the exact colour/size rather than just the product.
- * Requires the customer JWT — the channel 401s guests.
+ * Requires verified Supabase authentication — fails closed for guests.
  *
  * Uses the first-party B6A cached catalog snapshot with 0 database queries when warm.
  */
@@ -73,8 +74,8 @@ export async function searchWholesaleVariants(
   const trimmed = query.trim();
   if (trimmed.length < 2) return [];
 
-  const token = await getAccessToken();
-  if (!token) return [];
+  const userId = await getVerifiedUserId();
+  if (!userId) return [];
 
   const results = await searchCatalogVariants(trimmed, limit);
   return results.map((r) => ({
@@ -92,7 +93,7 @@ export async function searchWholesaleVariants(
  * quick-order form.
  *
  * Uses authoritative PostgreSQL lookup with exact case-insensitive SKU matching.
- * Requires the customer JWT — fails closed on database / infrastructure errors.
+ * Requires verified Supabase authentication — fails closed on unauthenticated or infrastructure errors.
  */
 export async function findWholesaleVariantBySku(sku: string): Promise<
   | {
@@ -110,8 +111,8 @@ export async function findWholesaleVariantBySku(sku: string): Promise<
   const trimmed = sku.trim();
   if (!trimmed) return { found: false as const };
 
-  const token = await getAccessToken();
-  if (!token) return { found: false as const };
+  const userId = await getVerifiedUserId();
+  if (!userId) return { found: false as const };
 
   const variant = await getVariantByIdOrSku(trimmed);
   if (!variant) {

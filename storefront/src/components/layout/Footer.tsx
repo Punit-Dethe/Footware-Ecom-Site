@@ -3,18 +3,12 @@ import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 import { POLICY_LINKS } from "@/lib/constants/policies";
-import { isWholesaleEnabled } from "@/lib/spree";
+import { isWholesaleEnabled } from "@/lib/storefront";
 import { getStoreDescription, getStoreName } from "@/lib/store";
 import { CurrentYear } from "./CurrentYear";
 
 const storeName = getStoreName();
 const storeDescription = getStoreDescription();
-
-// Demo-only: Remove for production.
-const githubUrl = "https://github.com/spree/storefront";
-const quickstartUrl =
-  "https://spreecommerce.org/docs/developer/getting-started/quickstart";
-const learnMoreUrl = "https://spreecommerce.org";
 
 interface FooterProps {
   basePath: string;
@@ -59,33 +53,6 @@ export async function Footer({ basePath, locale, categoryLinks }: FooterProps) {
             <p className="mt-4 text-sm text-neutral-400">
               {t("description") || storeDescription}
             </p>
-            {/* Demo-only: Remove for production. */}
-            <div className="mt-4 flex flex-col gap-2">
-              <Link
-                href={githubUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm text-white hover:text-neutral-200 transition-colors font-medium"
-              >
-                {t("forkOnGithub")} &rarr;
-              </Link>
-              <Link
-                href={quickstartUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm text-neutral-400 hover:text-neutral-200 transition-colors"
-              >
-                {t("quickstartGuide")}
-              </Link>
-              <Link
-                href={learnMoreUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm text-neutral-400 hover:text-neutral-200 transition-colors"
-              >
-                {t("learnMore")}
-              </Link>
-            </div>
           </div>
 
           {/* Links */}
@@ -171,15 +138,7 @@ export async function Footer({ basePath, locale, categoryLinks }: FooterProps) {
 
         <div className="mt-8 pt-8 border-t border-neutral-800 text-xs text-neutral-400 text-center">
           <p>
-            &copy; <CurrentYear /> {storeName}. {t("poweredBy")}{" "}
-            <Link
-              href="https://spreecommerce.org"
-              target="_blank"
-              className="text-neutral-400 hover:text-neutral-200 underline transition-colors"
-            >
-              Spree Commerce
-            </Link>{" "}
-            & Next.js.
+            &copy; <CurrentYear /> {storeName}. All rights reserved.
           </p>
         </div>
       </div>

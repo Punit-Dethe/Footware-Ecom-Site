@@ -30,7 +30,7 @@ import {
   getCartToken,
   setCartCookies,
   type Surface,
-} from "@/lib/spree";
+} from "@/lib/storefront";
 import { createClient } from "@/lib/supabase/server";
 import { actionResult } from "./utils";
 

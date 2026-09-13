@@ -10,7 +10,7 @@
  * the completion response returns, keyed by the cart ID used to complete.
  */
 
-const STORAGE_KEY_PREFIX = "spree_completed_order_";
+const STORAGE_KEY_PREFIX = "mirza_completed_order_";
 
 export function cacheCompletedOrder(cartId: string, order: unknown): void {
   try {

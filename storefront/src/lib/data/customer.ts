@@ -5,9 +5,8 @@ import { ensureProfile, getProfile, updateProfile } from "@/lib/db/profile";
 import {
   cacheTagSuffix,
   clearAllCartCookies,
-  clearAuthCookies,
   SURFACES,
-} from "@/lib/spree";
+} from "@/lib/storefront";
 import { createClient } from "@/lib/supabase/server";
 import { actionResult } from "./utils";
 
@@ -22,6 +21,39 @@ export interface AppUser {
 
 // Backward compatibility alias for UI consumers
 export type Customer = AppUser;
+
+/**
+ * Verifies Supabase session cryptographically via auth.getClaims().
+ * Returns the verified user UUID (claims.sub) or null for anonymous visitors.
+ * Fails closed on transient 5xx/network infrastructure errors by throwing.
+ */
+export async function getVerifiedUserId(): Promise<string | null> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase.auth.getClaims();
+  if (error) {
+    const status =
+      typeof error === "object" && error !== null && "status" in error
+        ? (error as { status?: number }).status
+        : undefined;
+    const name = error.name || "";
+    if (
+      (typeof status === "number" && status >= 500) ||
+      name === "AuthRetryableFetchError" ||
+      error.message?.includes("fetch failed")
+    ) {
+      throw error;
+    }
+    return null;
+  }
+
+  if (!data?.claims) {
+    return null;
+  }
+
+  const claims = data.claims as Record<string, unknown>;
+  return typeof claims.sub === "string" ? claims.sub : null;
+}
 
 /**
  * Get the currently authenticated customer from Supabase Auth and PostgreSQL public.profiles.
@@ -152,8 +184,6 @@ export async function login(
       phone: (data.user.user_metadata?.phone as string | undefined) || null,
     });
 
-    // Clean legacy Spree auth cookies defensively
-    await clearAuthCookies();
     updateTag("customer");
 
     const appUser: AppUser = {
@@ -270,7 +300,6 @@ export async function register(params: {
       phone: params.phone?.trim() || null,
     });
 
-    await clearAuthCookies();
     updateTag("customer");
 
     return {
@@ -305,9 +334,6 @@ export async function logout(): Promise<void> {
     // Non-fatal if session is already expired
   }
 
-  // Clear legacy Spree cookies defensively
-  await clearAuthCookies();
-
   // Clear every surface's cart on explicit user logout
   await clearAllCartCookies();
   updateTag("customer");
@@ -315,7 +341,6 @@ export async function logout(): Promise<void> {
     updateTag(`cart${cacheTagSuffix(surface)}`);
     updateTag(`checkout${cacheTagSuffix(surface)}`);
   }
-  updateTag("credit-cards");
 }
 
 /**

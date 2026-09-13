@@ -8,7 +8,7 @@ import type {
   ProductListParams,
 } from "@/types/commerce";
 import { cacheLife, cacheTag } from "next/cache";
-import { getAccessToken, getLocaleOptions } from "@/lib/spree";
+import { getLocaleOptions } from "@/lib/storefront";
 
 import {
   getCategoryByPermalinkOrId,
@@ -63,14 +63,12 @@ export async function getCategory(
 
 /**
  * Persistent cached category products fetch. Cache key is derived from
- * all function arguments (categoryId, params, locale, country, userToken).
- * Guest users pass undefined so the cache entry is shared.
+ * categoryId, params, locale, and country.
  */
 export async function cachedListCategoryProducts(
   categoryId: string,
   params: ProductListParams | undefined,
   _options: { locale?: string; country?: string },
-  _userToken?: string,
 ) {
   "use cache: remote";
   cacheLife("tenMinutes");
@@ -106,6 +104,5 @@ export async function getCategoryProducts(
   params?: ProductListParams,
 ) {
   const options = await getLocaleOptions();
-  const userToken = await getAccessToken();
-  return cachedListCategoryProducts(categoryId, params, options, userToken);
+  return cachedListCategoryProducts(categoryId, params, options);
 }

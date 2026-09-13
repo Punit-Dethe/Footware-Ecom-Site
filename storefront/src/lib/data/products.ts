@@ -5,35 +5,26 @@ import { cacheLife, cacheTag } from "next/cache";
 import {
   cacheTagSuffix,
   DEFAULT_SURFACE,
-  getAccessToken,
   getLocaleOptions,
   type Surface,
-} from "@/lib/spree";
-
-/**
- * Cached product list fetch. Cache key is derived from all function
- * arguments by Next.js "use cache":
- *
- * - locale/country: determines language and market-specific pricing
- * - surface: DTC vs wholesale — different catalog + channel pricing. Baked
- *   into both the cache tag and the arguments so the two never share entries.
- * - userToken: per-user cache segmentation (separate arg, NOT passed to
- *   SDK). Authenticated users may see different prices (B2B, loyalty).
- *   Each user's JWT is unique so the cache is segmented per user.
- *   Guest users pass undefined. On the wholesale surface the token is
- *   always present — the channel 401s guests.
- */
+} from "@/lib/storefront";
 import {
   getCatalogFilters,
   getProductBySlugOrId,
   queryProducts,
 } from "@/lib/catalog/catalog-repository";
 
+/**
+ * Cached product list fetch. Cache key is derived from function arguments by Next.js "use cache":
+ *
+ * - params: pagination, search, and category filters
+ * - options: locale/country for market formatting
+ * - surface: DTC vs wholesale — distinct catalog segmentation via cache tag and arguments
+ */
 export async function cachedListProducts(
   params: ProductListParams | undefined,
   _options: { locale?: string; country?: string },
   surface: Surface,
-  _userToken?: string,
 ) {
   "use cache: remote";
   cacheLife("tenMinutes");
@@ -93,8 +84,7 @@ export async function getProducts(
   surface: Surface = DEFAULT_SURFACE,
 ) {
   const options = await getLocaleOptions();
-  const userToken = await getAccessToken();
-  return cachedListProducts(params, options, surface, userToken);
+  return cachedListProducts(params, options, surface);
 }
 
 /**
@@ -105,7 +95,6 @@ export async function cachedGetProduct(
   _expand: string[],
   _options: { locale?: string; country?: string },
   surface: Surface,
-  _userToken?: string,
 ) {
   "use cache: remote";
   cacheLife("tenMinutes");
@@ -127,13 +116,11 @@ export async function getProduct(
   surface: Surface = DEFAULT_SURFACE,
 ) {
   const options = await getLocaleOptions();
-  const userToken = await getAccessToken();
   return cachedGetProduct(
     slugOrId,
     params?.expand ?? [],
     options,
     surface,
-    userToken,
   );
 }
 
@@ -141,7 +128,6 @@ export async function cachedGetProductFilters(
   params: Record<string, unknown> | undefined,
   _options: { locale?: string; country?: string },
   surface: Surface,
-  _userToken?: string,
 ) {
   "use cache: remote";
   cacheLife("tenMinutes");
@@ -166,6 +152,5 @@ export async function getProductFilters(
   surface: Surface = DEFAULT_SURFACE,
 ) {
   const options = await getLocaleOptions();
-  const userToken = await getAccessToken();
-  return cachedGetProductFilters(params, options, surface, userToken);
+  return cachedGetProductFilters(params, options, surface);
 }

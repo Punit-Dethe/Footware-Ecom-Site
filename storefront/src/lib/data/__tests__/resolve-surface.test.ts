@@ -14,7 +14,7 @@ const { mockGetCartId, mockGetCart, mockGetWholesaleChannel } = vi.hoisted(
   }),
 );
 
-vi.mock("@/lib/spree", () => ({
+vi.mock("@/lib/storefront", () => ({
   isWholesaleEnabled: vi.fn().mockReturnValue(true),
   getCartId: (surface?: string) => mockGetCartId(surface),
   cacheTagSuffix: () => "",
@@ -29,7 +29,7 @@ vi.mock("../wholesale", () => ({
 vi.mock("next/cache", () => ({ updateTag: vi.fn() }));
 
 import { resolveSurfaceForCartVerified } from "@/lib/data/checkout";
-import { isWholesaleEnabled } from "@/lib/spree";
+import { isWholesaleEnabled } from "@/lib/storefront";
 
 describe("resolveSurfaceForCartVerified", () => {
   beforeEach(() => {

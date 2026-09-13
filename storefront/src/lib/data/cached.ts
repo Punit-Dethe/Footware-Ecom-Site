@@ -1,5 +1,5 @@
 import { cache } from "react";
-import type { Surface } from "@/lib/spree";
+import type { Surface } from "@/lib/storefront";
 import { getCategory } from "./categories";
 import { getProduct } from "./products";
 

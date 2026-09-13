@@ -8,7 +8,7 @@ import {
   getCartToken,
   isWholesaleEnabled,
   type Surface,
-} from "@/lib/spree";
+} from "@/lib/storefront";
 import {
   findCartById,
   updateAuthorizedCartCheckoutData,

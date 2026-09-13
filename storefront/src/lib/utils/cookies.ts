@@ -1,3 +1,8 @@
+import {
+  MIRZA_COUNTRY_COOKIE,
+  MIRZA_LOCALE_COOKIE,
+} from "@/lib/storefront/legacy-cookie-migration";
+
 const ONE_YEAR = 60 * 60 * 24 * 365;
 
 function setCookie(name: string, value: string): void {
@@ -23,6 +28,6 @@ function setCookie(name: string, value: string): void {
  * Persist the selected country and locale in client-side cookies.
  */
 export function setStoreCookies(country: string, locale: string): void {
-  setCookie("spree_country", country);
-  setCookie("spree_locale", locale);
+  setCookie(MIRZA_COUNTRY_COOKIE, country);
+  setCookie(MIRZA_LOCALE_COOKIE, locale);
 }

@@ -1,6 +1,7 @@
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { type NextRequest, NextResponse } from "next/server";
 import { getDefaultCountry, getDefaultLocale } from "@/lib/store";
+import { resolveCountry, resolveLocale } from "@/lib/storefront";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -14,10 +15,8 @@ export async function GET(request: NextRequest) {
   const type = searchParams.get("type") as EmailOtpType | null;
 
   // Resolve country and locale context from existing cookies or defaults
-  const country =
-    request.cookies.get("spree_country")?.value || getDefaultCountry();
-  const locale =
-    request.cookies.get("spree_locale")?.value || getDefaultLocale();
+  const country = resolveCountry(request.cookies) || getDefaultCountry();
+  const locale = resolveLocale(request.cookies) || getDefaultLocale();
   const canonicalPrefix = `/${country}/${locale}`;
 
   if (

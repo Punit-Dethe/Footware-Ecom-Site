@@ -10,10 +10,6 @@ const mockCache = vi.hoisted(() => ({
   cacheTag: vi.fn(),
 }));
 
-const mockSpree = vi.hoisted(() => ({
-  getClient: vi.fn(),
-}));
-
 vi.mock("@/lib/catalog/catalog-repository", () => ({
   queryProducts: mockCatalog.queryProducts,
   listCatalogCategories: mockCatalog.listCatalogCategories,
@@ -22,10 +18,6 @@ vi.mock("@/lib/catalog/catalog-repository", () => ({
 vi.mock("next/cache", () => ({
   cacheLife: mockCache.cacheLife,
   cacheTag: mockCache.cacheTag,
-}));
-
-vi.mock("@/lib/spree", () => ({
-  getClient: mockSpree.getClient,
 }));
 
 import {
@@ -63,7 +55,6 @@ describe("First-Party Sitemap Data Layer", () => {
         "products",
         "sitemap-market:market-1",
       );
-      expect(mockSpree.getClient).not.toHaveBeenCalled();
     });
 
     it("uses first-party listCatalogCategories for category resource count and attaches catalog-public tag", async () => {
@@ -86,7 +77,6 @@ describe("First-Party Sitemap Data Layer", () => {
         "categories",
         "sitemap-market:market-1",
       );
-      expect(mockSpree.getClient).not.toHaveBeenCalled();
     });
   });
 
@@ -118,7 +108,6 @@ describe("First-Party Sitemap Data Layer", () => {
         "products",
         "sitemap-market:market-1",
       );
-      expect(mockSpree.getClient).not.toHaveBeenCalled();
     });
   });
 
@@ -150,7 +139,6 @@ describe("First-Party Sitemap Data Layer", () => {
         "categories",
         "sitemap-market:market-1",
       );
-      expect(mockSpree.getClient).not.toHaveBeenCalled();
     });
   });
 });
