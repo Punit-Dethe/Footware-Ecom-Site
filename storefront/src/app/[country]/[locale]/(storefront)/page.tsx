@@ -52,8 +52,8 @@ export default async function HomePage({ params }: HomePageProps) {
         locale={locale}
         currency={currency}
       />
-      <WholesaleSection basePath={basePath} locale={locale} />
       <ClosingStatement locale={locale} />
+      <WholesaleSection basePath={basePath} locale={locale} />
     </div>
   );
 }

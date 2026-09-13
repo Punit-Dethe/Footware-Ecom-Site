@@ -21,6 +21,16 @@ export async function CraftSection({ basePath, locale }: HomeSectionProps) {
       className="home-craft"
       aria-labelledby="home-craft-title"
     >
+      <div className="home-craft__photo">
+        <Image
+          src="/editorial/campaign-hero.webp"
+          alt={t("craftImageAlt")}
+          fill
+          sizes="100vw"
+          className="object-cover"
+        />
+      </div>
+      <div className="home-craft__wash" aria-hidden="true" />
       <div className="home-craft__copy">
         <p className="home-eyebrow">{t("craftLabel")}</p>
         <h2 id="home-craft-title" className="home-display home-craft__title">
@@ -33,27 +43,6 @@ export async function CraftSection({ basePath, locale }: HomeSectionProps) {
         >
           {t("viewCatalog")} <span aria-hidden="true">→</span>
         </Link>
-      </div>
-      <div className="home-craft__visual">
-        <div className="home-craft__photo">
-          <Image
-            src="/editorial/campaign-hero.webp"
-            alt={t("craftImageAlt")}
-            fill
-            sizes="(max-width: 900px) 100vw, 60vw"
-            className="object-cover"
-          />
-        </div>
-        <div className="home-craft__note home-craft__note--top">
-          <span className="home-craft__note-dot" aria-hidden="true" />
-          <strong>{t("craftFeatureOne")}</strong>
-          <span>{t("craftFeatureOneDescription")}</span>
-        </div>
-        <div className="home-craft__note home-craft__note--bottom">
-          <span className="home-craft__note-dot" aria-hidden="true" />
-          <strong>{t("craftFeatureTwo")}</strong>
-          <span>{t("craftFeatureTwoDescription")}</span>
-        </div>
       </div>
     </section>
   );
@@ -199,6 +188,14 @@ export async function ClosingStatement({ locale }: { locale: string }) {
 
   return (
     <section className="home-closing" aria-label={t("closingStatement")}>
+      <Image
+        src="/editorial/craft-hands.webp"
+        alt=""
+        fill
+        sizes="100vw"
+        className="home-closing__image"
+      />
+      <div className="home-closing__shade" aria-hidden="true" />
       <p className="home-display">“{t("closingStatement")}”</p>
       <span>Mirza Footwear</span>
     </section>
