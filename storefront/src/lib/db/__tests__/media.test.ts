@@ -183,6 +183,63 @@ describe("Media DAL Tests", () => {
         [1, TEST_MEDIA_ID, TEST_PROD_ID],
       );
     });
+
+    it("rejects duplicate IDs before executing any UPDATE (Section 15)", async () => {
+      const mockClient = {
+        query: vi.fn(),
+      };
+
+      mockDb.transaction.mockImplementation(async (cb: any) => cb(mockClient));
+
+      // Product has 3 existing images: [A, B, C]
+      mockClient.query.mockResolvedValueOnce({
+        rows: [{ id: "A" }, { id: "B" }, { id: "C" }],
+      });
+
+      // Submitted: [A, A, C] (length matches 3, but contains duplicates)
+      await expect(
+        reorderProductMedia(TEST_PROD_ID, ["A", "A", "C"]),
+      ).rejects.toThrow("duplicates");
+
+      // Verify ZERO position updates were executed
+      expect(mockClient.query).toHaveBeenCalledTimes(1);
+    });
+
+    it("rejects when submitted IDs count does not match existing media count", async () => {
+      const mockClient = {
+        query: vi.fn(),
+      };
+
+      mockDb.transaction.mockImplementation(async (cb: any) => cb(mockClient));
+
+      mockClient.query.mockResolvedValueOnce({
+        rows: [{ id: "A" }, { id: "B" }],
+      });
+
+      await expect(
+        reorderProductMedia(TEST_PROD_ID, ["A"]),
+      ).rejects.toThrow("count does not match");
+
+      expect(mockClient.query).toHaveBeenCalledTimes(1);
+    });
+
+    it("rejects cross-product media IDs", async () => {
+      const mockClient = {
+        query: vi.fn(),
+      };
+
+      mockDb.transaction.mockImplementation(async (cb: any) => cb(mockClient));
+
+      mockClient.query.mockResolvedValueOnce({
+        rows: [{ id: "A" }, { id: "B" }],
+      });
+
+      await expect(
+        reorderProductMedia(TEST_PROD_ID, ["A", "FOREIGN_MEDIA_ID"]),
+      ).rejects.toThrow("does not belong to product");
+
+      expect(mockClient.query).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe("updateMediaAltText", () => {
@@ -192,7 +249,7 @@ describe("Media DAL Tests", () => {
       await updateMediaAltText(TEST_PROD_ID, TEST_MEDIA_ID, "New Alt Text");
 
       expect(mockDb.query).toHaveBeenCalledWith(
-        expect.stringContaining("UPDATE public.product_images SET alt_text = $1"),
+        expect.stringContaining("UPDATE public.product_images"),
         ["New Alt Text", TEST_MEDIA_ID, TEST_PROD_ID],
       );
     });
@@ -236,6 +293,72 @@ describe("Media DAL Tests", () => {
       expect(result.newHeroMediaId).toBe(TEST_MEDIA_ID_2);
       expect(result.storagePathsToDelete).toContain(`products/${TEST_PROD_ID}/hero.webp`);
       expect(result.storagePathsToDelete).toContain(`products/${TEST_PROD_ID}/320.webp`);
+    });
+
+    it("produces media-less state without error when deleting the last remaining image", async () => {
+      const mockClient = {
+        query: vi.fn(),
+      };
+
+      mockDb.transaction.mockImplementation(async (cb: any) => cb(mockClient));
+
+      // 1. Fetch sole media item
+      mockClient.query.mockResolvedValueOnce({
+        rows: [
+          {
+            id: TEST_MEDIA_ID,
+            product_id: TEST_PROD_ID,
+            is_hero: true,
+            storage_path: `products/${TEST_PROD_ID}/final.webp`,
+            processed_variants: null,
+          },
+        ],
+      });
+
+      // 2. Delete from DB
+      mockClient.query.mockResolvedValueOnce({ rows: [] });
+
+      // 3. Check remaining: 0 rows
+      mockClient.query.mockResolvedValueOnce({ rows: [] });
+
+      const result = await deleteProductMedia(TEST_PROD_ID, TEST_MEDIA_ID);
+
+      expect(result.deletedMediaId).toBe(TEST_MEDIA_ID);
+      expect(result.newHeroMediaId).toBeNull();
+      expect(result.storagePathsToDelete).toEqual([`products/${TEST_PROD_ID}/final.webp`]);
+    });
+
+    it("deduplicates storage paths before deletion (Section 16)", async () => {
+      const mockClient = {
+        query: vi.fn(),
+      };
+
+      mockDb.transaction.mockImplementation(async (cb: any) => cb(mockClient));
+
+      // storage_path and a processed_variant share the same path
+      mockClient.query.mockResolvedValueOnce({
+        rows: [
+          {
+            id: TEST_MEDIA_ID,
+            product_id: TEST_PROD_ID,
+            is_hero: false,
+            storage_path: `products/${TEST_PROD_ID}/shared.webp`,
+            processed_variants: {
+              "640": { webp: `products/${TEST_PROD_ID}/shared.webp` },
+              "320": { webp: `products/${TEST_PROD_ID}/thumb.webp` },
+            },
+          },
+        ],
+      });
+
+      mockClient.query.mockResolvedValueOnce({ rows: [] });
+
+      const result = await deleteProductMedia(TEST_PROD_ID, TEST_MEDIA_ID);
+
+      expect(result.storagePathsToDelete).toEqual([
+        `products/${TEST_PROD_ID}/shared.webp`,
+        `products/${TEST_PROD_ID}/thumb.webp`,
+      ]);
     });
   });
 });

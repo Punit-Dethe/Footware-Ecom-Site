@@ -1,14 +1,14 @@
 "use server";
 
 import { updateTag } from "next/cache";
-import path from "node:path";
+import crypto from "node:crypto";
 import sharp, { type Metadata as SharpMetadata } from "sharp";
-import { requireAdmin } from "@/lib/auth/admin";
+import { AdminAuthError, requireAdmin } from "@/lib/auth/admin";
+import { query } from "@/lib/db";
 import {
   createSignedMediaUploadUrl,
   deleteStorageObjects,
   downloadStorageObject,
-  generateMediaStoragePath,
 } from "@/lib/media/storage-admin";
 import {
   deleteProductMedia,
@@ -19,12 +19,98 @@ import {
 } from "@/lib/db/media";
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
-const ALLOWED_MIME_TYPES = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/avif",
-]);
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const MIME_TO_EXT: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+  "image/avif": "avif",
+};
+
+const SHARP_FORMAT_TO_MIME: Record<string, string> = {
+  jpeg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+  avif: "image/avif",
+};
+
+class MediaValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "MediaValidationError";
+  }
+}
+
+function handleMediaActionError(err: any): { success: false; error: string } {
+  if (
+    err instanceof AdminAuthError ||
+    err?.name === "AdminAuthError" ||
+    err?.message?.includes("Admin authorization required") ||
+    err?.message?.includes("Unauthorized")
+  ) {
+    if (err.code === "INFRASTRUCTURE_ERROR") {
+      console.error("[admin-media] Auth infrastructure error:", err);
+      return {
+        success: false,
+        error: "Authorization service is temporarily unavailable.",
+      };
+    }
+    return {
+      success: false,
+      error: "Admin authorization required.",
+    };
+  }
+
+  if (
+    err instanceof MediaValidationError ||
+    err?.name === "MediaValidationError"
+  ) {
+    return {
+      success: false,
+      error: err.message,
+    };
+  }
+
+  // Preserve user-fixable validation error messages
+  const userFixableKeywords = [
+    "does not exist",
+    "does not belong",
+    "not belong",
+    "Disallowed image type",
+    "exceeds the 10 MB limit",
+    "SVG images are not allowed",
+    "contain duplicates",
+    "count does not match",
+    "Invalid product ID",
+    "Invalid media ID",
+    "Invalid image type",
+    "Image validation failed",
+    "Unsupported image format",
+    "Invalid storage path",
+    "MIME type mismatch",
+    "File size must be a positive integer",
+  ];
+
+  const msg = err instanceof Error ? err.message : String(err);
+  for (const kw of userFixableKeywords) {
+    if (msg.includes(kw)) {
+      return {
+        success: false,
+        error: msg,
+      };
+    }
+  }
+
+  // Log unexpected database / storage / network error server-side
+  console.error("[admin-media] Internal error:", err);
+
+  return {
+    success: false,
+    error: "An unexpected system error occurred. Media changes were not saved.",
+  };
+}
 
 export interface RequestUploadResult {
   success: boolean;
@@ -38,6 +124,7 @@ export interface RequestUploadResult {
 /**
  * Step 1: Admin requests upload authorization.
  * Generates an exact, collision-resistant object path and signed upload token.
+ * Validates product existence, file size, and allowed MIME whitelisting.
  */
 export async function requestProductMediaUploadAction(
   productId: string,
@@ -48,31 +135,51 @@ export async function requestProductMediaUploadAction(
   try {
     await requireAdmin();
 
-    if (!productId || typeof productId !== "string") {
-      return { success: false, error: "Valid product ID is required." };
+    if (!productId || typeof productId !== "string" || !UUID_REGEX.test(productId)) {
+      throw new MediaValidationError("Valid product ID (UUID) is required.");
     }
 
-    const cleanMime = mimeType?.toLowerCase().trim();
-    if (!ALLOWED_MIME_TYPES.has(cleanMime)) {
-      return {
-        success: false,
-        error: `Disallowed image type '${mimeType}'. Allowed formats: JPEG, PNG, WebP, AVIF. SVG is not allowed.`,
-      };
+    // Verify target product exists in PostgreSQL
+    const prodRes = await query<{ id: string }>(
+      "SELECT id FROM public.products WHERE id = $1;",
+      [productId],
+    );
+    if (prodRes.rows.length === 0) {
+      throw new MediaValidationError(`Product '${productId}' does not exist.`);
+    }
+
+    if (
+      typeof fileSizeBytes !== "number" ||
+      !Number.isFinite(fileSizeBytes) ||
+      !Number.isInteger(fileSizeBytes) ||
+      fileSizeBytes <= 0
+    ) {
+      throw new MediaValidationError("File size must be a positive integer.");
     }
 
     if (fileSizeBytes > MAX_UPLOAD_BYTES) {
-      return {
-        success: false,
-        error: `File size exceeds the 10 MB limit (${(fileSizeBytes / (1024 * 1024)).toFixed(1)} MB).`,
-      };
+      throw new MediaValidationError(
+        `File size exceeds the 10 MB limit (${(fileSizeBytes / (1024 * 1024)).toFixed(1)} MB).`,
+      );
     }
 
-    const ext = path.extname(filename || "").slice(1).toLowerCase() || "webp";
-    if (ext === "svg") {
-      return { success: false, error: "SVG images are not allowed." };
+    const cleanMime = mimeType?.toLowerCase().trim();
+    if (!cleanMime || !MIME_TO_EXT[cleanMime]) {
+      if (
+        cleanMime === "image/svg+xml" ||
+        filename?.toLowerCase().endsWith(".svg")
+      ) {
+        throw new MediaValidationError("SVG images are not allowed.");
+      }
+      throw new MediaValidationError(
+        `Disallowed image type '${mimeType}'. Allowed formats: JPEG, PNG, WebP, AVIF. SVG is not allowed.`,
+      );
     }
 
-    const { mediaId, storagePath } = generateMediaStoragePath(productId, ext);
+    const ext = MIME_TO_EXT[cleanMime];
+    const mediaId = crypto.randomUUID();
+    const storagePath = `products/${productId}/${mediaId}/original.${ext}`;
+
     const { signedUrl, token } = await createSignedMediaUploadUrl(storagePath);
 
     return {
@@ -83,11 +190,7 @@ export async function requestProductMediaUploadAction(
       mediaId,
     };
   } catch (err) {
-    console.error("[admin-media] request upload error:", err);
-    return {
-      success: false,
-      error: err instanceof Error ? err.message : "Failed to authorize media upload.",
-    };
+    return handleMediaActionError(err);
   }
 }
 
@@ -109,47 +212,87 @@ export interface FinalizeUploadResult {
 /**
  * Step 2: Finalize upload after direct client upload.
  * Downloads the object server-side and validates with Sharp (ensures actual image, dimensions, LQIP, dominant color).
+ * Strictly validates storagePath against the bound product/media namespace.
  * Deletes uploaded object best-effort if verification fails.
  */
 export async function finalizeProductMediaUploadAction(
   input: FinalizeUploadInput,
 ): Promise<FinalizeUploadResult> {
+  const { productId, mediaId, storagePath } = input;
+
   try {
     await requireAdmin();
 
-    // 1. Download uploaded bytes server-side for validation
+    // 1. Untrusted input validation
+    if (!productId || !UUID_REGEX.test(productId)) {
+      throw new MediaValidationError("Valid product ID (UUID) is required.");
+    }
+    if (!mediaId || !UUID_REGEX.test(mediaId)) {
+      throw new MediaValidationError("Valid media ID (UUID) is required.");
+    }
+
+    // Path must strictly bind to namespace: products/<productId>/<mediaId>/original.<ext>
+    const expectedPattern = new RegExp(
+      `^products/${productId}/${mediaId}/original\\.(jpg|png|webp|avif)$`,
+    );
+    if (!storagePath || !expectedPattern.test(storagePath) || storagePath.includes("..")) {
+      throw new MediaValidationError(
+        "Invalid storage path: must strictly match products/<productId>/<mediaId>/original.<ext>.",
+      );
+    }
+
+    // Verify product exists in PostgreSQL
+    const prodRes = await query<{ id: string }>(
+      "SELECT id FROM public.products WHERE id = $1;",
+      [productId],
+    );
+    if (prodRes.rows.length === 0) {
+      throw new MediaValidationError(`Product '${productId}' does not exist.`);
+    }
+
+    // 2. Download uploaded bytes server-side for validation
     let buffer: Buffer;
     try {
-      buffer = await downloadStorageObject(input.storagePath);
+      buffer = await downloadStorageObject(storagePath);
     } catch (downloadErr) {
-      return {
-        success: false,
-        error: `Failed to retrieve uploaded image from storage: ${downloadErr instanceof Error ? downloadErr.message : "Not found"}`,
-      };
+      throw new MediaValidationError(
+        `Failed to retrieve uploaded image from storage: ${downloadErr instanceof Error ? downloadErr.message : "Not found"}`,
+      );
     }
 
-    if (buffer.length > MAX_UPLOAD_BYTES) {
-      await deleteStorageObjects([input.storagePath]);
-      return { success: false, error: "Uploaded file exceeds the 10 MB size limit." };
+    if (buffer.length > MAX_UPLOAD_BYTES || buffer.length === 0) {
+      await deleteStorageObjects([storagePath]);
+      throw new MediaValidationError("Uploaded file exceeds the 10 MB limit.");
     }
 
-    // 2. Validate with Sharp
+    // 3. Validate with Sharp
     let metadata: SharpMetadata;
     let dominantHex = "#f5f5f5";
     let lqip: string | null = null;
+    let decodedMime: string;
 
     try {
-      const image = sharp(buffer);
+      const image = sharp(buffer, { failOn: "error", limitInputPixels: 268402689 });
       metadata = await image.metadata();
 
       if (!metadata.width || !metadata.height || !metadata.format) {
         throw new Error("Invalid or unreadable image format.");
       }
 
-      // Check format
-      const validFormats = ["jpeg", "png", "webp", "avif"];
-      if (!validFormats.includes(metadata.format.toLowerCase())) {
+      const format = metadata.format.toLowerCase();
+      decodedMime = SHARP_FORMAT_TO_MIME[format];
+      if (!decodedMime) {
         throw new Error(`Unsupported image format '${metadata.format}'.`);
+      }
+
+      // Verify declared MIME matches actual decoded MIME
+      if (input.mimeType) {
+        const declaredMime = input.mimeType.toLowerCase().trim();
+        if (declaredMime !== decodedMime) {
+          throw new Error(
+            `MIME type mismatch: declared '${declaredMime}' but decoded bytes are '${decodedMime}'.`,
+          );
+        }
       }
 
       // Compute dominant color
@@ -169,44 +312,45 @@ export async function finalizeProductMediaUploadAction(
       } catch {}
     } catch (validationErr) {
       // Clean up invalid object best-effort
-      await deleteStorageObjects([input.storagePath]);
-      return {
-        success: false,
-        error: `Image validation failed: ${validationErr instanceof Error ? validationErr.message : "Malformed image"}`,
-      };
+      await deleteStorageObjects([storagePath]);
+      throw new MediaValidationError(
+        `Image validation failed: ${validationErr instanceof Error ? validationErr.message : "Malformed image"}`,
+      );
     }
 
-    // 3. Persist to PostgreSQL product_images
+    // 4. Persist to PostgreSQL product_images
     try {
       await insertProductMedia({
-        id: input.mediaId,
-        productId: input.productId,
-        storagePath: input.storagePath,
+        id: mediaId,
+        productId,
+        storagePath,
         altText: input.altText || null,
         width: metadata.width || null,
         height: metadata.height || null,
         dominantColor: dominantHex,
         lqip,
         originalFilename: input.originalFilename || null,
-        mimeType: input.mimeType || `image/${metadata.format}`,
+        mimeType: decodedMime,
         fileSizeBytes: buffer.length,
       });
     } catch (dbErr) {
-      // Database insert failed, clean up uploaded storage object
-      await deleteStorageObjects([input.storagePath]);
+      // Database insert failed, clean up uploaded storage object best-effort
+      const cleanup = await deleteStorageObjects([storagePath]);
+      if (!cleanup.success) {
+        console.error(
+          "[admin-media] Orphan cleanup required: storage object could not be deleted after DB failure:",
+          storagePath,
+        );
+      }
       throw dbErr;
     }
 
-    // 4. Invalidate public catalog cache
+    // 5. Invalidate public catalog cache
     updateTag("catalog-public");
 
-    return { success: true, mediaId: input.mediaId };
+    return { success: true, mediaId };
   } catch (err) {
-    console.error("[admin-media] finalize upload error:", err);
-    return {
-      success: false,
-      error: err instanceof Error ? err.message : "Failed to finalize media upload.",
-    };
+    return handleMediaActionError(err);
   }
 }
 
@@ -219,15 +363,15 @@ export async function setHeroMediaAction(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     await requireAdmin();
+
+    if (!UUID_REGEX.test(productId)) throw new MediaValidationError("Invalid product ID.");
+    if (!UUID_REGEX.test(mediaId)) throw new MediaValidationError("Invalid media ID.");
+
     await setHeroMediaAtomic(productId, mediaId);
     updateTag("catalog-public");
     return { success: true };
   } catch (err) {
-    console.error("[admin-media] set hero error:", err);
-    return {
-      success: false,
-      error: err instanceof Error ? err.message : "Failed to set hero image.",
-    };
+    return handleMediaActionError(err);
   }
 }
 
@@ -240,15 +384,17 @@ export async function reorderProductMediaAction(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     await requireAdmin();
+
+    if (!UUID_REGEX.test(productId)) throw new MediaValidationError("Invalid product ID.");
+    if (!Array.isArray(mediaIds) || mediaIds.length === 0) {
+      throw new MediaValidationError("Media IDs must be a non-empty array.");
+    }
+
     await reorderProductMedia(productId, mediaIds);
     updateTag("catalog-public");
     return { success: true };
   } catch (err) {
-    console.error("[admin-media] reorder error:", err);
-    return {
-      success: false,
-      error: err instanceof Error ? err.message : "Failed to reorder media.",
-    };
+    return handleMediaActionError(err);
   }
 }
 
@@ -262,21 +408,21 @@ export async function updateMediaAltTextAction(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     await requireAdmin();
+
+    if (!UUID_REGEX.test(productId)) throw new MediaValidationError("Invalid product ID.");
+    if (!UUID_REGEX.test(mediaId)) throw new MediaValidationError("Invalid media ID.");
+
     await updateMediaAltText(productId, mediaId, altText);
     updateTag("catalog-public");
     return { success: true };
   } catch (err) {
-    console.error("[admin-media] update alt text error:", err);
-    return {
-      success: false,
-      error: err instanceof Error ? err.message : "Failed to update alt text.",
-    };
+    return handleMediaActionError(err);
   }
 }
 
 /**
  * Deletes a product image. Deletes from DB first, promotes next hero if needed,
- * then cleans up storage objects best-effort.
+ * then awaits storage cleanup.
  */
 export async function deleteProductMediaAction(
   productId: string,
@@ -284,22 +430,28 @@ export async function deleteProductMediaAction(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     await requireAdmin();
+
+    if (!UUID_REGEX.test(productId)) throw new MediaValidationError("Invalid product ID.");
+    if (!UUID_REGEX.test(mediaId)) throw new MediaValidationError("Invalid media ID.");
+
+    // 1. Delete from PostgreSQL first inside transaction
     const result = await deleteProductMedia(productId, mediaId);
 
-    // Clean up storage objects best-effort
+    // 2. Await Storage cleanup
     if (result.storagePathsToDelete.length > 0) {
-      deleteStorageObjects(result.storagePathsToDelete).catch((err) => {
-        console.error("[admin-media] Background storage cleanup warning:", err);
-      });
+      const cleanup = await deleteStorageObjects(result.storagePathsToDelete);
+      if (!cleanup.success) {
+        console.error(
+          "[admin-media] Orphan cleanup required: Storage objects could not be deleted:",
+          cleanup.failedPaths,
+          cleanup.error,
+        );
+      }
     }
 
     updateTag("catalog-public");
     return { success: true };
   } catch (err) {
-    console.error("[admin-media] delete error:", err);
-    return {
-      success: false,
-      error: err instanceof Error ? err.message : "Failed to delete image.",
-    };
+    return handleMediaActionError(err);
   }
 }

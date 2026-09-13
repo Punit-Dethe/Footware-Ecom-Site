@@ -185,9 +185,11 @@ describe("B6A Catalog Parity & Read Model Tests", () => {
         expect(actualVar?.purchasable).toBe(true);
       }
 
-      // Media association preserved
-      expect(found?.thumbnail_url).toBe(expectedProd.thumbnail_url);
-      expect(found?.primary_media.url).toBe(expectedProd.primary_media.url);
+      // Media association preserved (B7.1: resolves to clean Supabase Storage URL, zero legacy /products/ paths)
+      expect(found?.thumbnail_url).toContain("/storage/v1/object/public/product-media/");
+      expect(found?.thumbnail_url).not.toMatch(/^\/products\//);
+      expect(found?.primary_media.url).toContain("/storage/v1/object/public/product-media/");
+      expect(found?.primary_media.url).not.toMatch(/^\/products\//);
       expect(found?.product_media?.lqip).toBe(expectedProd.product_media?.lqip);
       expect(found?.product_media?.dominantColor).toBe(
         expectedProd.product_media?.dominantColor,

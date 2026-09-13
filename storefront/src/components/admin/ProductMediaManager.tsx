@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { createClient } from "@supabase/supabase-js";
 import {
   deleteProductMediaAction,
   finalizeProductMediaUploadAction,
@@ -52,17 +53,31 @@ export function ProductMediaManager({
         throw new Error(reqRes.error || "Failed to authorize upload");
       }
 
-      // 2. Direct browser upload to signed URL
-      const uploadRes = await fetch(reqRes.signedUrl, {
-        method: "PUT",
-        headers: {
-          "Content-Type": file.type,
+      // 2. Browser-safe Supabase uploadToSignedUrl
+      const supabaseUrl =
+        process.env.NEXT_PUBLIC_SUPABASE_URL ||
+        "https://hkncfdsvgjopkujmmxem.supabase.co";
+      const publishableKey =
+        process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || "";
+
+      const supabase = createClient(supabaseUrl, publishableKey, {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false,
         },
-        body: file,
       });
 
-      if (!uploadRes.ok) {
-        throw new Error(`Upload failed with status ${uploadRes.status}`);
+      const { error: uploadError } = await supabase.storage
+        .from("product-media")
+        .uploadToSignedUrl(
+          reqRes.storagePath,
+          reqRes.token || "",
+          file,
+          { contentType: file.type },
+        );
+
+      if (uploadError) {
+        throw new Error(`Upload failed: ${uploadError.message}`);
       }
 
       // 3. Finalize upload on server (Sharp validation, LQIP, metadata DB insert)

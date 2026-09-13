@@ -190,19 +190,27 @@ export async function setHeroMediaAtomic(
 
 /**
  * Reorders product media deterministically.
- * Verifies every media ID strictly belongs to the target product (tamper-proof).
+ * Verifies no duplicate IDs are submitted and exact set equality with existing IDs.
+ * Retains cross-product media ID rejection.
  */
 export async function reorderProductMedia(
   productId: string,
   mediaIds: string[],
 ): Promise<void> {
   return transaction(async (client) => {
+    // 1. Fetch existing media IDs for the product
     const existing = await client.query<{ id: string }>(
       `SELECT id FROM public.product_images WHERE product_id = $1;`,
       [productId],
     );
     const existingIds = new Set(existing.rows.map((r) => r.id));
 
+    // Guard against duplicate IDs in submitted payload (e.g. [A, A, C])
+    if (new Set(mediaIds).size !== mediaIds.length) {
+      throw new Error("Reorder rejected: submitted media IDs contain duplicates.");
+    }
+
+    // Exact length and set equality check
     if (mediaIds.length !== existingIds.size) {
       throw new Error("Reorder rejected: provided media IDs count does not match product media count.");
     }
@@ -252,7 +260,7 @@ export interface DeleteProductMediaResult {
 /**
  * Deletes a product media item from PostgreSQL first inside a transaction.
  * If the deleted media was hero and others remain, transactionally promotes the next lowest-position image.
- * Returns all associated storage paths (including processed variants) for post-commit storage deletion.
+ * Returns all associated storage paths (including processed variants) deduplicated for post-commit storage deletion.
  */
 export async function deleteProductMedia(
   productId: string,
@@ -272,14 +280,15 @@ export async function deleteProductMedia(
     const targetMedia = mediaRes.rows[0];
     const wasHero = targetMedia.is_hero;
 
-    // Collect all associated storage paths to delete
-    const pathsToDelete: string[] = [targetMedia.storage_path];
+    // Collect all associated storage paths to delete (deduplicated)
+    const rawPaths: string[] = [targetMedia.storage_path];
     if (targetMedia.processed_variants && typeof targetMedia.processed_variants === "object") {
       for (const formats of Object.values(targetMedia.processed_variants)) {
-        if (formats?.avif) pathsToDelete.push(formats.avif);
-        if (formats?.webp) pathsToDelete.push(formats.webp);
+        if (formats?.avif) rawPaths.push(formats.avif);
+        if (formats?.webp) rawPaths.push(formats.webp);
       }
     }
+    const pathsToDelete = Array.from(new Set(rawPaths.filter(Boolean)));
 
     // 2. Delete the DB record first
     await client.query(
