@@ -6,27 +6,96 @@ This is a headless e-commerce storefront built with Next.js 16 and React 19, bac
 
 ## Tech Stack
 
-- **Framework:** Next.js 16 (App Router)
+- **Framework:** Next.js 16 (App Router, Turbopack, Cache Components)
 - **React:** 19 (with new features like `use()`, Actions, improved Suspense)
-- **Styling:** Tailwind CSS
-- **Database & DAL:** PostgreSQL (`pg` pool) with strict verification
+- **Styling:** Tailwind CSS 4
+- **Database & DAL:** PostgreSQL (`pg` pool) with strict TLS verification — server-only
 - **Authentication:** Supabase Auth (server-side verification with `@supabase/ssr`)
-- **Language:** TypeScript
+- **i18n:** `next-intl` — `de`, `en`, `es`, `fr`, `pl`
+- **Lint/format:** Biome (not ESLint)
+- **Tests:** Vitest + React Testing Library; Playwright for E2E
+- **Language:** TypeScript (strict)
 
 ## Project Structure
 
 ```
 src/
 ├── app/                          # Next.js App Router
-│   └── [country]/[locale]/       # Internationalized routes
-│       ├── (checkout)/           # Checkout route group (minimal layout)
-│       └── (storefront)/         # Storefront route group (full layout)
+│   ├── [country]/[locale]/       # Internationalized routes
+│   │   ├── (storefront)/         # Catalog, PDP, cart, account, policies
+│   │   ├── (checkout)/           # Checkout route group (minimal layout)
+│   │   ├── (admin)/              # Role-gated catalog administration
+│   │   └── (wholesale)/          # Gated B2B portal + quick order
+│   ├── dev/emails/[template]/    # Email preview (dev only)
+│   ├── robots.ts
+│   └── sitemap.ts
 ├── components/                   # Reusable UI components
 ├── contexts/                     # React Context providers
-├── lib/
-│   └── data/                     # Server Actions for data fetching
-└── types/                        # TypeScript type definitions
+├── hooks/
+├── i18n/                         # Locale registry + routing
+├── types/                        # TypeScript type definitions (commerce.ts)
+└── lib/
+    ├── actions/                  # Admin Server Actions
+    ├── cache/                    # cache-policy.ts — canonical cache classes
+    ├── catalog/                  # catalog-repository.ts — public read model
+    ├── data/                     # Cached fetchers + Server Actions
+    ├── db/                       # Raw SQL DAL (server-only, never from client)
+    ├── emails/                   # react-email templates
+    ├── media/                    # Storage admin + delivery helpers
+    ├── metadata/                 # SEO metadata builders
+    ├── storefront/               # Surface, cookies, legacy-cookie bridge
+    └── supabase/                 # Server + proxy clients
 ```
+
+### Layering rule
+
+```text
+lib/db        raw SQL, server-only
+  ↓
+lib/data      cached fetchers + Server Actions
+  ↓
+lib/catalog   bounded public snapshot (cache tag: catalog-public)
+  ↓
+components
+```
+
+Never import `lib/db` from a client component. Cache invalidation belongs at the
+Server Action boundary, not inside the DAL.
+
+## Architecture invariants
+
+These are enforced by guard suites (`src/lib/__tests__/b{8,9,10}-architecture-audit.test.ts`)
+and by catalog/cart tests. Breaking one is a regression even if tests happen to pass.
+
+```text
+catalog     warm snapshot = 0 DB queries · cold = 4 bounded queries · N+1 = 0
+PLP         12 products in the initial payload + exactly one deferred remainder request
+anonymous   no auth call, no profile/address/order query, no cart row created
+            by a read, 0 Set-Cookie headers on warm visitors
+cart        one CartProvider hydration; zero cart reads on ordinary navigation;
+            mutation responses update React state directly; no router.refresh()
+admin       verified Supabase claims.sub → public.profiles.role = 'admin'.
+            Never from email, signup metadata, client state, or route visibility.
+orders      historical order snapshots must never mutate when catalog/media changes
+media       client cannot choose an object namespace; finalize verifies byte size
+            and Sharp-decoded MIME; SVG rejected; max 10 MB
+TLS         rejectUnauthorized: true everywhere. Never loosen.
+secrets     never in docs, tests, source, logs, or client bundles
+naming      no Spree identifiers outside lib/storefront/legacy-cookie-migration.ts
+```
+
+## Current catalog
+
+```text
+categories = 2    office-wear, traditional
+products   = 31   shoe-2026-09-001 … shoe-2026-09-031
+sizes      = 7 per product  (UK/India 6–12)
+media      = /catalog-shoes/shoe-NN.webp
+```
+
+The retired 38-product demo catalog (`office-footwear-01`,
+`traditional-footwear-NN`, `formal-office`, `traditional-indian`) no longer
+exists — do not use those identifiers in new code, tests, or fixtures.
 
 ## React 19 Best Practices
 
@@ -518,9 +587,26 @@ const ProductReviews = dynamic(
 
 ## Testing
 
-- Use Playwright for E2E tests
-- Use React Testing Library for component tests
-- Test Server Actions independently
+```bash
+pnpm test              # Vitest (62 suites / 662 tests)
+pnpm run test:watch
+pnpm run test:e2e      # Playwright
+pnpm run lint          # Biome
+pnpm run check         # Biome lint + format check
+pnpm run check:locales # locale message-bundle parity
+pnpm run analyze       # bundle analysis build
+npx tsc --noEmit
+```
+
+- Use Playwright for E2E tests.
+- Use React Testing Library for component tests.
+- Test Server Actions independently.
+- **Never weaken an architecture-audit assertion to make a change pass.** If a
+  change cannot satisfy the invariant, the change is wrong.
+
+Some catalog tests read `../scripts/catalog/shoes-2026-09.json` and/or hit a real
+PostgreSQL instance via `.env.local`. They are integration tests, not pure unit
+tests; a missing `DATABASE_URL` will fail them.
 
 ## Code Style
 

@@ -1,5 +1,12 @@
 # Architecture & Delivery Topology
 
+> **Scope.** This document describes *runtime topology only*. It does not carry
+> phase or project state — see `docs/ENGINEERING-CONTINUITY-LOG.md` for that.
+> It was reconciled with the codebase on **2026-09-14** (head `6c504be`).
+>
+> Phase at reconciliation: **backend migration B1–B10 complete**;
+> **final UI implementation in progress**.
+
 ## 1. System Topology Overview
 
 ```mermaid
@@ -76,3 +83,136 @@ To ensure benchmark integrity and avoid contaminated comparisons, this repositor
    All route caching headers in `next.config.ts` and `middleware.ts` are strictly derived from the single canonical module `storefront/src/lib/cache/cache-policy.ts` to prevent edge cache drift.
 4. **First-Party Data Access Layer**:
    The application communicates directly through a typed Data Access Layer (DAL) and React Server Actions to PostgreSQL and Supabase services. Zero runtime dependency on `@spree/sdk`, legacy BFF endpoints, or external Rails servers.
+
+---
+
+## 4. Route Groups & URL Structure
+
+URL shape:
+
+```text
+/{country}/{locale}/...
+```
+
+Example: `/us/en/products`, `/us/en/c/office-wear`, `/us/en/products/shoe-2026-09-001`.
+
+Supported locales: `de`, `en`, `es`, `fr`, `pl` (registry: `src/i18n/locales.ts`).
+
+Route groups under `src/app/[country]/[locale]/`:
+
+| Group | Purpose | Notes |
+|---|---|---|
+| `(storefront)` | Public catalog, PDP, cart, account, policies | Full header/footer layout |
+| `(checkout)` | `checkout/[id]`, `order-placed/[id]` | Minimal layout |
+| `(admin)` | `/admin` — products, variants, categories | Role-gated server-side |
+| `(wholesale)` | `/wholesale` — gated B2B surface, quick order | Enabled by `WHOLESALE_CHANNEL` |
+
+Plus `src/app/dev/emails/[template]` — a development-only email template
+previewer (Resend + `react-email`).
+
+---
+
+## 5. Data Ownership
+
+```text
+auth            → Supabase Auth            (sole authority)
+profiles        → PostgreSQL public.profiles
+addresses       → PostgreSQL public.addresses
+carts           → PostgreSQL public.carts / cart_items
+orders          → PostgreSQL public.orders / order_items
+catalog         → PostgreSQL public.products / variants / categories
+                  + cached public read model (tag: catalog-public)
+catalog admin   → first-party Next.js admin
+media metadata  → PostgreSQL public.product_images
+media bytes     → Supabase Storage `product-media`  (admin uploads)
+                  …and static /catalog-shoes/*.webp  (current catalog; see §6)
+```
+
+Authorization is always:
+
+```text
+verified Supabase claims.sub → public.profiles → public.profiles.role
+```
+
+Never from email, signup metadata, client state, route visibility, or legacy tokens.
+
+---
+
+## 6. Catalog Read Path & Current Catalog Contract
+
+```text
+PostgreSQL source of truth
+→ bounded 4-query snapshot   (lib/catalog/catalog-repository.ts)
+→ Next cache tagged `catalog-public`
+→ in-process filter / search / sort / lookup
+→ compatibility DTOs → components
+```
+
+Performance contract (enforced by audit tests):
+
+```text
+warm snapshot DB queries = 0
+cold snapshot DB queries = 4 (bounded)
+N+1 = 0
+PLP = 12 products initial + exactly one deferred remainder request
+```
+
+Current catalog contents:
+
+```text
+categories = 2   office-wear, traditional
+products   = 31  shoe-2026-09-001 … shoe-2026-09-031
+sizes      = 7 per product  (UK/India 6–12)
+media      = /catalog-shoes/shoe-NN.webp
+```
+
+**Media is in a transitional state.** B7 established Supabase Storage
+`product-media` as the byte authority for admin-uploaded media, but the current
+31-shoe catalog is served from static files in `storefront/public/catalog-shoes/`.
+`lib/media/delivery.ts#getStoragePublicUrl` passes root-relative paths through
+unchanged, so both forms resolve today. Reconciling them is the **Media Contract
+v1** item in the continuity log.
+
+The retired 38-product demo catalog (`office-footwear-01`,
+`traditional-footwear-NN`, categories `formal-office` / `traditional-indian`) is
+gone. Any documentation or smoke test still referencing those identifiers is stale.
+
+---
+
+## 7. Environment Configuration
+
+First-party variables (server-only unless prefixed):
+
+```text
+DATABASE_URL                              Secret
+SUPABASE_DB_CA_CERT_BASE64                Secret — strict TLS, rejectUnauthorized: true
+SUPABASE_SECRET_KEY                       Secret, server-only, never NEXT_PUBLIC_*
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+WHOLESALE_CHANNEL                         optional; unset = DTC-only
+```
+
+Optional: `RESEND_API_KEY` / `EMAIL_FROM`, `SENTRY_DSN`, `GTM_ID`,
+`NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_STORE_NAME`.
+
+> The publishable key is `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (not
+> `..._ANON_KEY`). All env examples were corrected on 2026-09-14.
+
+Strict database TLS is a hard invariant. Do not regress to
+`rejectUnauthorized: false`.
+
+---
+
+## 8. Validation Baseline
+
+Measured on `main` at `6c504be`, 2026-09-14:
+
+```text
+Vitest        62 suites / 662 tests passing
+TypeScript    tsc --noEmit clean
+Biome         lint clean
+```
+
+Architectural invariants are enforced by guard suites:
+`b8-architecture-audit.test.ts` (18), `b9-architecture-audit.test.ts` (21),
+`b10-architecture-audit.test.ts` (22).

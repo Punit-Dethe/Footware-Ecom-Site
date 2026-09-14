@@ -70,9 +70,10 @@ const nextConfig: NextConfig = {
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
     remotePatterns: [
-      // Clean Supabase Storage product-media bucket
+      // Supabase Storage product-media bucket (admin-uploaded media)
       ...supabaseImagePatterns(),
-      { protocol: "https", hostname: "images.unsplash.com" },
+      // NOTE: images.unsplash.com was removed — no product or editorial
+      // asset uses it. Re-add only alongside a real usage site.
     ],
   },
   async redirects() {

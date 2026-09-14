@@ -1,6 +1,20 @@
 # Performance Research Paper Evidence
 
 > Paper-oriented evidence log derived from controlled storefront experiments. This complements `PERFORMANCE-RESEARCH-LEDGER.md`: the ledger is the engineering source of truth; this file is organized for methodology, results, negative findings, discussion, and threats-to-validity sections.
+>
+> **Scope and validity (2026-09-14).** This file covers **R001–R012 only**. All
+> of those were measured on the pre-/mid-migration architecture: a static
+> TypeScript catalog behind a same-app Spree-compatible BFF, 38 demo products,
+> and pre-generated local assets.
+>
+> That architecture no longer exists. The catalog is now authoritative
+> PostgreSQL behind a bounded 4-query cached read model with **31 shoes**; the
+> BFF and SDK are deleted; and the editorial UI has reworked the homepage, PLP
+> and PDP markup that these measurements were taken on.
+>
+> Treat every number here as **research evidence about that earlier system**,
+> not as a current production baseline. Re-validate before citing. Current phase
+> state: `docs/ENGINEERING-CONTINUITY-LOG.md`.
 
 ## Experimental method
 
@@ -171,8 +185,8 @@ These are preserved for completeness but are not part of the completed broad aud
 - PDP `ProductDetails` broad client boundary: potential hydration target only if post-P2 traces show hydration dominates.
 - Real generated PDP LQIP/dominant colour is available but the PDP still uses a generic placeholder; this is perceptual polish after P2, not the current latency bottleneck.
 - Homepage remote Unsplash hero: candidate for local/source-delivery redesign.
-- Swiper dependency / obsolete `.swiper-*` CSS: cleanup only; no runtime Swiper chunk was observed.
-- Unused/inert `SpeculationRules.tsx`: cleanup only after R010 removed its injection.
+- Swiper dependency / obsolete `.swiper-*` CSS: the obsolete CSS was removed on 2026-09-14; no runtime Swiper chunk was ever observed. The `swiper` package remains in `package.json` with zero imports and still needs removing.
+- Unused/inert `SpeculationRules.tsx`: still present after R010 removed its injection; zero importers, safe to delete.
 - Old Render `/admin` redirects and stale architecture documentation: repository hygiene updates.
 - Payment/checkout/wholesale feature surface exceeds the research storefront's required scope; prune only where bundle/runtime evidence or project scope justifies it.
 - Serverless in-memory cart `Map`: correctness/persistence risk for a real multi-instance deployment; not changed during S8 because persistence architecture was intentionally out of scope.

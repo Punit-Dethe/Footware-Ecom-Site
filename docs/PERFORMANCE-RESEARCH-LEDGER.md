@@ -2,8 +2,23 @@
 
 > Current source of truth for performance decisions. Keep entries short. Historical experiment write-ups remain in `docs/PERFORMANCE.md`, but results measured before the serverless migration are not the current baseline.
 
-**Audit baseline:** `38481f2335141d9eec4095242e9c3567b459aba6`  
-**Architecture:** Next.js 16 / React 19 on Vercel, same-app Spree-compatible BFF retained for API compatibility, static TypeScript catalog (38 products), pre-generated product assets. B1 persistence foundation is complete on clean Supabase/Postgres; B2 real-auth migration is under audit and is not yet part of the accepted performance baseline.  
+**Audit baseline:** `38481f2335141d9eec4095242e9c3567b459aba6`
+
+> **Architecture note (updated 2026-09-14).** The description below is the
+> architecture *at the time R001–R012 were measured* and is preserved for that
+> reason. It is no longer the live architecture. Since then: B6A replaced the
+> static TypeScript catalog with an authoritative PostgreSQL catalog behind a
+> bounded 4-query cached read model; B8 removed the same-app Spree-compatible
+> BFF entirely; B10 completed the backend migration. The live catalog is now 31
+> shoes (not 38 demo products) with media served from static
+> `/catalog-shoes/*.webp` paths. **Every R-series result below therefore
+> predates the current read path and the current editorial UI, and must be
+> re-validated before it is cited as a current baseline.**
+>
+> Canonical phase/state lives in `docs/ENGINEERING-CONTINUITY-LOG.md`.
+
+**Architecture at measurement time:** Next.js 16 / React 19 on Vercel, same-app Spree-compatible BFF retained for API compatibility, static TypeScript catalog (38 products), pre-generated product assets. B1 persistence foundation complete on clean Supabase/Postgres; B2 real-auth migration under audit and not yet part of the accepted performance baseline.
+
 **Research method:** one meaningful variable per experiment; benchmark before/after; keep, simplify, or revert from measured evidence.
 
 ## Decision rule
@@ -148,16 +163,16 @@ For user-visible latency, prefer a change when it produces a repeatable visible 
 
 | ID | Optimization / mechanism | Status | Current audit note |
 |---|---|---|---|
-| O01 | Next Cache Components + cache lifetimes | TEST | Catalog is now in-process static data. Re-test remote-style cache wrappers only where the new improvement phase proves they are on a critical path. |
+| O01 | Next Cache Components + cache lifetimes | TEST | Catalog is now an authoritative PostgreSQL read model cached under tag `catalog-public`, not in-process static data. Re-test remote-style cache wrappers only where the new improvement phase proves they are on a critical path. |
 | O02 | Canonical edge cache classes / `s-maxage` / SWR | KEEP | Production A/B confirms Vercel edge caching is active and materially hides server execution on warm routes. |
 | O03 | Suppress redundant locale `Set-Cookie` | KEEP | Prevents unnecessary cache-busting headers after locale is established. |
 | O04 | React request memoization (`cache()`) | KEEP | Cheap request-level deduplication. |
 | O05 | Parallel independent server work (`Promise.all`) | KEEP | Correct low-complexity waterfall removal. |
 | O06 | Narrow product-card fields | KEEP | Still reduces serialization/client props. |
 | O07 | Build-time `generateStaticParams` for PDP/category routes | KEEP / P2 VERIFY | PDP slugs are enumerated, but P1 shows cold PDP data still resolves slowly; P2 must determine why the prepared route is not effectively instant. |
-| O08 | Server data layer -> SDK -> public same-app BFF -> local repository | RESOLVED GENERALLY / P2 RE-AUDIT PDP | R002 simplified audited server reads, but current PDP helper still contains `getProduct -> getLocaleOptions/getAccessToken -> use cache: remote -> SDK` machinery before local fallback. P2 isolates this path. |
-| O09 | `use cache: remote` around catalog reads | P2 HIGH | P1 isolates cold PDP route/data as the dominant remaining latency; test whether the generic remote-style cache wrapper is unnecessary for public static DTC product data. |
-| O10 | User token included in public catalog/product cache keys | P2 HIGH | Public DTC catalog is not personalized; token/cookie participation may prevent static preparation and reduce cache reuse. |
+| O08 | Server data layer -> SDK -> public same-app BFF -> local repository | RESOLVED: PATH DELETED (B8) | The SDK/BFF hop is gone. Public reads go `lib/catalog/catalog-repository.ts` -> bounded 4-query snapshot -> `catalog-public` tag -> in-process filter/search/sort. Re-audit the current path in P2; do not re-run the old recipe. |
+| O09 | `use cache: remote` around catalog reads | P2 (RE-SCOPE) | P1 isolated cold PDP route/data as the dominant remaining latency. Re-test against the current read model once the editorial UI is stable. |
+| O10 | User token included in public catalog/product cache keys | RESOLVED: REMOVED (B10) | B10 deleted the dead `getAccessToken() -> userToken` cache dimension. Remaining cache dimensions are surface, locale/country, filters/query, product identity, catalog tags. |
 | O11 | Root market/category reads via remote-style path | PARTLY RESOLVED | R002 moved public reads toward local repository/constants; PDP-specific path is now being audited separately. |
 | O12 | `connection()` + dynamic navigation category subtree | RESOLVED: KEEP REMOVED | R009 moved category nav into PPR Chunk 0 and made it ~346–608 ms earlier. |
 | O13 | Whole document children behind `Suspense fallback={null}` | RESOLVED: KEEP STRONG | R003 removed it; visible shell arrives hundreds of milliseconds earlier. |
@@ -185,14 +200,14 @@ For user-visible latency, prefer a change when it produces a repeatable visible 
 | O35 | PDP lightbox dynamic import | KEEP | Rare interaction; sensible deferral. |
 | O36 | Homepage Unsplash hero | SIMPLIFY LATER | Separate from PDP critical path. |
 | O37 | Native CSS carousel | KEEP | Runtime Swiper already absent. |
-| O38 | `swiper` package / old CSS | REMOVE CLEANUP | Cleanup only. |
+| O38 | `swiper` package / old CSS | PARTLY CLEANED 2026-09-14 | Old CSS removed (33 inert `.swiper-*` lines in `globals.css`). The `swiper ^12.1.2` dependency remains with zero imports and needs `pnpm remove swiper`. |
 | O39 | Native carousel dynamic import | RESOLVED: KEEP STATIC | R005 made featured cards ~135 ms earlier. |
 | O40 | Featured outer data Suspense | PARTLY RESOLVED | Only revisit with evidence. |
 | O41 | Mobile `content-visibility:auto` | KEEP / VERIFY | Low priority. |
 | O42 | React Compiler + `memo(ProductCard)` | TEST LOW PRIORITY | Not current bottleneck. |
 | O43 | Whole PDP `ProductDetails` client boundary | LATER | P1 shows route/data, not post-render hydration, is the immediate dominant delay. |
-| O44 | In-memory serverless BFF cart `Map` | MIGRATE IN B3 / CORRECTNESS RISK | Runtime cart state is still in-memory and ephemeral. B1 added persistent `carts`/`cart_items` schema only; B3 owns wiring the shopper cart to durable storage. |
-| O45 | Legacy Spree cart orchestration | LATER CLEANUP | S8 removed the measured refresh/polling waste; broader cart rewrite is not justified by current latency evidence. |
+| O44 | In-memory serverless BFF cart `Map` | RESOLVED: MIGRATED (B3) | Carts are persistent PostgreSQL rows with SHA-256-hashed guest bearer tokens; guest→user merge is transactional. No in-memory cart state remains. |
+| O45 | Legacy Spree cart orchestration | RESOLVED: REMOVED (B8/B10) | All Spree cart orchestration deleted; adapters renamed to `*ToCommerce*`. |
 | O46 | `router.refresh()` after cart mutation | RESOLVED: REMOVED | R011 cuts mutation bytes ~19–32% with no correctness loss. |
 | O47 | Re-fetch cart on pathname change | RESOLVED: REMOVED | R011 drops ordinary navigation cart reads to zero. |
 | O48 | Cart drawer opens immediately | KEEP | Good instant acknowledgement. |
@@ -201,18 +216,48 @@ For user-visible latency, prefer a change when it produces a repeatable visible 
 | O51 | Lighthouse budgets / CI | KEEP | Regression guard only. |
 | O52 | Old benchmark JSON | HISTORICAL ONLY | Pre-serverless baseline. |
 | O53 | HTTP-only harness | KEEP AS SERVER TOOL | Not a substitute for visible browser milestones. |
-| O54 | Stale Render redirects | CLEANUP | Repository hygiene only. |
-| O55 | Stale architecture docs | UPDATE AS MIGRATION LANDS | This ledger now records the B1/B2 phase boundary; broader repository docs should be reconciled as legacy Spree/Render paths are actually removed. |
+| O54 | Stale Render redirects | RESOLVED: REMOVED (B9) | Render/Rails operational infrastructure deleted; `redirects()` in `next.config.ts` is empty. |
+| O55 | Stale architecture docs | PARTLY RESOLVED 2026-09-14 | Root/storefront READMEs, `ARCHITECTURE.md`, `infra/README.md`, `CLAUDE.md` and this ledger were reconciled. `PERFORMANCE.md`, `EXPERIMENTS.md`, `BASELINE.md` and `specifications/*` are now banner-marked historical rather than rewritten. |
 | O56 | Payment/checkout/wholesale surface | KEEP FUNCTIONAL / PERF WITH EVIDENCE | The product is intended to become a real store. Do not prune commerce/account/order surfaces merely because they were outside earlier performance experiments; payment gateway and fulfillment remain deliberately deferred. |
 | O57 | Exact PDP hero intent prewarm | RESOLVED: KEEP STRONG | R012 starts the exact responsive Next Image candidate ~0.47–1.16 s earlier, reuses it 60/60 with zero duplicate bytes, and collapses title-to-hero lag to ~2 ms. |
-| O58 | Public DTC PDP product resolution through request/cache/SDK machinery | PAUSED / P2 AFTER B2 | P1 leaves ~0.48–0.83 s median cold title latency and up to ~1.1 s observed response time. Resume once B2 auth is accepted so P2 benchmarks the stable public PDP request path rather than transitional auth/SDK behavior. |
+| O58 | Public DTC PDP product resolution through request/cache/SDK machinery | RESOLVED: MACHINERY DELETED (B8/B10) | The `getLocaleOptions/getAccessToken/use cache: remote/SDK` path no longer exists. P1's ~0.48–0.83 s cold title latency was measured on that path and must be re-measured on the current one before it is quoted. |
 
 ## Current execution queue
 
-1. **Architecture stabilization gate — B1 complete, B2 under audit:** B1 persistence/TLS infrastructure is accepted and production-connected. B2 replaces demo/Spree authentication with Supabase Auth while preserving a hard public-route performance invariant (anonymous homepage/PLP/PDP must not gain auth/profile work). These phases are architecture/correctness work, not R-series performance experiments.
-2. **P2 — Cold public DTC PDP route/data path, after B2 acceptance:** trace the exact server request graph and compare the stable generic `getCachedProduct/getProduct/use cache: remote/SDK` path against a direct local static DTC product resolution while preserving wholesale/private behavior. Keep P1 enabled and explicitly control for its desktop route-timing anomaly.
-3. **P3 — PDP perceptual polish only after P2:** feed the real generated product LQIP/dominant colour into the PDP hero if a visible placeholder gap remains. Do not confuse this with network latency reduction.
-4. **Later:** PDP client-boundary/hydration work only if post-P2 traces show JavaScript/hydration is the next dominant delay; otherwise move to the next measured UX bottleneck.
+**Status 2026-09-14.** The gate this queue was written against has changed:
+
+- The backend migration B1–B10 is **complete** and production-verified. The
+  "B2 under audit" gate below is resolved.
+- `O08`/`O09`/`O10` were written against the old `getProduct -> getLocaleOptions
+  -> getAccessToken -> use cache: remote -> SDK` path. **That path no longer
+  exists** — B8 deleted it and B10 removed the dead auth token cache dimension.
+  P2 must be re-scoped against the current `lib/catalog/catalog-repository.ts`
+  read model, not re-run against the old recipe.
+- The editorial UI (homepage, PLP, PDP) has since been reworked. R003/R005/R008/
+  R012 gains are unverified on the new markup.
+
+Revised queue:
+
+1. **Blocked — finish the editorial UI first.** No new R-series experiment
+   should be run against pages that are still changing shape. Re-baseline once
+   the UI work is accepted.
+2. **P2 (re-scoped) — cold public PDP route/data path on the current read
+   model:** trace the server request graph from
+   `lib/catalog/catalog-repository.ts` through `lib/data/products.ts`, and
+   confirm the cold path still costs only the bounded 4 queries. Keep R012 (P1
+   hero prewarm) enabled and explicitly control for its desktop route-timing
+   anomaly.
+3. **P3 — PDP perceptual polish, only after P2:** feed the real generated LQIP /
+   dominant colour into the PDP hero if a visible placeholder gap remains. Not
+   a network-latency fix.
+4. **Later:** PDP client-boundary/hydration work only if post-P2 traces show
+   JavaScript/hydration is the next dominant delay.
+5. **Media Contract v1** (see continuity log §13) must land before any
+   cold-image optimization, because product media currently resolves to static
+   `/catalog-shoes/*.webp` rather than Supabase Storage.
+
+Do not create R-numbers for migration or UI work unless it becomes a controlled
+performance experiment.
 
 ## Measurement notes / known facts
 

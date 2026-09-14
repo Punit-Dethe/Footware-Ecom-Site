@@ -2,6 +2,24 @@
 
 ## Final Research-Level Performance Engineering Plan
 
+> **⚠ Historical specification — superseded.**
+>
+> This is the research-level performance plan for the **Spree-backed** storefront.
+> The backend migration B1–B10 is complete; the platform is now first-party
+> (Supabase Auth + PostgreSQL + Supabase Storage behind a server-only DAL).
+> Every Spree-specific mechanism described here — SDK types, API expand lists,
+> Active Storage media, webhook invalidation, the Rails/Render backend — has
+> been removed from the codebase.
+>
+> Do **not** execute this document.
+>
+> The *research method* it describes — one variable per experiment, measure
+> before/after, keep or revert on evidence, retain negative results — is still
+> the project's method and is carried forward in
+> `docs/PERFORMANCE-RESEARCH-LEDGER.md`.
+>
+> Authoritative current state: `docs/ENGINEERING-CONTINUITY-LOG.md`.
+
 ## 1. Project objective
 
 This project is not primarily an ecommerce implementation.

@@ -1,5 +1,25 @@
 # Baseline Measurement Report (`baseline-v1`)
 
+> **⚠ Historical — pre-migration baseline, retained for comparison only.**
+>
+> `baseline-v1` was captured on 2026-09-08 against the **Spree Commerce API v3**
+> architecture. That architecture no longer exists: the backend is now
+> first-party Supabase Auth + PostgreSQL behind a server-only DAL, with zero
+> Spree/Rails/Render dependency (backend migration B1–B10 complete).
+>
+> Consequences for anyone reading these numbers:
+> - The sub-5 ms TTFB figures are local-production-build numbers for a static
+>   catalog that has since been replaced by a database-backed read model.
+>   They are **not** representative of current production.
+> - The PDP slugs (`mirza-imperial-wholecut-oxford`,
+>   `mirza-royal-embroidered-jutti`) and categories (`formal-office`,
+>   `traditional-indian`) are from the retired 38-product demo catalog. Current
+>   slugs are `shoe-2026-09-001`…`031`; current categories are `office-wear`
+>   and `traditional`.
+> - Treat this file as the "before" arm of a historical comparison. For current
+>   performance state see `docs/PERFORMANCE-RESEARCH-LEDGER.md` and
+>   `docs/ENGINEERING-CONTINUITY-LOG.md`.
+
 ## 1. Baseline Specification
 
 * **Tag**: `baseline-v1`

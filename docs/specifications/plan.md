@@ -1,5 +1,25 @@
 # High-Performance Ecommerce Storefront Engineering Plan
 
+> **⚠ Historical specification — superseded.**
+>
+> This plan was written for a **Spree Commerce** backend ("We are deliberately
+> using Spree Commerce to avoid spending project effort implementing product
+> CRUD…"). That premise is obsolete. The backend migration B1–B10 is complete:
+> catalog, cart, orders, auth, profiles and media are all first-party
+> (Supabase Auth + PostgreSQL + Supabase Storage, server-only DAL, zero
+> Spree/Rails/Render dependency).
+>
+> Do **not** execute this document. Sections describing Spree API access, Spree
+> webhooks, Spree SDK types, Active Storage media or the Rails/Render backend
+> describe a system that no longer exists.
+>
+> What still applies: the *performance principles* (do less work, do it earlier
+> when intent is predictable, cache at the nearest safe layer, never block the
+> user on work that need not block them) and the measurement discipline.
+>
+> Authoritative current state: `docs/ENGINEERING-CONTINUITY-LOG.md`,
+> `docs/PERFORMANCE-RESEARCH-LEDGER.md`, `docs/ARCHITECTURE.md`.
+
 ## 1. Project Mission
 
 Build an extremely fast, app-like ecommerce storefront whose primary engineering objective is web performance.

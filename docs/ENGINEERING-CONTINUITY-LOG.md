@@ -12,7 +12,7 @@
 
 ## 1. Current canonical snapshot
 
-**Snapshot date:** 2026-09-13
+**Snapshot date:** 2026-09-14
 
 **Repository:** `Punit-Dethe/Footware-Ecom-Site`
 
@@ -20,7 +20,7 @@
 
 ### Accepted application baseline
 
-Current `origin/main`:
+Backend baseline (B10 merge, still the last production-verified backend state):
 
 ```text
 3367ea2f05fac795cc8df616d4e7a4b59859ef7e
@@ -29,6 +29,33 @@ Current `origin/main`:
 B1 through B10 are **COMPLETE / MERGED / DEPLOYED / PRODUCTION VERIFIED**.
 
 **BACKEND MIGRATION COMPLETE**.
+
+### Current working head
+
+Current `main` head (ahead of the B10 backend baseline):
+
+```text
+6c504be  Expand homepage editorial imagery and closing scene
+```
+
+`main` has moved **12 commits past the B10 merge**. All 12 are storefront UI work
+belonging to the **FINAL UI IMPLEMENTATION** phase. No backend/phase work is
+outstanding.
+
+Diff versus the B10 backend baseline:
+
+```text
+88 files changed, +2349 / -777
+```
+
+Current phase:
+
+```text
+FINAL UI IMPLEMENTATION — IN PROGRESS
+```
+
+(Still do not start Media Contract v1 or the final performance pass until the
+editorial UI is complete.)
 
 Canonical B10 references:
 * B10.1 accepted SHA: `5d858a1fe6aff98479eda39baa3305ae8d208104`
@@ -68,6 +95,13 @@ Verified on merged main:
 * Request headers neutralized: `x-mirza-request-pathname` / `x-mirza-request-search` (0 `x-spree-request-*`)
 
 Production smoke verification:
+
+> **These URLs and counts were correct at B10 acceptance and are now stale.**
+> The catalog has since been replaced: 31 products, categories `office-wear` /
+> `traditional`, and PDP slugs `shoe-2026-09-001`…`031`. Use
+> `/us/en/products/shoe-2026-09-001` for smoke tests, and `/us/en/c/office-wear`
+> for a category. Retained below as the historical B10 record.
+
 * Homepage (`/us/en`): 200 OK
 * PLP (`/us/en/products`): 200 OK (38 products rendered, active links, filter state)
 * PDP (`/us/en/products/office-footwear-01`): 200 OK
@@ -78,11 +112,25 @@ Production smoke verification:
 * Live legacy auth distrust: verified `_spree_jwt` is not accepted for protected routes (`/account/orders` redirects to login) and legacy auth cookies are expired
 * Anonymous visitor invariant: S8 0 set-cookie headers preserved on warm visitor
 
-Next phase:
+Next phase recorded at B10 acceptance (now superseded by the in-progress state above):
 ```text
 FINAL UI IMPLEMENTATION
 ```
 (Do not start Media Contract v1 or performance optimization).
+
+### Current validation baseline
+
+Re-measured on `main` at `6c504be` on 2026-09-14:
+
+```text
+62 suites / 662 tests passing (100%)
+TypeScript tsc --noEmit  clean (0 errors)
+Biome lint               clean (0 errors, 0 warnings)
+```
+
+The B10 numbers below (61 suites / 660 tests / 106 pages) remain the accepted
+*backend* baseline. The two extra suites and two extra tests come from the
+editorial UI work (`VariantPicker.test.tsx`, expanded `ProductCarousel.test.tsx`).
 
 ---
 
@@ -115,15 +163,19 @@ media bytes    → Supabase Storage product-media
 media admin    → first-party Next.js admin
 ```
 
-Remaining Spree-shaped SDK/BFF/types/cookies are temporary compatibility surfaces. They do not own catalog/cart/order/media state.
+> **Status 2026-09-14:** the compatibility surfaces listed below have all been
+> retired. B8 deleted the fake Spree BFF and `@spree/sdk`; B9 removed the
+> Render/Rails operational infrastructure; B10 deleted `src/lib/spree/` and
+> replaced the Spree identifiers with neutral first-party naming. The only
+> remaining legacy surface is the deliberate cookie migration bridge in
+> `src/lib/storefront/legacy-cookie-migration.ts`, which isolates the legacy
+> `_spree_*` cookie literals so existing carts survive the rename.
 
-The migration target remains:
+The migration target is met:
 
 ```text
-zero runtime Spree / Render / Rails dependency
+zero runtime Spree / Render / Rails dependency   — VERIFIED
 ```
-
-after B8/B9/B10.
 
 ---
 
@@ -516,8 +568,11 @@ B7 source architecture = COMPLETE / ACCEPTED
 B7 merge to main        = COMPLETE (e64631d90ef52bc7470f79b780cbe9dcb7e98aa2)
 B7 production deploy    = COMPLETE (dpl_FiDAYjzgYHKZaVXceMyb2BPfSHH9)
 B7 production signoff   = COMPLETE
-B8                      = NEXT
+B8                      = COMPLETE (superseded; see §11 roadmap)
 ```
+
+> **Note:** B7 status above is reproduced as originally recorded. B8, B9 and B10
+> have since completed — see §11 for the authoritative roadmap state.
 
 ### B7 media authority
 
@@ -1009,21 +1064,67 @@ B6B first-party catalog admin                      COMPLETE
 B7  first-party media management/publishing        COMPLETE
 B8  remove Spree SDK / fake Spree BFF compatibility COMPLETE
 B9  remove Render/Rails legacy                     COMPLETE
-B10 cleanup / dead compatibility / naming/config   NEXT
+B10 cleanup / dead compatibility / naming/config   COMPLETE
 ```
+
+**BACKEND MIGRATION COMPLETE.** There is no B11. Remaining work is the
+post-migration product sequence in §13.
 
 ---
 
-## 12. Immediate next executor run — B10 General Cleanup / Dead Compatibility / Naming / Stale Config
+## 12. Immediate next executor run — FINAL UI IMPLEMENTATION
 
 **Target:**
-Complete **B10 — cleanup / dead compatibility / naming / stale config**.
+Complete the **editorial Mirza UI** on the post-migration first-party foundation.
 
-Do **not** redesign the storefront.
-Do **not** import the new shoe catalog.
-Do **not** start image/data performance optimization.
+Do **not** start Media Contract v1.
+Do **not** start the final UX performance pass until the editorial UI is accepted.
 
-Scope of B10:
+### 12.0 Current UI state (2026-09-14)
+
+Already landed on `main` past the B10 backend baseline:
+
+```text
+editorial-home.css                     new editorial homepage stylesheet
+product-page.css                       new editorial PDP stylesheet
+components/home/EditorialSections.tsx  craft / culture / closing editorial sections
+components/products/CatalogHero.tsx    unified catalog hero
+HeroSection, Header, Footer            typographic + layout refresh
+ProductCarousel                        reworked native carousel
+MediaGallery, VariantPicker, ProductCard  PDP editorial rework
+public/editorial/*.webp                editorial imagery (several temporary-*.webp)
+public/catalog-shoes/shoe-NN.webp      31 catalog images (31 files)
+scripts/catalog/shoes-2026-09.json     31-shoe catalog manifest
+```
+
+### 12.1 Current catalog contract
+
+The 38-product demo catalog is **superseded**. The live contract is now:
+
+```text
+categories = 2   (office-wear, traditional)
+products   = 31  (shoe-2026-09-001 .. shoe-2026-09-031)
+sizes      = 7 per product (UK/India 6,7,8,9,10,11,12)
+media      = /catalog-shoes/shoe-NN.webp  (static, storefront/public)
+```
+
+Old identifiers that must no longer be used in docs or smoke tests:
+
+```text
+office-footwear-01, traditional-footwear-NN   (old demo product slugs)
+categories/formal-office                      (old category permalink)
+categories/traditional-indian                 (old category permalink)
+38 products                                   (old demo catalog size)
+```
+
+Media delivery is **transitional**: `getStoragePublicUrl()` passes
+root-relative paths through unchanged, so the new shoe catalog is served as
+static assets from `storefront/public` while Supabase Storage `product-media`
+remains the admin-managed byte authority for catalog-admin uploads. Resolving
+this split is the Media Contract v1 item in §13.
+
+### 12.2 Historical B10 scope (completed)
+
 ```text
 - Dead compatibility removal (e.g. unused compatibility adapters, dead helpers);
 - Legacy vendor naming cleanup (e.g. SPREE_WHOLESALE_CHANNEL, _spree_* cookie names, spree_country, spree_locale, src/lib/spree namespace, adaptDbOrderToSpree);
@@ -1054,25 +1155,43 @@ Do not interrupt the backend migration.
 Sequence:
 
 ```text
-B7 final merge + production verification
-→ B8 remove Spree SDK / fake Spree BFF compatibility
-→ B9 remove Render/Rails leftovers
-→ B10 final migration cleanup
-→ BACKEND MIGRATION COMPLETE
-→ define Media Contract v1
-→ ingest new ~31-shoe demo catalog
-→ deep image/data/navigation optimization
-→ implement new editorial Mirza UI
-→ final UX-specific performance pass
+B7 final merge + production verification          DONE
+→ B8 remove Spree SDK / fake Spree BFF compatibility  DONE
+→ B9 remove Render/Rails leftovers                DONE
+→ B10 final migration cleanup                     DONE
+→ BACKEND MIGRATION COMPLETE                      DONE
+→ define Media Contract v1                        NOT STARTED
+→ ingest new ~31-shoe demo catalog                DONE (contract live; see 12.1)
+→ deep image/data/navigation optimization         NOT STARTED
+→ implement new editorial Mirza UI                IN PROGRESS
+→ final UX-specific performance pass              NOT STARTED
 ```
 
-Do **not** upload the new catalog before migration completion.
+### Sequencing deviation — record it, do not silently ignore it
 
-Do **not** start Duke + Dexter / ME London-style cold-image optimization before B10.
+The locked sequence above required Media Contract v1 and the optimization pass
+to land *before* the editorial UI. That is **not** what happened: the ~31-shoe
+catalog was ingested and the editorial UI was started first, on the existing B7
+media path.
 
-Do **not** implement the homepage/PLP/PDP redesign before the optimized post-migration media/data foundation is established.
+Consequences the next executor must carry:
 
-Design exploration can happen separately, but it must not interrupt or contaminate the migration branch sequence.
+- Product media currently resolves to static `/catalog-shoes/*.webp` files in
+  `storefront/public` rather than Supabase Storage `product-media`.
+- `storefront/public/editorial/` still contains `temporary-product-01..08.webp`,
+  i.e. placeholder imagery shipped as real UI.
+- Media Contract v1 is therefore **not** a greenfield design task; it must
+  absorb the existing split (static path passthrough vs Storage authority)
+  rather than assume a clean slate.
+- The final UX performance pass has not measured the new editorial pages. Every
+  R-series result in `PERFORMANCE-RESEARCH-LEDGER.md` predates them and must be
+  re-validated rather than assumed to still hold.
+
+Do **not** start Duke + Dexter / ME London-style cold-image optimization until
+Media Contract v1 is defined.
+
+Design exploration can happen separately, but it must not interrupt or
+contaminate the migration branch sequence.
 
 ---
 
@@ -1100,18 +1219,109 @@ because it broke the Server/Client Component boundary.
 
 Read in this order:
 
-1. `docs/ENGINEERING-CONTINUITY-LOG.md` from `docs/engineering-continuity-log` until it has been reconciled onto current `main`;
+1. `docs/ENGINEERING-CONTINUITY-LOG.md` (this file — reconciled onto `main` as of 2026-09-14);
 2. `docs/PERFORMANCE-RESEARCH-LEDGER.md`;
 3. `docs/PERFORMANCE-PAPER-EVIDENCE.md` when detailed experiment evidence is needed;
-4. current GitHub `main`;
-5. accepted B7 branch `backend/b7-media` at `1e09b19...`;
+4. current GitHub `main` (head `6c504be`);
+5. `docs/ARCHITECTURE.md` and `infra/README.md` for topology;
 6. relevant auth/catalog/media DAL/actions/tests for the phase being audited.
 
 Do not assume older `ARCHITECTURE.md`, old specification docs, or old performance execution queues describe the current migration state. Reconcile them only during the appropriate cleanup/documentation phase rather than letting stale docs override accepted source state.
 
+### Documentation status (2026-09-14)
+
+| Document | Trust level | Note |
+|---|---|---|
+| `docs/ENGINEERING-CONTINUITY-LOG.md` | Canonical | This file. |
+| `docs/PERFORMANCE-RESEARCH-LEDGER.md` | Canonical for R-series | Header was stale; corrected. |
+| `docs/PERFORMANCE-PAPER-EVIDENCE.md` | Research record | R001–R012 only; pre-editorial-UI. |
+| `docs/ARCHITECTURE.md` | Current | Topology only; no phase state. |
+| `infra/README.md` | Current | Topology + deployment. |
+| `README.md`, `storefront/README.md` | Current | Rewritten 2026-09-14. |
+| `storefront/CLAUDE.md` | Current | Conventions + invariants. |
+| `docs/PERFORMANCE.md` | **Historical** | Experiments 001–008/018 predate the migration. |
+| `docs/EXPERIMENTS.md` | **Historical** | 001–006 predate the migration; 005 superseded by R010. |
+| `docs/BASELINE.md` | **Historical** | `baseline-v1`, Spree-era. |
+| `docs/specifications/*.md` | **Historical** | Spree-era engineering specs. |
+
 ---
 
 ## 16. Rolling change log
+
+### 2026-09-14 — Documentation reconciliation + editorial UI phase in progress
+
+Recorded:
+
+- No application code changed; this is a documentation reconciliation pass.
+- `main` head advanced to `6c504be`, 12 commits past the B10 backend baseline
+  (`3367ea2`). All 12 are FINAL UI IMPLEMENTATION work.
+- Re-measured validation baseline: **62 suites / 662 tests passing**, `tsc
+  --noEmit` clean, Biome lint clean. (B10 baseline was 61 / 660.)
+- Catalog contract changed and docs were stale about it: the 38-product demo
+  catalog is superseded by **31 shoes** (`shoe-2026-09-001..031`) across
+  **2 categories** (`office-wear`, `traditional`), 7 sizes each, with static
+  media at `/catalog-shoes/shoe-NN.webp`. Old slugs and category permalinks in
+  §1 production-smoke notes are now wrong and were left in place only inside
+  the historical B10 entry.
+- Sequencing deviation recorded in §13: the ~31-shoe catalog was ingested and
+  the editorial UI was started **before** Media Contract v1 and the
+  image/data optimization pass, contrary to the locked post-B7 sequence.
+- Corrected stale phase state: §7 `B8 = NEXT`, §11 `B10 = NEXT`, and §12
+  "immediate next executor run = B10" all described superseded state.
+- `storefront/README.md`, `storefront/.env.example` and
+  `storefront/.env.local.example` all documented
+  `NEXT_PUBLIC_SUPABASE_ANON_KEY`; the code reads
+  `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`. **All three corrected.** Also added
+  the missing `SUPABASE_DB_CA_CERT_BASE64` to both example files — strict TLS
+  requires it and it was undocumented.
+- Marked `docs/PERFORMANCE.md`, `docs/EXPERIMENTS.md`, `docs/BASELINE.md` and
+  `docs/specifications/*.md` as historical with banners, and refreshed the
+  `PERFORMANCE-RESEARCH-LEDGER.md` header/queue which still described a
+  retained Spree BFF and a B2-under-audit state.
+- Rewrote root `README.md`, refreshed `docs/ARCHITECTURE.md` and
+  `infra/README.md`, and extended `storefront/CLAUDE.md`.
+
+Dead-code cleanup performed in this pass (2026-09-14):
+
+```text
+- Removed 33 lines of inert .swiper-* rules from src/app/globals.css.
+  Verified: ProductCarousel now uses product-carousel / product-carousel__item
+  and no .swiper-* class is referenced anywhere in src/.
+- Removed the images.unsplash.com entry from remotePatterns in next.config.ts.
+  Verified: zero unsplash references in src/, e2e/, scripts/, perf/, public/.
+- Both changes verified: 62 suites / 662 tests, tsc --noEmit clean,
+  biome lint clean. src/ is byte-identical otherwise.
+```
+
+Known open defects not fixed in this pass:
+
+```text
+1. swiper ^12.1.2 remains in storefront/package.json although no file imports
+   it. Removing it requires a lockfile regen (pnpm remove swiper) and was
+   deliberately not done in a documentation pass.
+2. src/components/performance/SpeculationRules.tsx is dead code (R010 removed
+   the injection; the component was never deleted). It has zero importers
+   anywhere in src/, e2e/ or config, and is safe to delete.
+3. .next build was not re-run to completion (two attempts, ~15-18 min each,
+   network-bound static generation; the sandbox also blocked Next's cleanup of
+   .next/trace). Total page count for the 31-product catalog is therefore
+   unverified. The last accepted figure is 106 pages at B10; since the catalog
+   went 38 -> 31 products the expected total is ~99, but that is derived, not
+   measured. Re-run `pnpm build` to confirm before quoting.
+4. scripts/images/manifest.json still describes the retired demo catalog
+   (office-footwear-01, traditional-footwear-*). It is ingest input for the old
+   asset set and is now stale relative to the 31-shoe catalog.
+```
+
+Pre-rendered route parameters are verifiable from code without a build:
+
+```text
+PDP      generateStaticParams -> 31 params (31 products x default country/locale)
+Category generateStaticParams ->  2 params (office-wear, traditional)
+```
+
+Next action: continue FINAL UI IMPLEMENTATION. Do not start Media Contract v1
+or the final performance pass until the editorial UI is accepted.
 
 ### 2026-09-13 — B10 complete: Final migration cleanup, neutral naming & backend migration complete
 

@@ -1,5 +1,16 @@
 # Footware E-Commerce — Revised Speed-First Plan
 
+> **⚠ Historical specification — superseded.**
+>
+> Written for the Spree-backed architecture. The backend migration B1–B10 is
+> now complete and the storefront is fully first-party; there is no Spree API,
+> no same-app BFF, and no static TypeScript catalog. "Wave 0 is complete"
+> refers to work measured against that retired stack.
+>
+> Do **not** execute this document. Authoritative current state:
+> `docs/ENGINEERING-CONTINUITY-LOG.md` and
+> `docs/PERFORMANCE-RESEARCH-LEDGER.md`.
+
 ## Objective
 
 Ignore marginal optimizations for now.

@@ -1,5 +1,35 @@
 # Living Performance Document
 
+> **⚠ Historical — do not use as the current baseline.**
+>
+> Everything below was measured against the **pre-migration** architecture:
+> Next.js 16 storefront + Spree Commerce API v3 via `@spree/sdk`, a same-app
+> Spree-compatible BFF, a static TypeScript catalog, and pre-generated local
+> product assets. Several named code paths no longer exist — notably
+> `storefront/src/lib/spree/middleware.ts` (deleted in B10), the
+> `/api/webhooks/spree` handlers (deleted in B8), and the Spree image host
+> compatibility (deleted in B9).
+>
+> **Authoritative current performance state:**
+> `docs/PERFORMANCE-RESEARCH-LEDGER.md` (R001–R012, all measured on the same
+> pre-/mid-migration architecture) and `docs/ENGINEERING-CONTINUITY-LOG.md`.
+>
+> Specifically superseded:
+> - **Experiment 005 — Speculation Rules: decision reversed.** Recorded here as
+>   `Kept & Verified`. R010 later measured it as duplicate full-document
+>   prerender work and **removed** it. `SpeculationRules.tsx` still exists in
+>   the tree but is no longer rendered anywhere.
+> - **Experiment 018 — Swiper elimination: only partly true.** The component no
+>   longer imports Swiper and the dead `.swiper-*` rules were removed from
+>   `src/app/globals.css` on 2026-09-14, but `swiper ^12.1.2` is still listed in
+>   `storefront/package.json` with zero imports anywhere. It is dead weight
+>   pending a `pnpm remove swiper`.
+> - **All TTFB figures** predate the PostgreSQL read model, the 31-shoe catalog
+>   and the editorial UI. Do not quote them as current.
+>
+> The Core Web Vitals stretch budgets in §2 and the data-freshness classes in §3
+> remain valid project targets.
+
 ## 1. Core Engineering Objective
 
 Build an extremely fast, app-like ecommerce storefront where performance is an ongoing discipline, not a one-time optimization sprint.

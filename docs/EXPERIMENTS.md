@@ -1,5 +1,32 @@
 # Performance Optimization Experiments Log
 
+> **⚠ Historical — do not use as the current baseline.**
+>
+> Experiments 001–006 below were run on 2026-09-08 against the **pre-migration**
+> architecture (Spree Commerce API v3 via `@spree/sdk`, a same-app
+> Spree-compatible BFF, and a static TypeScript catalog). They are retained as
+> the record of what was tried, not as a description of the running system.
+>
+> **Authoritative current performance state:**
+> `docs/PERFORMANCE-RESEARCH-LEDGER.md` and `docs/ENGINEERING-CONTINUITY-LOG.md`.
+>
+> Superseded decisions to be aware of:
+> - **Experiment 005 — Speculation Rules is `[REVERT]`, not `[KEEP]`.** R010
+>   measured it as duplicate full-document prerender work and removed it.
+> - **Experiment 002 — intent prefetch** survives, but only as part of the
+>   R010 outcome: Next `<Link>` prefetch + manual intent `router.prefetch()`,
+>   no Chromium speculation.
+> - **Experiment 006 — request deduplication** targeted the Spree
+>   `PRODUCT_PAGE_EXPAND` / `CATEGORY_PAGE_EXPAND` API path, which no longer
+>   exists. The principle (React `cache()` + `Promise.all`) still applies.
+> - **Experiment 003 — optimistic cart drawer** still holds; the "Spree commerce
+>   server action" it describes is now a first-party Server Action.
+> - The PDP slugs used throughout (`mirza-imperial-wholecut-oxford`,
+>   `mirza-royal-embroidered-jutti`) are from the retired demo catalog. Current
+>   slugs are `shoe-2026-09-001` … `shoe-2026-09-031`.
+>
+> The workflow in the template below is still the correct method for new work.
+
 This document records every hypothesis-driven performance intervention performed on the storefront.
 
 Workflow:
