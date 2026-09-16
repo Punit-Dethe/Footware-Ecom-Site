@@ -39,3 +39,7 @@ meilisearch_data/
 *.backup/
 *.bak
 scratch/
+.impeccable/
+.workbuddy-ai/
+Shoes/
+storefront/*.png

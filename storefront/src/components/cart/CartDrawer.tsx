@@ -18,6 +18,7 @@ import {
 import { useCart } from "@/contexts/CartContext";
 import { trackRemoveFromCart, trackViewCart } from "@/lib/analytics/gtm";
 import { extractBasePath } from "@/lib/utils/path";
+import "@/app/cart-page.css";
 
 export function CartDrawer() {
   const {
@@ -76,13 +77,13 @@ export function CartDrawer() {
     >
       <SheetContent
         side="right"
-        className="data-[side=right]:w-full data-[side=right]:sm:max-w-md flex flex-col p-0 gap-0"
+        className="editorial-cart-drawer data-[side=right]:w-full data-[side=right]:sm:max-w-md flex flex-col p-0 gap-0"
         showCloseButton={false}
         aria-describedby={undefined}
       >
-        <SheetHeader className="flex flex-row gap-2 items-center justify-between border-b">
-          <SheetTitle className="flex flex-row gap-2 items-center">
-            <ShoppingBag className="w-6 h-6 text-gray-600" />
+        <SheetHeader className="cart-drawer__header flex flex-row gap-2 items-center justify-between border-b">
+          <SheetTitle className="cart-drawer__title flex flex-row gap-2 items-center">
+            <ShoppingBag className="w-5 h-5" />
             <span>{t("cart")}</span>
             {itemCount > 0 && (
               <span className="text-gray-600">
@@ -99,7 +100,7 @@ export function CartDrawer() {
             <X className="w-6 h-6" />
           </Button>
         </SheetHeader>
-        <div className="flex-1 overflow-y-auto">
+        <div className="cart-drawer__body flex-1 overflow-y-auto">
           {loading ? (
             <div className="p-4 space-y-4">
               {[1, 2].map((i) => (
@@ -128,14 +129,14 @@ export function CartDrawer() {
               </Link>
             </div>
           ) : (
-            <ul className="divide-y divide-gray-200">
+            <ul className="cart-drawer__items divide-y divide-gray-200">
               {lineItems.map((item) => (
-                <li key={item.id} className="p-4">
+                <li key={item.id} className="cart-drawer__item p-4">
                   <div className="flex gap-4">
                     {/* Image */}
                     <Link
                       href={`${basePath}/products/${item.slug}`}
-                      className="relative w-24 h-24 bg-gray-100 rounded overflow-hidden flex-shrink-0"
+                      className="cart-drawer__image relative w-24 h-24 bg-gray-100 overflow-hidden flex-shrink-0"
                       onClick={closeCart}
                     >
                       <ProductImage
@@ -152,7 +153,7 @@ export function CartDrawer() {
                       <div className="flex justify-between items-start">
                         <Link
                           href={`${basePath}/products/${item.slug}`}
-                          className="font-medium text-gray-900 hover:text-primary line-clamp-2"
+                          className="cart-drawer__product-name font-medium text-gray-900 line-clamp-2"
                           onClick={closeCart}
                         >
                           {item.name}
@@ -226,20 +227,26 @@ export function CartDrawer() {
 
         {/* Footer */}
         {!isEmpty && !loading && (
-          <SheetFooter className="border-t border-gray-200 p-4 space-y-4">
+          <SheetFooter
+            className="cart-drawer__footer p-4 space-y-4"
+            style={{
+              borderTop: "none",
+              background:
+                "linear-gradient(180deg, #f3efe8 0%, #efe9df 25px, #ece5da 45px, #e9e2d6 64px, #e9e2d6 100%)",
+            }}
+          >
             {/* Summary */}
             <div className="space-y-2">
               <div className="flex justify-between items-center">
                 <span>{tc("subtotal")}</span>
                 <span>{cart?.display_item_total}</span>
               </div>
-              {cart?.discount_total &&
-                parseFloat(cart.discount_total) < 0 && (
-                  <div className="flex justify-between items-center text-sm text-green-600">
-                    <span>{tc("discount")}</span>
-                    <span>{cart.display_discount_total}</span>
-                  </div>
-                )}
+              {cart?.discount_total && parseFloat(cart.discount_total) < 0 && (
+                <div className="flex justify-between items-center text-sm text-green-600">
+                  <span>{tc("discount")}</span>
+                  <span>{cart.display_discount_total}</span>
+                </div>
+              )}
               <div className="flex justify-between items-center">
                 <span>{tc("shipping")}</span>
                 <span className="text-gray-500">
@@ -249,7 +256,11 @@ export function CartDrawer() {
             </div>
 
             <div className="space-y-2">
-              <Button size="lg" className="w-full" asChild>
+              <Button
+                size="lg"
+                className="cart-drawer__checkout w-full"
+                asChild
+              >
                 <Link
                   href={`${basePath}/checkout/${cart?.id}`}
                   onClick={closeCart}
@@ -257,7 +268,12 @@ export function CartDrawer() {
                   {t("checkout")}
                 </Link>
               </Button>
-              <Button size="lg" className="w-full" variant="link" asChild>
+              <Button
+                size="lg"
+                className="cart-drawer__view-cart w-full"
+                variant="link"
+                asChild
+              >
                 <Link href={`${basePath}/cart`} onClick={closeCart}>
                   {t("viewCart")}
                 </Link>
@@ -268,7 +284,7 @@ export function CartDrawer() {
 
         {/* Loading overlay */}
         {updating && (
-          <div className="absolute inset-0 bg-white/50 flex items-center justify-center">
+          <div className="cart-drawer__updating absolute inset-0 flex items-center justify-center">
             <div className="w-8 h-8 border-4 border-gray-600 border-t-transparent rounded-full animate-spin" />
           </div>
         )}

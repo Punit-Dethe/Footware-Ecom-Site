@@ -4,6 +4,7 @@
 @import "./editorial-home.css";
 @import "./catalog-page.css";
 @import "./product-page.css";
+@import "./cart-page.css";
 @plugin "@tailwindcss/typography";
 
 @custom-variant dark (&:is(.dark *));

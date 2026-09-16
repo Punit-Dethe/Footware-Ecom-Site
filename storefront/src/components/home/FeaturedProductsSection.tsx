@@ -1,14 +1,18 @@
+import { ArrowUpRight } from "lucide-react";
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
-import { FeaturedProducts } from "@/components/products/FeaturedProducts";
-import { ProductCardSkeleton } from "@/components/products/ProductCardSkeleton";
+import { CuratedProducts } from "@/components/home/CuratedProducts";
 
-function CarouselSkeleton() {
+function SelectionSkeleton() {
   return (
-    <div className="grid grid-cols-2 gap-4 lg:grid-cols-4" aria-hidden="true">
+    <div className="mirza-selection__grid" aria-hidden="true">
       {Array.from({ length: 4 }, (_, i) => (
-        <ProductCardSkeleton key={i} />
+        <div className="mirza-product-placeholder" key={i}>
+          <div className="mirza-product-placeholder__image" />
+          <div className="mirza-product-placeholder__name" />
+          <div className="mirza-product-placeholder__price" />
+        </div>
       ))}
     </div>
   );
@@ -34,19 +38,22 @@ export async function FeaturedProductsSection({
 
   return (
     <section
-      className="home-highlights featured-products"
+      className="mirza-selection mirza-frame"
       aria-labelledby="home-highlights-title"
     >
-      <div className="home-section-heading">
-        <h2 id="home-highlights-title" className="home-section-label">
-          {t("featuredProducts")}
+      <div className="mirza-section-heading">
+        <h2 id="home-highlights-title" className="mirza-display">
+          {t.rich("journal.selectionTitle", {
+            em: (chunks) => <em>{chunks}</em>,
+          })}
         </h2>
-        <Link className="home-text-link" href={`${basePath}/products`}>
-          {t("viewAll")} <span aria-hidden="true">→</span>
+        <Link className="mirza-link" href={`${basePath}/products`}>
+          {t("journal.selectionCta")}
+          <ArrowUpRight size={17} strokeWidth={1.4} aria-hidden="true" />
         </Link>
       </div>
-      <Suspense fallback={<CarouselSkeleton />}>
-        <FeaturedProducts
+      <Suspense fallback={<SelectionSkeleton />}>
+        <CuratedProducts
           basePath={basePath}
           locale={locale}
           country={country}

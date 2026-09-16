@@ -1,9 +1,3 @@
-import type {
-  PaginatedResponse,
-  Product,
-  ProductFiltersResponse,
-  ProductListParams,
-} from "@/types/commerce";
 import { Search } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 import { type ReactElement, Suspense } from "react";
@@ -12,7 +6,6 @@ import { ListingAnalytics } from "@/components/products/ListingAnalytics";
 import { ListingFilterBar } from "@/components/products/ListingFilterBar";
 import { ProductListingSkeleton } from "@/components/products/ProductListingSkeleton";
 import { PRODUCT_CARD_FIELDS } from "@/lib/data/cached";
-import type { ActiveFilters } from "@/types/filters";
 import {
   type ListingSearchParams,
   listingKey,
@@ -21,6 +14,13 @@ import {
   buildProductQueryParams,
   wrapInRansackParams,
 } from "@/lib/utils/product-query";
+import type {
+  PaginatedResponse,
+  Product,
+  ProductFiltersResponse,
+  ProductListParams,
+} from "@/types/commerce";
+import type { ActiveFilters } from "@/types/filters";
 
 const PAGE_SIZE = 12;
 
@@ -51,6 +51,8 @@ interface ProductListingProps {
   editorialBreak?: boolean;
   editorialHref?: string;
   editorialCopy?: { label: string; title: string; action: string };
+  editorialGridFeature?: boolean;
+  editorialGridCopy?: { title: string; description: string };
 }
 
 /**
@@ -99,6 +101,8 @@ async function ProductListingInner({
   editorialBreak,
   editorialHref,
   editorialCopy,
+  editorialGridFeature,
+  editorialGridCopy,
 }: ProductListingProps): Promise<ReactElement> {
   const t = await getTranslations({ locale, namespace: "products" });
 
@@ -135,10 +139,14 @@ async function ProductListingInner({
   const productsResponse = await fetchProducts({ ...listParams, page: 1 });
 
   const products = productsResponse.data;
-  const totalCount =
-    (productsResponse.meta as any)?.total_count ??
-    productsResponse.meta?.count ??
-    products.length;
+  const reportedTotal = Number(
+    (productsResponse.meta as { total_count?: unknown })?.total_count ??
+      productsResponse.meta?.count ??
+      products.length,
+  );
+  const totalCount = Number.isFinite(reportedTotal)
+    ? Math.max(products.length, Math.floor(reportedTotal))
+    : products.length;
 
   const hasResults = products.length > 0;
 
@@ -168,7 +176,7 @@ async function ProductListingInner({
             // new instance mounts with products already populated,
             // the user sees the grid update in place with no loading
             // fallback shown.
-            key={listingKey(state)}
+            key={`${listId}:${listingKey(state)}`}
             initialProducts={products}
             totalCount={totalCount}
             listParams={listParams}
@@ -181,6 +189,8 @@ async function ProductListingInner({
             editorialBreak={editorialBreak}
             editorialHref={editorialHref}
             editorialCopy={editorialCopy}
+            editorialGridFeature={editorialGridFeature}
+            editorialGridCopy={editorialGridCopy}
           />
           <ListingAnalytics
             products={products}

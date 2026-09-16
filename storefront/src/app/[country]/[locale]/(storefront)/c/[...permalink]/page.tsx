@@ -108,9 +108,8 @@ async function CategoryPageContent({
       <CatalogHero
         title={category.name}
         eyebrow={t("catalogEyebrow")}
-        intro={t("categoryIntro", { category: category.name })}
+        intro={t("catalogIntro")}
         note={t("catalogNote")}
-        signature={t("catalogSignature")}
       />
 
       <ProductListing
@@ -130,6 +129,11 @@ async function CategoryPageContent({
           label: t("editorialLabel"),
           title: t("editorialTitle"),
           action: t("editorialAction"),
+        }}
+        editorialGridFeature
+        editorialGridCopy={{
+          title: t("productStoryTitle"),
+          description: t("editorialTitle"),
         }}
       />
     </div>

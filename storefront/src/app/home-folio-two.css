@@ -1,0 +1,197 @@
+/* A single process plate intersects the same warm field as the opening. */
+.mirza-home .folio-two-craft {
+  position: relative;
+  padding-block: clamp(148px, 11vw, 176px) clamp(136px, 10vw, 160px);
+  overflow: hidden;
+  background: var(--mirza-opening-field);
+  color: var(--mirza-ink);
+}
+
+.mirza-home .folio-two-craft::before,
+.mirza-home .folio-two-craft::after {
+  position: absolute;
+  z-index: 2;
+  right: 0;
+  left: 0;
+  height: 118px;
+  filter: blur(12px);
+  pointer-events: none;
+  content: "";
+}
+
+.mirza-home .folio-two-craft::before {
+  top: -18px;
+  background: linear-gradient(
+    180deg,
+    var(--mirza-mineral) 0%,
+    rgba(243, 239, 232, .72) 38%,
+    rgba(233, 226, 214, 0) 100%
+  );
+}
+
+.mirza-home .folio-two-craft::after {
+  bottom: -18px;
+  background: linear-gradient(
+    180deg,
+    rgba(233, 226, 214, 0) 0%,
+    rgba(243, 239, 232, .72) 62%,
+    var(--mirza-mineral) 100%
+  );
+}
+
+.mirza-home .folio-two-craft__composition {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-template-rows: auto 1fr auto;
+  column-gap: 22px;
+  isolation: isolate;
+}
+
+.mirza-home .folio-two-craft__title {
+  z-index: 1;
+  grid-column: 1 / 7;
+  grid-row: 1;
+  align-self: start;
+  min-width: 0;
+  width: max-content;
+  max-width: 100%;
+  margin: 0;
+  padding: 0 42px 32px 0;
+  background: var(--mirza-opening-field);
+  font-size: clamp(62px, 6.2vw, 90px);
+  line-height: .98;
+}
+
+.mirza-home .folio-two-craft__title span,
+.mirza-home .folio-two-craft__title em {
+  display: block;
+}
+
+.mirza-home .folio-two-craft__title em {
+  margin-left: .74em;
+}
+
+.mirza-home .folio-two-craft__title::after {
+  display: block;
+  width: 76px;
+  height: 1px;
+  margin-top: 30px;
+  background: #aa9b89;
+  content: "";
+}
+
+.mirza-home .folio-two-craft__process {
+  position: relative;
+  grid-column: 5 / -1;
+  grid-row: 1 / 4;
+  width: calc(100% + 32px);
+  height: clamp(552px, calc(44vw + 32px), 682px);
+  min-width: 0;
+  margin: -16px;
+  overflow: hidden;
+  background: var(--mirza-umber);
+}
+
+.mirza-home .folio-two-craft__process img {
+  object-fit: cover;
+  object-position: 49% 55%;
+}
+
+.mirza-home .folio-two-craft__copy {
+  z-index: 1;
+  grid-column: 1 / 5;
+  grid-row: 2;
+  align-self: end;
+  padding: 36px 42px 24px 0;
+  background: var(--mirza-opening-field);
+}
+
+.mirza-home .folio-two-craft__copy p {
+  max-width: 39ch;
+  color: var(--mirza-muted);
+  font-size: 14px;
+  line-height: 1.8;
+  text-wrap: pretty;
+}
+
+.mirza-home .folio-two-craft__copy .mirza-link {
+  max-width: 100%;
+  margin-top: 20px;
+}
+
+
+@media (max-width: 1100px) {
+  .mirza-home .folio-two-craft__title {
+    grid-column-end: 8;
+    font-size: clamp(54px, 6.4vw, 72px);
+  }
+
+  .mirza-home .folio-two-craft__copy {
+    grid-column-end: 5;
+  }
+}
+
+@media (max-width: 760px) {
+  .mirza-home .folio-two-craft {
+    padding-block: 112px 96px;
+  }
+
+  .mirza-home .folio-two-craft::before,
+  .mirza-home .folio-two-craft::after {
+    height: 82px;
+    filter: blur(9px);
+  }
+
+  .mirza-home .folio-two-craft__composition {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .mirza-home .folio-two-craft__title {
+    width: 100%;
+    align-self: auto;
+    margin: 0 0 28px;
+    padding: 0;
+    font-size: clamp(50px, 11.8vw, 68px);
+  }
+
+  .mirza-home .folio-two-craft__title em {
+    margin-left: .58em;
+  }
+
+  .mirza-home .folio-two-craft__title::after {
+    width: 54px;
+    margin-top: 22px;
+  }
+
+  .mirza-home .folio-two-craft__process {
+    width: calc(100% + 16px);
+    height: auto;
+    margin: 0 -8px -8px;
+    aspect-ratio: 1.05;
+  }
+
+  .mirza-home .folio-two-craft__copy {
+    width: 100%;
+    margin-top: 24px;
+    padding: 0;
+    background: transparent;
+  }
+
+  .mirza-home .folio-two-craft__copy p {
+    font-size: 13px;
+  }
+
+  .mirza-home .folio-two-craft__copy .mirza-link {
+    margin-top: 14px;
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 360px) {
+  .mirza-home .folio-two-craft__title {
+    font-size: 46px;
+  }
+}

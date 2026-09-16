@@ -1,6 +1,5 @@
 "use client";
 
-import type { Address, AddressParams, Cart, Country } from "@/types/commerce";
 import { CircleAlert, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -24,23 +23,17 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCart } from "@/contexts/CartContext";
 import { useCheckout } from "@/contexts/CheckoutContext";
-import {
-  trackAddPaymentInfo,
-  trackBeginCheckout,
-} from "@/lib/analytics/gtm";
+import { trackAddPaymentInfo, trackBeginCheckout } from "@/lib/analytics/gtm";
 import { getAddresses, updateAddress } from "@/lib/data/addresses";
-import {
-  getCheckoutOrder,
-  updateOrderAddresses,
-} from "@/lib/data/checkout";
+import { getCheckoutOrder, updateOrderAddresses } from "@/lib/data/checkout";
 import { isAuthenticated as checkAuth } from "@/lib/data/cookies";
 import { getCountry } from "@/lib/data/countries";
 import { getMarketCountries, resolveMarket } from "@/lib/data/markets";
 import { completeCheckoutOrder } from "@/lib/data/payment";
 import { extractBasePath } from "@/lib/utils/path";
+import type { Address, AddressParams, Cart, Country } from "@/types/commerce";
 import { CheckoutSidebar } from "./CheckoutSidebar";
 import type { CheckoutInitialData } from "./page";
-
 
 // Fingerprint of line-item state only. Used to detect when CartContext
 // has a different set of line items than our local checkout cart —
@@ -326,43 +319,39 @@ function CheckoutPageContentInner({
 
   // Handle payment completion (called by PaymentSection after payment is confirmed)
   const handlePaymentComplete = useCallback(async () => {
-      const currentOrder = cartRef.current;
-      if (!currentOrder) return;
+    const currentOrder = cartRef.current;
+    if (!currentOrder) return;
 
-      setError(null);
+    setError(null);
 
+    try {
       try {
-        try {
-          trackAddPaymentInfo(currentOrder);
-        } catch {
-          // Analytics should never break checkout flow
-        }
-
-        const completeResult = await completeCheckoutOrder(currentOrder.id);
-        if (!completeResult.success) {
-          setError(
-            completeResult.error || tRef.current("failedToCompleteOrder"),
-          );
-          setProcessing(false);
-          return;
-        }
-
-        // Cache the completed order for the thank-you page
-        if (completeResult.order) {
-          const { cacheCompletedOrder } = await import(
-            "@/lib/utils/completed-order-cache"
-          );
-          cacheCompletedOrder(currentOrder.id, completeResult.order);
-        }
-
-        routerRef.current.push(`${basePath}/order-placed/${currentOrder.id}`);
+        trackAddPaymentInfo(currentOrder);
       } catch {
-        setError(tRef.current("generalError"));
-        setProcessing(false);
+        // Analytics should never break checkout flow
       }
-    },
-    [basePath],
-  );
+
+      const completeResult = await completeCheckoutOrder(currentOrder.id);
+      if (!completeResult.success) {
+        setError(completeResult.error || tRef.current("failedToCompleteOrder"));
+        setProcessing(false);
+        return;
+      }
+
+      // Cache the completed order for the thank-you page
+      if (completeResult.order) {
+        const { cacheCompletedOrder } = await import(
+          "@/lib/utils/completed-order-cache"
+        );
+        cacheCompletedOrder(currentOrder.id, completeResult.order);
+      }
+
+      routerRef.current.push(`${basePath}/order-placed/${currentOrder.id}`);
+    } catch {
+      setError(tRef.current("generalError"));
+      setProcessing(false);
+    }
+  }, [basePath]);
 
   // Fetch states for a country
   const fetchStates = useCallback(async (countryIso: string) => {
@@ -468,13 +457,13 @@ function CheckoutPageContentInner({
   // we already know isAuthenticated from the server.
   if (loading || (!initialData && authLoading)) {
     return (
-      <div className="animate-pulse space-y-6">
-        <div className="h-8 bg-gray-200 rounded w-1/3" />
-        <div className="h-4 bg-gray-200 rounded w-1/4" />
+      <div className="checkout-loading animate-pulse space-y-6">
+        <div className="h-8 w-1/3" />
+        <div className="h-4 w-1/4" />
         <div className="space-y-4 mt-8">
-          <div className="h-12 bg-gray-200 rounded" />
-          <div className="h-12 bg-gray-200 rounded" />
-          <div className="h-12 bg-gray-200 rounded" />
+          <div className="h-12" />
+          <div className="h-12" />
+          <div className="h-12" />
         </div>
       </div>
     );
@@ -483,15 +472,10 @@ function CheckoutPageContentInner({
   // Error state (no cart loaded)
   if (error && !cart) {
     return (
-      <div className="text-center py-12">
-        <h1 className="text-2xl font-bold text-gray-900 mb-4">
-          {t("checkoutError")}
-        </h1>
-        <p className="text-gray-600 mb-6">{error}</p>
-        <Link
-          href={`${basePath}/cart`}
-          className="inline-flex items-center px-4 py-2 bg-primary text-white rounded-xl hover:bg-primary-700"
-        >
+      <div className="checkout-state">
+        <h1>{t("checkoutError")}</h1>
+        <p>{error}</p>
+        <Link href={`${basePath}/cart`} className="checkout-state__action">
           {t("returnToCart")}
         </Link>
       </div>
@@ -503,15 +487,10 @@ function CheckoutPageContentInner({
   // Empty cart
   if (!cart.items || cart.items.length === 0) {
     return (
-      <div className="text-center py-12">
-        <h1 className="text-2xl font-bold text-gray-900 mb-4">
-          {t("emptyCart")}
-        </h1>
-        <p className="text-gray-600 mb-6">{t("emptyCartDescription")}</p>
-        <Link
-          href={`${basePath}/products`}
-          className="inline-flex items-center px-4 py-2 bg-primary text-white rounded-xl hover:bg-primary-700"
-        >
+      <div className="checkout-state">
+        <h1>{t("emptyCart")}</h1>
+        <p>{t("emptyCartDescription")}</p>
+        <Link href={`${basePath}/products`} className="checkout-state__action">
           {tc("continueShopping")}
         </Link>
       </div>
@@ -519,7 +498,11 @@ function CheckoutPageContentInner({
   }
 
   return (
-    <div>
+    <main className="checkout-form">
+      <header className="checkout-form__intro">
+        <h1>{t("checkout")}</h1>
+      </header>
+
       {/* Error banner */}
       {error && (
         <Alert variant="destructive" className="mb-6">
@@ -528,17 +511,16 @@ function CheckoutPageContentInner({
         </Alert>
       )}
 
-
       {/* Checkout form sections — dimmed & disabled during express checkout */}
       <div
-        className={
+        className={`checkout-form__sections ${
           processing
             ? "relative opacity-50 pointer-events-none select-none"
             : "relative"
-        }
+        }`}
       >
         {/* Contact + Delivery */}
-        <div id="checkout-section-address">
+        <div id="checkout-section-address" className="checkout-form__section">
           <AddressSection
             cart={cart}
             countries={countries}
@@ -559,12 +541,12 @@ function CheckoutPageContentInner({
         </div>
 
         {/* Shipping method */}
-        <div id="checkout-section-shipping" className="mt-6">
+        <div id="checkout-section-shipping" className="checkout-form__section">
           <DeliveryMethodSection errors={sectionErrors.shipping} />
         </div>
 
         {/* Payment */}
-        <div id="checkout-section-payment" className="mt-6">
+        <div id="checkout-section-payment" className="checkout-form__section">
           <PaymentSection
             ref={paymentRef}
             cart={cart}
@@ -581,7 +563,7 @@ function CheckoutPageContentInner({
 
         {/* Policy consent — guests only, authenticated users accepted at registration */}
         {!isAuthenticated && (
-          <div className="mt-6">
+          <div className="checkout-form__consent">
             <PolicyConsent
               checked={policyConsent}
               onCheckedChange={(checked) => {
@@ -598,7 +580,7 @@ function CheckoutPageContentInner({
           type="button"
           onClick={validateAndPay}
           disabled={processing}
-          className="w-full mt-8 h-[54px] bg-black text-white text-sm font-bold rounded-sm hover:bg-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+          className="checkout-form__submit"
         >
           {processing ? (
             <>
@@ -610,7 +592,7 @@ function CheckoutPageContentInner({
           )}
         </button>
       </div>
-    </div>
+    </main>
   );
 }
 

@@ -1,6 +1,5 @@
 "use client";
 
-import type { Address, AddressParams, Cart, Country, State } from "@/types/commerce";
 import { Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
@@ -17,6 +16,13 @@ import {
   formDataToAddress,
   updateAddressField,
 } from "@/lib/utils/address";
+import type {
+  Address,
+  AddressParams,
+  Cart,
+  Country,
+  State,
+} from "@/types/commerce";
 
 interface AddressSectionProps {
   cart: Cart;
@@ -246,7 +252,7 @@ export function AddressSection({
   };
 
   return (
-    <>
+    <section className="checkout-address">
       {/* Errors */}
       {errors && errors.length > 0 && (
         <div className="rounded-sm border border-red-300 bg-red-50 px-4 py-3 mb-4">
@@ -259,16 +265,11 @@ export function AddressSection({
       )}
 
       {/* Contact section */}
-      <div className="mb-6">
-        <div className="flex items-baseline justify-between mb-3">
-          <h2 className="text-lg font-bold text-gray-900">
-            {t("contactInformation")}
-          </h2>
+      <div className="checkout-address__contact">
+        <div className="checkout-section-heading">
+          <h2>{t("contactInformation")}</h2>
           {!isAuthenticated && (
-            <Link
-              href={signInUrl}
-              className="text-[13px] text-gray-700 underline underline-offset-2 hover:text-black"
-            >
+            <Link href={signInUrl} className="checkout-section-heading__link">
               {t("signIn")}
             </Link>
           )}
@@ -284,20 +285,18 @@ export function AddressSection({
           placeholder={t("emailAddress")}
         />
         {hasAccountEmail && (
-          <p className="text-xs text-gray-500 mt-1.5">
+          <p className="checkout-address__account-note">
             {t("usingAccountEmail")}
           </p>
         )}
       </div>
 
       {/* Delivery section */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-bold text-gray-900">
-            {t("shippingAddress")}
-          </h2>
+      <div className="checkout-address__delivery">
+        <div className="checkout-section-heading">
+          <h2>{t("shippingAddress")}</h2>
           {saving && (
-            <span className="flex items-center gap-1.5 text-xs text-gray-400">
+            <span className="checkout-section-heading__status">
               <Loader2 className="h-3 w-3 animate-spin" />
               {tc("saving")}
             </span>
@@ -346,6 +345,6 @@ export function AddressSection({
           title={ta("editAddress")}
         />
       )}
-    </>
+    </section>
   );
 }

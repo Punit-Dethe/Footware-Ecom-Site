@@ -1,6 +1,5 @@
 "use client";
 
-import type { Address, Country, State } from "@/types/commerce";
 import { CircleAlert } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
@@ -16,6 +15,7 @@ import {
   formDataToAddress,
   updateAddressField,
 } from "@/lib/utils/address";
+import type { Address, Country, State } from "@/types/commerce";
 import { AddressFormFields } from "./AddressFormFields";
 
 interface AddressEditModalProps {
@@ -86,7 +86,10 @@ export function AddressEditModal({
         if (!open) onClose();
       }}
     >
-      <DialogContent className="sm:max-w-lg p-0 gap-0" showCloseButton={false}>
+      <DialogContent
+        className="checkout-address-dialog sm:max-w-lg p-0 gap-0"
+        showCloseButton={false}
+      >
         <form onSubmit={handleSubmit}>
           <div className="px-4 pt-5 pb-4 sm:p-6">
             <DialogTitle className="text-lg font-medium text-gray-900 mb-4">
@@ -110,11 +113,20 @@ export function AddressEditModal({
             />
           </div>
 
-          <div className="border-t border-gray-200 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse gap-3">
-            <Button type="submit" disabled={saving}>
+          <div className="checkout-address-dialog__actions">
+            <Button
+              type="submit"
+              disabled={saving}
+              className="checkout-address-dialog__save"
+            >
               {saving ? tc("saving") : t("saveAddress")}
             </Button>
-            <Button type="button" variant="outline" onClick={onClose}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClose}
+              className="checkout-address-dialog__cancel"
+            >
               {tc("cancel")}
             </Button>
           </div>

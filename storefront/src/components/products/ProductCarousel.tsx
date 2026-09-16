@@ -7,6 +7,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type WheelEvent,
 } from "react";
 import { ProductCard } from "@/components/products/ProductCard";
 import type { Product } from "@/types/commerce";
@@ -19,13 +20,35 @@ interface ProductCarouselProps {
   listId?: string;
   listName?: string;
   priorityFirst?: boolean;
+  ambientMotion?: boolean;
 }
 
 interface DragState {
   pointerId: number;
+  pointerType: string;
   startX: number;
   startScrollLeft: number;
+  lastX: number;
+  lastTime: number;
+  velocity: number;
   moved: boolean;
+}
+
+interface MotionState {
+  direction: -1 | 1;
+  velocity: number;
+  pauseUntil: number;
+  lastFrame: number;
+  lastWheelTime: number;
+  residualDistance: number;
+}
+
+const AMBIENT_SPEED = 0.04;
+const MAX_RELEASE_SPEED = 0.82;
+const INERTIA_SETTLE_MS = 900;
+
+function clampVelocity(value: number) {
+  return Math.max(-MAX_RELEASE_SPEED, Math.min(MAX_RELEASE_SPEED, value));
 }
 
 export function ProductCarousel({
@@ -36,12 +59,22 @@ export function ProductCarousel({
   listId = "featured-products",
   listName = "Featured Products",
   priorityFirst = true,
+  ambientMotion = false,
 }: ProductCarouselProps) {
   const t = useTranslations("products");
   const tHome = useTranslations("home");
   const viewportRef = useRef<HTMLElement>(null);
   const dragRef = useRef<DragState | null>(null);
   const suppressClickRef = useRef(false);
+  const lastPointerInteractionRef = useRef(0);
+  const motionRef = useRef<MotionState>({
+    direction: 1,
+    velocity: ambientMotion ? AMBIENT_SPEED : 0,
+    pauseUntil: 0,
+    lastFrame: 0,
+    lastWheelTime: 0,
+    residualDistance: 0,
+  });
   const [isDragging, setIsDragging] = useState(false);
 
   // A complete set must be wider than the viewport, including small catalogs.
@@ -98,6 +131,145 @@ export function ProductCarousel({
     };
   }, [cycle.length]);
 
+  useLayoutEffect(() => {
+    if (!ambientMotion) return;
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+
+    const motion = motionRef.current;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let isVisible = typeof IntersectionObserver === "undefined";
+    let hasFocusWithin = viewport.contains(document.activeElement);
+    let animationFrame = 0;
+
+    motion.velocity = reducedMotion.matches
+      ? 0
+      : motion.direction * AMBIENT_SPEED;
+    motion.lastFrame = 0;
+
+    const shouldAnimate = () =>
+      isVisible &&
+      !document.hidden &&
+      !reducedMotion.matches &&
+      !hasFocusWithin;
+
+    const stopAnimation = () => {
+      if (animationFrame) window.cancelAnimationFrame(animationFrame);
+      animationFrame = 0;
+      motion.lastFrame = 0;
+    };
+
+    const animate = (time: number) => {
+      animationFrame = 0;
+      if (!shouldAnimate()) return;
+
+      const elapsed = motion.lastFrame
+        ? Math.min(Math.max(time - motion.lastFrame, 0), 32)
+        : 16;
+      motion.lastFrame = time;
+
+      if (!dragRef.current && time >= motion.pauseUntil) {
+        const targetVelocity = motion.direction * AMBIENT_SPEED;
+        const easing = 1 - Math.exp(-elapsed / INERTIA_SETTLE_MS);
+        motion.velocity += (targetVelocity - motion.velocity) * easing;
+        const distance = motion.residualDistance + motion.velocity * elapsed;
+        const wholePixels = Math.trunc(distance);
+        motion.residualDistance = distance - wholePixels;
+        if (wholePixels) viewport.scrollLeft += wholePixels;
+      }
+
+      animationFrame = window.requestAnimationFrame(animate);
+    };
+
+    const startAnimation = () => {
+      if (animationFrame || !shouldAnimate()) return;
+      motion.lastFrame = 0;
+      animationFrame = window.requestAnimationFrame(animate);
+    };
+
+    const onFocusIn = () => {
+      const arrivedFromKeyboard =
+        performance.now() - lastPointerInteractionRef.current > 120;
+      hasFocusWithin = arrivedFromKeyboard;
+      if (arrivedFromKeyboard) {
+        motion.velocity = 0;
+        stopAnimation();
+      }
+    };
+    const onFocusOut = (event: FocusEvent) => {
+      hasFocusWithin = viewport.contains(event.relatedTarget as Node | null);
+      startAnimation();
+    };
+    const onMotionPreferenceChange = () => {
+      motion.velocity = reducedMotion.matches
+        ? 0
+        : motion.direction * AMBIENT_SPEED;
+      if (reducedMotion.matches) stopAnimation();
+      else startAnimation();
+    };
+    const onVisibilityChange = () => {
+      if (document.hidden) stopAnimation();
+      else startAnimation();
+    };
+    const observer =
+      typeof IntersectionObserver === "undefined"
+        ? null
+        : new IntersectionObserver(
+            ([entry]) => {
+              isVisible = entry?.isIntersecting ?? true;
+              if (isVisible) startAnimation();
+              else stopAnimation();
+            },
+            { threshold: 0.04 },
+          );
+
+    observer?.observe(viewport);
+    viewport.addEventListener("focusin", onFocusIn);
+    viewport.addEventListener("focusout", onFocusOut);
+    reducedMotion.addEventListener("change", onMotionPreferenceChange);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    startAnimation();
+
+    return () => {
+      stopAnimation();
+      observer?.disconnect();
+      viewport.removeEventListener("focusin", onFocusIn);
+      viewport.removeEventListener("focusout", onFocusOut);
+      reducedMotion.removeEventListener("change", onMotionPreferenceChange);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [ambientMotion]);
+
+  const updateGestureVelocity = (velocity: number) => {
+    if (!ambientMotion || !Number.isFinite(velocity)) return;
+    const motion = motionRef.current;
+    const nextVelocity = clampVelocity(velocity);
+    if (Math.abs(nextVelocity) > AMBIENT_SPEED * 1.5) {
+      motion.direction = nextVelocity < 0 ? -1 : 1;
+    }
+    motion.velocity = nextVelocity;
+  };
+
+  const handleWheel = (event: WheelEvent<HTMLElement>) => {
+    if (!ambientMotion) return;
+    const horizontalDelta =
+      Math.abs(event.deltaX) >= Math.abs(event.deltaY) * 0.55
+        ? event.deltaX
+        : event.shiftKey
+          ? event.deltaY
+          : 0;
+    if (Math.abs(horizontalDelta) < 0.5) return;
+
+    const now = performance.now();
+    const motion = motionRef.current;
+    const elapsed = motion.lastWheelTime
+      ? Math.max(now - motion.lastWheelTime, 16)
+      : 16;
+    motion.lastWheelTime = now;
+    updateGestureVelocity(horizontalDelta / elapsed);
+    motion.pauseUntil = now + 90;
+  };
+
   const endDrag = (event: PointerEvent<HTMLElement>) => {
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
@@ -109,6 +281,11 @@ export function ProductCarousel({
       if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
         event.currentTarget.releasePointerCapture(event.pointerId);
       }
+    }
+    if (ambientMotion) {
+      updateGestureVelocity(drag.velocity);
+      motionRef.current.pauseUntil =
+        performance.now() + (drag.pointerType === "mouse" ? 36 : 150);
     }
     dragRef.current = null;
     setIsDragging(false);
@@ -125,15 +302,21 @@ export function ProductCarousel({
       <section
         ref={viewportRef}
         className={`product-carousel__viewport${isDragging ? " is-dragging" : ""}`}
+        data-motion={ambientMotion ? "ambient" : "manual"}
         aria-label={ariaLabel ?? tHome("featuredProducts")}
         // biome-ignore lint/a11y/noNoninteractiveTabindex: Focus lets keyboard users scroll the overflow region with arrow keys.
         tabIndex={0}
         onPointerDown={(event) => {
-          if (event.pointerType !== "mouse" || event.button !== 0) return;
+          if (event.pointerType === "mouse" && event.button !== 0) return;
+          lastPointerInteractionRef.current = performance.now();
           dragRef.current = {
             pointerId: event.pointerId,
+            pointerType: event.pointerType,
             startX: event.clientX,
             startScrollLeft: event.currentTarget.scrollLeft,
+            lastX: event.clientX,
+            lastTime: event.timeStamp,
+            velocity: motionRef.current.velocity,
             moved: false,
           };
         }}
@@ -141,9 +324,21 @@ export function ProductCarousel({
           const drag = dragRef.current;
           if (!drag || drag.pointerId !== event.pointerId) return;
           const distance = event.clientX - drag.startX;
+          const elapsed = Math.max(event.timeStamp - drag.lastTime, 8);
+          const instantaneousVelocity = -(event.clientX - drag.lastX) / elapsed;
+          drag.velocity = clampVelocity(
+            drag.velocity * 0.28 + instantaneousVelocity * 0.72,
+          );
+          drag.lastX = event.clientX;
+          drag.lastTime = event.timeStamp;
+          if (ambientMotion && Math.abs(instantaneousVelocity) > 0.008) {
+            updateGestureVelocity(drag.velocity);
+            motionRef.current.pauseUntil = performance.now() + 90;
+          }
           if (!drag.moved && Math.abs(distance) < 6) return;
-          if (!drag.moved) {
-            drag.moved = true;
+          drag.moved = true;
+          if (drag.pointerType !== "mouse") return;
+          if (!isDragging) {
             event.currentTarget.setPointerCapture?.(event.pointerId);
             setIsDragging(true);
           }
@@ -156,6 +351,7 @@ export function ProductCarousel({
           if (dragRef.current && !dragRef.current.moved) dragRef.current = null;
         }}
         onDragStart={(event) => event.preventDefault()}
+        onWheel={handleWheel}
         onClickCapture={(event) => {
           if (!suppressClickRef.current) return;
           event.preventDefault();

@@ -1,11 +1,5 @@
 "use client";
 
-import type {
-  AvailabilityFilter,
-  CategoryFilter,
-  OptionFilter,
-  ProductFiltersResponse,
-} from "@/types/commerce";
 import { Check, X } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
@@ -18,6 +12,12 @@ import {
 } from "@/lib/utils/filters";
 import type { PriceBucket } from "@/lib/utils/price-buckets";
 import { findMatchingBucket } from "@/lib/utils/price-buckets";
+import type {
+  AvailabilityFilter,
+  CategoryFilter,
+  OptionFilter,
+  ProductFiltersResponse,
+} from "@/types/commerce";
 import {
   type ActiveFilters,
   type AvailabilityStatus,
@@ -119,26 +119,58 @@ export function MobileFilterDrawer({
         <div className="flex-1 overflow-y-auto p-5 space-y-7">
           {(filtersData?.filters ?? []).map((filter) => {
             switch (filter.type) {
-              case "category":
+              case "category": {
+                const categoryFilter = filter as CategoryFilter;
+                const activeCategory = categoryFilter.options.find(
+                  (option) => option.active,
+                );
                 return (
                   <div key={filter.id}>
                     <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
-                      {(filter as CategoryFilter).label || filter.name}
+                      {categoryFilter.label || filter.name}
                     </h3>
                     <div className="space-y-1">
-                      {(filter as CategoryFilter).options.map((option) => (
+                      <Link
+                        href={`${basePath}/products`}
+                        scroll={false}
+                        prefetch
+                        aria-current={activeCategory ? undefined : "page"}
+                        className={`flex items-center justify-between px-3 py-2.5 text-sm transition-colors ${
+                          activeCategory
+                            ? "text-gray-700 hover:bg-gray-50"
+                            : "bg-gray-50 font-medium text-gray-900"
+                        }`}
+                        onClick={onClose}
+                      >
+                        <span>{t("allProducts")}</span>
+                        {!activeCategory && (
+                          <Check className="w-4 h-4 text-primary shrink-0" />
+                        )}
+                      </Link>
+                      {categoryFilter.options.map((option) => (
                         <Link
                           key={option.id}
-                          href={`${basePath}/c/categories/${option.slug ?? option.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
-                          className="block px-3 py-2.5 text-sm"
+                          href={`${basePath}/products?category=${encodeURIComponent(option.slug ?? option.name.toLowerCase().replace(/[^a-z0-9]+/g, "-"))}`}
+                          scroll={false}
+                          prefetch
+                          aria-current={option.active ? "page" : undefined}
+                          className={`flex items-center justify-between px-3 py-2.5 text-sm transition-colors ${
+                            option.active
+                              ? "bg-gray-50 font-medium text-gray-900"
+                              : "text-gray-700 hover:bg-gray-50"
+                          }`}
                           onClick={onClose}
                         >
-                          {option.label || option.name}
+                          <span>{option.label || option.name}</span>
+                          {option.active && (
+                            <Check className="w-4 h-4 text-primary shrink-0" />
+                          )}
                         </Link>
                       ))}
                     </div>
                   </div>
                 );
+              }
               case "option":
                 return (
                   <MobileOptionSection

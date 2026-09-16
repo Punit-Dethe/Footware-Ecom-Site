@@ -1,10 +1,15 @@
 "use client";
 
-import type { PaginatedResponse, Product, ProductListParams } from "@/types/commerce";
 import Image from "next/image";
 import Link from "next/link";
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { ProductCard } from "@/components/products/ProductCard";
+import { mergeUniqueProducts } from "@/lib/utils/product-list";
+import type {
+  PaginatedResponse,
+  Product,
+  ProductListParams,
+} from "@/types/commerce";
 
 interface InfiniteProductListProps {
   initialProducts: Product[];
@@ -21,6 +26,8 @@ interface InfiniteProductListProps {
   editorialBreak?: boolean;
   editorialHref?: string;
   editorialCopy?: { label: string; title: string; action: string };
+  editorialGridFeature?: boolean;
+  editorialGridCopy?: { title: string; description: string };
 }
 
 /**
@@ -47,23 +54,36 @@ export function InfiniteProductList({
   editorialBreak = false,
   editorialHref,
   editorialCopy,
+  editorialGridFeature = false,
+  editorialGridCopy,
 }: InfiniteProductListProps) {
-  const [products, setProducts] = useState<Product[]>(initialProducts);
+  const preparedInitialProducts = useMemo(
+    () => mergeUniqueProducts([], initialProducts, totalCount),
+    [initialProducts, totalCount],
+  );
+  const [products, setProducts] = useState<Product[]>(preparedInitialProducts);
+
+  useEffect(() => {
+    setProducts(preparedInitialProducts);
+  }, [preparedInitialProducts]);
 
   useEffect(() => {
     // If all matching products are already displayed, no remainder fetch needed
-    if (totalCount <= initialProducts.length) return;
+    const remainingCount = totalCount - preparedInitialProducts.length;
+    if (remainingCount <= 0) return;
 
     let active = true;
     const timer = setTimeout(async () => {
       try {
         const response = await fetchRemainder({
           ...listParams,
-          offset: initialProducts.length,
-          limit: 100,
+          offset: preparedInitialProducts.length,
+          limit: Math.min(100, remainingCount),
         });
         if (active && response.data.length > 0) {
-          setProducts((prev) => [...prev, ...response.data]);
+          setProducts((current) =>
+            mergeUniqueProducts(current, response.data, totalCount),
+          );
         }
       } catch (error) {
         console.error("InfiniteProductList: failed to load remainder", error);
@@ -74,7 +94,7 @@ export function InfiniteProductList({
       active = false;
       clearTimeout(timer);
     };
-  }, [fetchRemainder, initialProducts.length, listParams, totalCount]);
+  }, [fetchRemainder, listParams, preparedInitialProducts, totalCount]);
 
   return (
     <div className="catalog-products-grid grid grid-cols-2 lg:grid-cols-3 gap-6">
@@ -96,6 +116,27 @@ export function InfiniteProductList({
               </div>
             </aside>
           )}
+          {editorialGridFeature &&
+            index === 20 &&
+            editorialGridCopy &&
+            editorialHref && (
+              <aside className="catalog-grid-feature">
+                <div className="catalog-grid-feature__image">
+                  <Image
+                    src="/editorial/heritage-architecture.webp"
+                    alt=""
+                    fill
+                    sizes="(max-width: 760px) calc(100vw - 40px), (max-width: 1600px) 46vw, 714px"
+                  />
+                </div>
+                <div className="catalog-grid-feature__content">
+                  <h2>{editorialGridCopy.title}</h2>
+                  <p className="catalog-grid-feature__description">
+                    {editorialGridCopy.description}
+                  </p>
+                </div>
+              </aside>
+            )}
           <div className="catalog-products-grid__cell">
             <ProductCard
               product={product}

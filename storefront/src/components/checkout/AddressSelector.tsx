@@ -1,6 +1,5 @@
 "use client";
 
-import type { Address, Country, State } from "@/types/commerce";
 import { MapPin } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useCallback, useMemo } from "react";
@@ -8,6 +7,7 @@ import { AddressFormFields } from "@/components/checkout/AddressFormFields";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import type { User } from "@/contexts/AuthContext";
 import type { AddressFormData } from "@/lib/utils/address";
+import type { Address, Country, State } from "@/types/commerce";
 
 interface AddressSelectorProps {
   savedAddresses: Address[];
@@ -94,22 +94,22 @@ export function AddressSelector({
   const showForm = selectedAddressId === "new" || savedAddresses.length === 0;
 
   return (
-    <div onBlur={handleContainerBlur}>
+    <div className="checkout-address-selector" onBlur={handleContainerBlur}>
       {/* Saved addresses — bordered container matching Shipping/Payment style */}
       {savedAddresses.length > 0 && (
         <RadioGroup
           value={selectedAddressId}
           onValueChange={handleSelectAddress}
-          className="rounded-sm border overflow-hidden gap-0"
+          className="checkout-address-selector__group"
         >
           {savedAddresses.map((address, index) => (
             <label
               key={address.id}
-              className={`flex items-start gap-3 px-4 py-3.5 cursor-pointer transition-colors ${
+              className={`checkout-address-choice ${
                 selectedAddressId === address.id
-                  ? "bg-blue-50"
-                  : "bg-white hover:bg-gray-50"
-              } ${index > 0 ? "border-t" : ""}`}
+                  ? "checkout-address-choice--selected"
+                  : ""
+              } ${index > 0 ? "checkout-address-choice--divided" : ""}`}
             >
               <RadioGroupItem value={address.id} className="mt-0.5 shrink-0" />
               <div className="flex-1 min-w-0">
@@ -143,10 +143,10 @@ export function AddressSelector({
 
           {/* Use a different address option */}
           <label
-            className={`flex items-center gap-3 px-4 py-3.5 cursor-pointer border-t transition-colors ${
+            className={`checkout-address-choice checkout-address-choice--different ${
               selectedAddressId === "new"
-                ? "bg-blue-50"
-                : "bg-white hover:bg-gray-50"
+                ? "checkout-address-choice--selected"
+                : ""
             }`}
           >
             <RadioGroupItem value="new" />

@@ -1,6 +1,5 @@
 "use client";
 
-import type { Country, State } from "@/types/commerce";
 import { useTranslations } from "next-intl";
 import { Input } from "@/components/ui/input";
 import {
@@ -8,6 +7,7 @@ import {
   NativeSelectOption,
 } from "@/components/ui/native-select";
 import type { AddressFormData } from "@/lib/utils/address";
+import type { Country, State } from "@/types/commerce";
 
 interface AddressFormFieldsProps {
   address: AddressFormData;
@@ -31,7 +31,7 @@ export function AddressFormFields({
   const hasStates = states.length > 0;
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="checkout-address-fields">
       {/* Country — full width, floating label style */}
       <div className="relative">
         <NativeSelect
@@ -54,7 +54,7 @@ export function AddressFormFields({
       </div>
 
       {/* First name / Last name */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="checkout-address-fields__row checkout-address-fields__row--names">
         <Input
           type="text"
           id={`${idPrefix}-first_name`}
@@ -106,7 +106,7 @@ export function AddressFormFields({
       />
 
       {/* City / State / ZIP — 3 columns */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="checkout-address-fields__row checkout-address-fields__row--locality">
         <Input
           type="text"
           id={`${idPrefix}-city`}

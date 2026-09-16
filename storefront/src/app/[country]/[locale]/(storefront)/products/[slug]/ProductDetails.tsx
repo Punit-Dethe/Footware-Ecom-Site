@@ -1,7 +1,6 @@
 "use client";
 
 import { Loader2, Plus } from "lucide-react";
-import Image from "next/image";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useState } from "react";
@@ -10,9 +9,9 @@ import { HiddenPricePrompt } from "@/components/products/HiddenPricePrompt";
 import { MediaGallery } from "@/components/products/MediaGallery";
 import { ProductCard } from "@/components/products/ProductCard";
 import { ProductCustomFields } from "@/components/products/ProductCustomFields";
+import { ProductWearGallery } from "@/components/products/ProductWearGallery";
 import { VariantPicker } from "@/components/products/VariantPicker";
 import { Button } from "@/components/ui/button";
-import { ProductImage } from "@/components/ui/product-image";
 import { useCart } from "@/contexts/CartContext";
 import { useHiddenPricing } from "@/contexts/HiddenPricingContext";
 import { useStore } from "@/contexts/StoreContext";
@@ -240,21 +239,6 @@ export function ProductDetails({
           </div>
         )}
 
-        {editorial && media.mainUrl && (
-          <div className="pdp-detail-photo">
-            <div className="pdp-detail-photo__frame">
-              <ProductImage
-                src={media.mainUrl}
-                alt={t("detailImageAlt", { product: product.name })}
-                fill
-                className="object-cover"
-                sizes="(max-width: 760px) 100vw, 24vw"
-              />
-            </div>
-            <span className="pdp-kicker">{t("detailCaption")}</span>
-          </div>
-        )}
-
         <div className="pdp-specifications">
           <h2 className="pdp-kicker">{t("details")}</h2>
           <dl className="pdp-specifications__list">
@@ -318,21 +302,13 @@ export function ProductDetails({
       </section>
 
       {editorial && (
-        <section className="pdp-campaign" aria-labelledby="pdp-campaign-title">
-          <Image
-            src="/editorial/craft-hands.webp"
-            alt=""
-            fill
-            sizes="100vw"
-            className="object-cover"
-          />
-          <div className="pdp-campaign__content">
-            <p className="pdp-kicker">{th("heritageLabel")}</p>
-            <h2 id="pdp-campaign-title">{th("heritageTitle")}</h2>
-            <Link href={`${basePath}/#craft`}>
-              {t("discoverStory")} <span aria-hidden="true">→</span>
-            </Link>
+        <section className="pdp-worn" aria-labelledby="pdp-worn-title">
+          <div className="pdp-worn__copy">
+            <p className="pdp-kicker">{t("wornLabel")}</p>
+            <h2 id="pdp-worn-title">{t("wornTitle")}</h2>
+            <p>{t("wornDescription")}</p>
           </div>
+          <ProductWearGallery />
         </section>
       )}
 

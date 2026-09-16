@@ -1,16 +1,17 @@
 "use client";
 
+import "../../../checkout-page.css";
 import { ArrowLeft, ChevronDown, ShoppingBag } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Suspense, useState } from "react";
+import { AuthRouteSync } from "@/components/auth/AuthRouteSync";
 import {
   CheckoutProvider,
   CheckoutSummary,
   useCheckout,
 } from "@/contexts/CheckoutContext";
-import { AuthRouteSync } from "@/components/auth/AuthRouteSync";
 import { POLICY_LINKS } from "@/lib/constants/policies";
 import { getStoreName } from "@/lib/store";
 import { extractBasePath } from "@/lib/utils/path";
@@ -21,20 +22,18 @@ function CheckoutHeader() {
   const pathname = usePathname();
   const basePath = extractBasePath(pathname);
   const t = useTranslations("checkoutLayout");
+  const checkout = useTranslations("checkout");
 
   return (
-    <header className="flex items-center justify-between h-16 border-b border-gray-100">
-      <Link href={basePath || "/"} className="flex flex-col">
-        <span className="font-serif text-lg font-bold tracking-[0.2em] uppercase text-stone-900 leading-tight">
-          Mirza Footwear
-        </span>
-        <span className="text-[9px] tracking-[0.25em] uppercase text-stone-500 font-medium">
-          White-Glove Checkout
-        </span>
+    <header className="checkout-header">
+      <Link href={basePath || "/"} className="checkout-brand">
+        <span className="checkout-brand__name">MIRZA</span>
+        <span className="checkout-brand__descriptor">FOOTWEAR</span>
       </Link>
+      <span className="checkout-header__context">{checkout("checkout")}</span>
       <Link
         href={basePath || "/"}
-        className="text-sm text-gray-600 hover:text-gray-900 flex items-center gap-1"
+        className="checkout-header__back"
         aria-label={t("backToStore")}
       >
         <ArrowLeft className="w-4 h-4" aria-hidden="true" />
@@ -51,16 +50,14 @@ function CheckoutFooter() {
   const tp = useTranslations("policies");
 
   return (
-    <footer className="py-4 text-xs text-gray-500 border-t border-gray-200 mt-auto flex flex-wrap items-center gap-x-3 gap-y-1">
-      <p>
-        {t("allRightsReserved", { year: 2026, storeName })}
-      </p>
+    <footer className="checkout-footer">
+      <p>{t("allRightsReserved", { year: 2026, storeName })}</p>
       {POLICY_LINKS.map((policy) => (
         <Link
           key={policy.slug}
           href={`${basePath}/policies/${policy.slug}`}
           target="_blank"
-          className="text-gray-500 underline hover:text-gray-700"
+          className="checkout-footer__link"
         >
           {tp(policy.nameKey)}
         </Link>
@@ -80,24 +77,27 @@ function MobileSummaryToggle() {
   if (summaryContent === null) return null;
 
   return (
-    <div className="lg:hidden border-b border-gray-200 bg-gray-50">
+    <div className="checkout-mobile-summary lg:hidden">
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full px-5 py-4 flex items-center justify-between text-left"
+        className="checkout-mobile-summary__toggle"
         aria-expanded={isOpen}
         aria-controls="checkout-summary-panel"
       >
-        <span className="flex items-center gap-2 text-sm font-medium text-gray-900">
-          <ShoppingBag className="w-5 h-5 text-gray-600" />
+        <span className="flex items-center gap-2 text-sm font-medium">
+          <ShoppingBag className="w-5 h-5" />
           {isOpen ? t("hideOrderSummary") : t("showOrderSummary")}
         </span>
         <ChevronDown
-          className={`w-5 h-5 text-gray-500 transition-transform ${isOpen ? "rotate-180" : ""}`}
+          className={`w-5 h-5 transition-transform ${isOpen ? "rotate-180" : ""}`}
         />
       </button>
       {isOpen && (
-        <div id="checkout-summary-panel" className="px-5 pb-4">
+        <div
+          id="checkout-summary-panel"
+          className="checkout-mobile-summary__panel"
+        >
           <CheckoutSummary />
         </div>
       )}
@@ -110,11 +110,14 @@ interface CheckoutLayoutProps {
 }
 
 function CheckoutLayoutContent({ children }: CheckoutLayoutProps) {
+  const { summaryContent } = useCheckout();
+  const hasSummary = summaryContent !== null;
+
   return (
-    <div className="min-h-screen flex flex-col bg-white">
+    <div className="checkout-shell min-h-screen flex flex-col">
       {/* Mobile header */}
-      <div className="lg:hidden border-b border-gray-200">
-        <div className="px-5">
+      <div className="checkout-shell__mobile-header lg:hidden">
+        <div>
           <CheckoutHeader />
         </div>
       </div>
@@ -123,27 +126,33 @@ function CheckoutLayoutContent({ children }: CheckoutLayoutProps) {
       <MobileSummaryToggle />
 
       {/* Main checkout grid — Shopify proportions */}
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-[1fr_minmax(0,640px)_minmax(0,440px)_1fr]">
+      <div
+        className={`checkout-shell__grid ${
+          hasSummary ? "" : "checkout-shell__grid--without-summary"
+        }`}
+      >
         {/* Main content area — white bg */}
-        <div className="lg:col-start-2 flex flex-col">
-          <div className="flex-1 px-5 py-6 lg:pl-10 lg:pr-12 lg:py-10">
+        <div className="checkout-shell__main">
+          <div className="checkout-shell__content">
             {/* Desktop header */}
-            <div className="hidden lg:block mb-8">
+            <div className="checkout-shell__desktop-header hidden lg:block">
               <CheckoutHeader />
             </div>
             {children}
           </div>
-          <div className="px-5 lg:pl-10 lg:pr-12 pb-4">
+          <div className="checkout-shell__footer-wrap">
             <CheckoutFooter />
           </div>
         </div>
 
         {/* Desktop summary sidebar — Shopify: light gray bg with left border */}
-        <div className="hidden lg:block lg:col-start-3 border-l border-gray-200 bg-gray-50">
-          <div className="sticky top-0 px-10 py-10">
-            <CheckoutSummary />
-          </div>
-        </div>
+        {hasSummary && (
+          <aside className="checkout-shell__summary hidden lg:block">
+            <div className="checkout-shell__summary-inner">
+              <CheckoutSummary />
+            </div>
+          </aside>
+        )}
       </div>
     </div>
   );

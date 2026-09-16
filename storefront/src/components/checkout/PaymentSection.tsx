@@ -1,6 +1,5 @@
 "use client";
 
-import type { AddressParams, Cart, Country, State } from "@/types/commerce";
 import { CheckCircle2, ShieldCheck } from "lucide-react";
 import { useTranslations } from "next-intl";
 import {
@@ -18,6 +17,7 @@ import {
   formDataToAddress,
   updateAddressField,
 } from "@/lib/utils/address";
+import type { AddressParams, Cart, Country, State } from "@/types/commerce";
 
 export interface PaymentSectionHandle {
   submit: () => Promise<{ error?: string }>;
@@ -143,11 +143,11 @@ export function PaymentSection({
   );
 
   return (
-    <div>
-      <div className="flex items-center justify-between">
+    <section className="checkout-payment">
+      <div className="checkout-section-heading">
         <div>
-          <h2 className="text-lg font-bold text-gray-900">{t("paymentMethod")}</h2>
-          <p className="text-sm text-gray-500 mt-0.5">{t("secureTransactions")}</p>
+          <h2>{t("paymentMethod")}</h2>
+          <p>{t("secureTransactions")}</p>
         </div>
         <ShieldCheck className="h-5 w-5 text-gray-400" />
       </div>
@@ -163,7 +163,7 @@ export function PaymentSection({
       )}
 
       {/* Direct Order Confirmation Card */}
-      <div className="mt-3 rounded-sm border border-gray-200 bg-gray-50 p-4">
+      <div className="checkout-payment__note">
         <div className="flex items-start gap-3">
           <CheckCircle2 className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
           <div>
@@ -171,20 +171,23 @@ export function PaymentSection({
               Direct Order Placement
             </p>
             <p className="text-xs text-gray-600 mt-1 leading-relaxed">
-              Your order is placed directly with Mirza. Fulfillment and payment details
-              will be confirmed upon order processing with complimentary insured express courier delivery.
+              Your order is placed directly with Mirza. Fulfillment and payment
+              details will be confirmed upon order processing with complimentary
+              insured express courier delivery.
             </p>
           </div>
         </div>
       </div>
 
       {/* Billing Address Selection */}
-      <div className="mt-6 border-t pt-5">
-        <h3 className="text-sm font-semibold text-gray-900 mb-3">Billing Address</h3>
+      <div className="checkout-billing">
+        <h3>Billing Address</h3>
         <label className="flex items-center gap-2.5 cursor-pointer">
           <Checkbox
             checked={useShippingForBilling}
-            onCheckedChange={(checked) => setUseShippingForBilling(checked === true)}
+            onCheckedChange={(checked) =>
+              setUseShippingForBilling(checked === true)
+            }
           />
           <span className="text-sm text-gray-900">{t("sameAsShipping")}</span>
         </label>
@@ -202,6 +205,6 @@ export function PaymentSection({
           </div>
         )}
       </div>
-    </div>
+    </section>
   );
 }

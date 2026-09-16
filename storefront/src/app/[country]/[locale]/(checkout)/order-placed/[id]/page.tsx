@@ -1,6 +1,5 @@
 "use client";
 
-import type { Cart } from "@/types/commerce";
 import { CircleCheckBig, Package } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -16,6 +15,7 @@ import { trackPurchase } from "@/lib/analytics/gtm";
 import { getCompletedOrder } from "@/lib/data/checkout";
 import { getCachedCompletedOrder } from "@/lib/utils/completed-order-cache";
 import { extractBasePath } from "@/lib/utils/path";
+import type { Cart } from "@/types/commerce";
 
 interface OrderPlacedPageProps {
   params: Promise<{
@@ -99,21 +99,19 @@ function OrderPlacedContent({ params }: OrderPlacedPageProps) {
 
   if (loading) {
     return (
-      <div className="animate-pulse space-y-6 py-12">
-        <div className="h-12 w-12 bg-gray-200 rounded-lg mx-auto" />
-        <div className="h-8 bg-gray-200 rounded w-1/2 mx-auto" />
-        <div className="h-4 bg-gray-200 rounded w-1/3 mx-auto" />
-        <div className="h-64 bg-gray-200 rounded mt-8" />
+      <div className="checkout-loading checkout-loading--confirmation animate-pulse space-y-6 py-12">
+        <div className="h-12 w-12 mx-auto" />
+        <div className="h-8 w-1/2 mx-auto" />
+        <div className="h-4 w-1/3 mx-auto" />
+        <div className="h-64 mt-8" />
       </div>
     );
   }
 
   if (error || !order) {
     return (
-      <div className="text-center py-12">
-        <h1 className="text-2xl font-bold text-gray-900 mb-4">
-          {t(error || "orderNotFound")}
-        </h1>
+      <div className="checkout-state">
+        <h1>{t(error || "orderNotFound")}</h1>
         <Button asChild>
           <Link href={`${basePath}/`}>{tc("continueShopping")}</Link>
         </Button>
@@ -125,38 +123,37 @@ function OrderPlacedContent({ params }: OrderPlacedPageProps) {
     order.billing_address?.full_name || order.shipping_address?.full_name || "";
 
   return (
-    <div className="py-8 max-w-2xl mx-auto">
+    <main className="order-confirmation">
       {/* Success Header */}
-      <div className="text-center mb-10">
-        <CircleCheckBig className="w-16 h-16 text-green-500 mx-auto mb-4" />
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">
+      <header className="order-confirmation__header">
+        <CircleCheckBig className="order-confirmation__check" />
+        <h1>
           {customerName
             ? t("thanksForOrder", { name: customerName.split(" ")[0] })
             : t("thanksForOrderAnonymous")}
         </h1>
-        <p className="text-gray-500">
+        <p className="order-confirmation__number">
           {t("orderNumber", { number: order.number || "" })}
         </p>
-        <p className="text-sm text-gray-400 mt-2">{t("emailConfirmation")}</p>
-      </div>
+        <p className="order-confirmation__email">{t("emailConfirmation")}</p>
+      </header>
 
       {/* Order Items */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mb-6">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-medium text-gray-900">
-            {t("orderItems")}
-          </h2>
+      <section className="order-confirmation__section">
+        <div className="order-confirmation__section-heading">
+          <h2>{t("orderItems")}</h2>
         </div>
-        <ul className="divide-y divide-gray-200">
+        <ul className="order-confirmation__items">
           {order.items?.map((item) => (
-            <li key={item.id} className="px-6 py-4 flex gap-4">
-              <div className="relative w-14 h-14 bg-gray-100 rounded-xl flex-shrink-0 overflow-hidden">
+            <li key={item.id} className="order-confirmation__item">
+              <div className="order-confirmation__item-image">
                 <ProductImage
                   src={item.thumbnail_url}
                   alt={item.name}
                   fill
                   className="object-cover"
                   iconClassName="w-6 h-6"
+                  sizes="72px"
                 />
               </div>
               <div className="flex-1 min-w-0">
@@ -178,14 +175,14 @@ function OrderPlacedContent({ params }: OrderPlacedPageProps) {
         </ul>
 
         {/* Totals */}
-        <div className="px-6 py-4 border-t border-gray-200">
+        <div className="order-confirmation__totals">
           <OrderTotals order={order} />
         </div>
-      </div>
+      </section>
 
       {/* Shipping & Payment */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mb-6">
-        <div className="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-gray-200">
+      <section className="order-confirmation__section order-confirmation__details">
+        <div className="order-confirmation__detail-grid">
           {/* Shipping Method */}
           {order.fulfillments && order.fulfillments.length > 0 && (
             <div className="px-6 py-4">
@@ -233,11 +230,11 @@ function OrderPlacedContent({ params }: OrderPlacedPageProps) {
             </div>
           )}
         </div>
-      </div>
+      </section>
 
       {/* Contact & Addresses */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mb-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-gray-200">
+      <section className="order-confirmation__section order-confirmation__addresses">
+        <div className="order-confirmation__address-grid">
           {order.shipping_address && (
             <div className="px-6 py-4">
               <h3 className="text-sm font-semibold text-gray-900 mb-2">
@@ -265,14 +262,14 @@ function OrderPlacedContent({ params }: OrderPlacedPageProps) {
             </p>
           </div>
         )}
-      </div>
+      </section>
 
       {/* Actions */}
-      <div className="text-center">
-        <Button size="lg" asChild>
+      <div className="order-confirmation__actions">
+        <Button size="lg" asChild className="checkout-state__action">
           <Link href={`${basePath}/`}>{tc("continueShopping")}</Link>
         </Button>
       </div>
-    </div>
+    </main>
   );
 }

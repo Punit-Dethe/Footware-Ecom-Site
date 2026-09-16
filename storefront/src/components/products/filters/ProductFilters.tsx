@@ -1,13 +1,6 @@
 "use client";
 
-import type {
-  AvailabilityFilter,
-  CategoryFilter,
-  OptionFilter,
-  PriceRangeFilter,
-  ProductFiltersResponse,
-} from "@/types/commerce";
-import { SlidersHorizontal } from "lucide-react";
+import { Check, SlidersHorizontal } from "lucide-react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import type { JSX } from "react";
@@ -23,6 +16,13 @@ import { SortDropdownContent } from "@/components/products/filters/SortDropdownC
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { getActiveFilterCount } from "@/lib/utils/filters";
 import { generatePriceBuckets } from "@/lib/utils/price-buckets";
+import type {
+  AvailabilityFilter,
+  CategoryFilter,
+  OptionFilter,
+  PriceRangeFilter,
+  ProductFiltersResponse,
+} from "@/types/commerce";
 import type { ActiveFilters, AvailabilityStatus } from "@/types/filters";
 
 interface FilterBarProps {
@@ -152,9 +152,14 @@ export const FilterBar = memo(function FilterBar({
   const categoryFilter = filtersData.filters?.find(
     (filter) => filter.type === "category",
   ) as CategoryFilter | undefined;
-  const activeSortLabel = filtersData.sort_options?.find(
-    (option) => option.id === activeSortBy,
-  )?.label ?? filtersData.sort_options?.[0]?.label ?? t("sort");
+  const activeCategory = categoryFilter?.options.find(
+    (option) => option.active,
+  );
+  const activeSortLabel =
+    filtersData.sort_options?.find((option) => option.id === activeSortBy)
+      ?.label ??
+    filtersData.sort_options?.[0]?.label ??
+    t("sort");
 
   const hasPriceFilter =
     Boolean(filtersData.filters?.some((f) => f.type === "price_range")) &&
@@ -167,18 +172,40 @@ export const FilterBar = memo(function FilterBar({
           <span className="catalog-filter-bar__label">{t("filters")}:</span>
           {categoryFilter && (
             <FilterDropdown
-              label={categoryFilter.label || categoryFilter.name}
+              label={
+                activeCategory?.label ||
+                activeCategory?.name ||
+                t("allProducts")
+              }
               isOpen={openDropdownId === "category"}
               onToggle={() => toggleDropdown("category")}
               onClose={closeDropdown}
             >
+              <DropdownMenuItem asChild>
+                <Link
+                  href={`${basePath}/products`}
+                  scroll={false}
+                  prefetch
+                  aria-current={activeCategory ? undefined : "page"}
+                  className="catalog-category-option"
+                  onClick={closeDropdown}
+                >
+                  <span>{t("allProducts")}</span>
+                  {!activeCategory && <Check aria-hidden="true" />}
+                </Link>
+              </DropdownMenuItem>
               {categoryFilter.options.map((option) => (
                 <DropdownMenuItem key={option.id} asChild>
                   <Link
-                    href={`${basePath}/c/categories/${option.slug ?? option.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
+                    href={`${basePath}/products?category=${encodeURIComponent(option.slug ?? option.name.toLowerCase().replace(/[^a-z0-9]+/g, "-"))}`}
+                    scroll={false}
+                    prefetch
+                    aria-current={option.active ? "page" : undefined}
+                    className="catalog-category-option"
                     onClick={closeDropdown}
                   >
-                    {option.label || option.name}
+                    <span>{option.label || option.name}</span>
+                    {option.active && <Check aria-hidden="true" />}
                   </Link>
                 </DropdownMenuItem>
               ))}

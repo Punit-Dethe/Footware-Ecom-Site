@@ -1,6 +1,5 @@
 "use client";
 
-import type { LineItem } from "@/types/commerce";
 import { ShoppingBag } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -12,6 +11,7 @@ import { ProductImage } from "@/components/ui/product-image";
 import { useCart } from "@/contexts/CartContext";
 import { trackRemoveFromCart, trackViewCart } from "@/lib/analytics/gtm";
 import { extractBasePath } from "@/lib/utils/path";
+import type { LineItem } from "@/types/commerce";
 
 export default function CartPage() {
   const { cart, loading, updating, updateItem, removeItem } = useCart();
@@ -44,188 +44,178 @@ export default function CartPage() {
 
   if (loading) {
     return (
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8  py-8">
-        <div className="animate-pulse">
-          <div className="h-8 bg-gray-200 rounded w-32 mb-8"></div>
-          <div className="space-y-4">
+      <main className="cart-page cart-page--loading">
+        <div className="cart-page__frame animate-pulse">
+          <div className="cart-page__loading-title" />
+          <div className="cart-page__loading-grid">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="h-24 bg-gray-200 rounded"></div>
+              <div key={i} className="cart-page__loading-row" />
             ))}
           </div>
         </div>
-      </div>
+      </main>
     );
   }
 
   if (!cart?.items || cart.items.length === 0) {
     return (
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8  py-16">
-        <div className="text-center">
+      <main className="cart-page cart-page--empty">
+        <div className="cart-empty">
           <ShoppingBag
-            className="w-24 h-24 text-gray-300 mx-auto"
+            className="cart-empty__icon"
             strokeWidth={1}
+            aria-hidden="true"
           />
-          <h1 className="mt-4 text-2xl font-bold text-gray-900">
-            {t("emptyCart")}
-          </h1>
-          <p className="mt-2 text-gray-500">{t("emptyCartDescription")}</p>
-          <div className="mt-6">
-            <Button size="lg" asChild>
-              <Link href={`${basePath}/products`}>
-                {tc("continueShopping")}
-              </Link>
-            </Button>
-          </div>
+          <h1>{t("emptyCart")}</h1>
+          <p>{t("emptyCartDescription")}</p>
+          <Button size="lg" asChild className="cart-page__primary-action">
+            <Link href={`${basePath}/products`}>{tc("continueShopping")}</Link>
+          </Button>
         </div>
-      </div>
+      </main>
     );
   }
 
   return (
-    <div className="container mx-auto px-4 sm:px-6 lg:px-8  py-8">
-      <h1 className="text-3xl font-bold text-gray-900 mb-8">
-        {t("shoppingCart")}
-      </h1>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Cart Items */}
-        <div className="lg:col-span-2">
-          <div className="bg-white rounded-xl border border-gray-200 divide-y">
-            {cart.items.map((item) => (
-              <div key={item.id} className="p-6 flex gap-6">
-                {/* Image */}
-                <div className="relative w-24 h-24 bg-gray-100 rounded-xl overflow-hidden flex-shrink-0">
-                  <ProductImage
-                    src={item.thumbnail_url}
-                    alt={item.name}
-                    fill
-                    className="object-cover"
-                    sizes="96px"
-                  />
-                </div>
-
-                {/* Details */}
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-lg font-medium text-gray-900 truncate">
-                    {item.name}
-                  </h3>
-                  {item.options_text && (
-                    <p className="mt-1 text-sm text-gray-500">
-                      {item.options_text}
-                    </p>
-                  )}
-                  <p className="mt-2 text-lg font-semibold text-gray-900">
-                    {item.display_price}
-                  </p>
-                </div>
-
-                {/* Quantity & Actions */}
-                <div className="flex flex-col items-end gap-2">
-                  <QuantityPickerField
-                    quantity={item.quantity}
-                    onQuantityChange={(quantity) =>
-                      updateItem(item.id, quantity)
-                    }
-                    disabled={updating}
-                  />
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    aria-label={t("removeItemLabel", { name: item.name })}
-                    onClick={() => handleRemove(item)}
-                    disabled={updating}
-                  >
-                    {tc("remove")}
-                  </Button>
-                </div>
-              </div>
-            ))}
+    <main className="cart-page">
+      <div className="cart-page__frame">
+        <header className="cart-page__intro">
+          <div>
+            <h1>{t("shoppingCart")}</h1>
+            <p>{t("itemCount", { count: cart.total_quantity })}</p>
           </div>
-        </div>
+          <Link href={`${basePath}/products`} className="cart-page__continue">
+            {tc("continueShopping")}
+          </Link>
+        </header>
 
-        {/* Order Summary */}
-        <div className="lg:col-span-1">
-          <div className="bg-white rounded-xl border border-gray-200 p-6 sticky top-24">
-            <h2 className="text-lg font-medium text-gray-900">
-              {tc("orderSummary")}
-            </h2>
+        <div className="cart-page__layout">
+          <section className="cart-page__items" aria-label={t("shoppingCart")}>
+            <ul>
+              {cart.items.map((item) => (
+                <li key={item.id} className="cart-line">
+                  <Link
+                    href={`${basePath}/products/${item.slug}`}
+                    className="cart-line__image"
+                    aria-label={item.name}
+                  >
+                    <ProductImage
+                      src={item.thumbnail_url}
+                      alt={item.name}
+                      fill
+                      className="object-contain"
+                      sizes="(max-width: 640px) 112px, 176px"
+                    />
+                  </Link>
 
-            <dl className="mt-6 space-y-4">
-              <div className="flex justify-between">
-                <dt className="text-gray-500">{tc("subtotal")}</dt>
-                <dd className="text-gray-900">{cart.display_item_total}</dd>
-              </div>
-              {cart.discount_total && parseFloat(cart.discount_total) < 0 && (
-                <div className="flex justify-between text-green-600">
-                  <dt>{tc("discount")}</dt>
-                  <dd>{cart.display_discount_total}</dd>
-                </div>
-              )}
-              {cart.delivery_total && parseFloat(cart.delivery_total) > 0 && (
-                <div className="flex justify-between">
-                  <dt className="text-gray-500">{tc("shipping")}</dt>
-                  <dd className="text-gray-900">
-                    {cart.display_delivery_total}
-                  </dd>
-                </div>
-              )}
-              {cart.tax_total && parseFloat(cart.tax_total) > 0 && (
-                <div className="flex justify-between">
-                  <dt className="text-gray-500">{tc("tax")}</dt>
-                  <dd className="text-gray-900">{cart.display_tax_total}</dd>
-                </div>
-              )}
-              <div className="border-t pt-4 flex justify-between">
-                <dt className="text-lg font-medium text-gray-900">
-                  {tc("total")}
-                </dt>
-                <dd className="text-lg font-bold text-gray-900">
-                  {cart.display_total}
-                </dd>
-              </div>
+                  <div className="cart-line__content">
+                    <h3>
+                      <Link href={`${basePath}/products/${item.slug}`}>
+                        {item.name}
+                      </Link>
+                    </h3>
+                    {item.options_text && (
+                      <p className="cart-line__options">{item.options_text}</p>
+                    )}
+                    <p className="cart-line__price">{item.display_price}</p>
+                    <div className="cart-line__actions">
+                      <QuantityPickerField
+                        quantity={item.quantity}
+                        onQuantityChange={(quantity) =>
+                          updateItem(item.id, quantity)
+                        }
+                        disabled={updating}
+                      />
+                      <Button
+                        variant="link"
+                        size="sm"
+                        className="cart-line__remove"
+                        aria-label={t("removeItemLabel", { name: item.name })}
+                        onClick={() => handleRemove(item)}
+                        disabled={updating}
+                      >
+                        {tc("remove")}
+                      </Button>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
 
-              {cart.gift_card && parseFloat(cart.gift_card_total ?? "0") > 0 ? (
-                <div className="flex justify-between text-green-600">
-                  <dt>{t("giftCard")}</dt>
-                  <dd>-{cart.display_gift_card_total}</dd>
-                </div>
-              ) : cart.store_credit_total &&
-                parseFloat(cart.store_credit_total) > 0 ? (
-                <div className="flex justify-between text-green-600">
-                  <dt>{t("storeCredit")}</dt>
-                  <dd>-{cart.display_store_credit_total}</dd>
-                </div>
-              ) : null}
+          <aside className="cart-summary">
+            <div className="cart-summary__inner">
+              <h2>{tc("orderSummary")}</h2>
 
-              {cart.amount_due &&
-                cart.amount_due !== cart.total &&
-                parseFloat(cart.amount_due) > 0 && (
-                  <div className="border-t pt-4 flex justify-between">
-                    <dt className="text-lg font-medium text-gray-900">
-                      {t("amountDue")}
-                    </dt>
-                    <dd className="text-lg font-bold text-gray-900">
-                      {cart.display_amount_due}
-                    </dd>
+              <dl>
+                <div>
+                  <dt>{tc("subtotal")}</dt>
+                  <dd>{cart.display_item_total}</dd>
+                </div>
+                {cart.discount_total && parseFloat(cart.discount_total) < 0 && (
+                  <div className="cart-summary__saving">
+                    <dt>{tc("discount")}</dt>
+                    <dd>{cart.display_discount_total}</dd>
                   </div>
                 )}
-            </dl>
+                {cart.delivery_total && parseFloat(cart.delivery_total) > 0 && (
+                  <div>
+                    <dt>{tc("shipping")}</dt>
+                    <dd>{cart.display_delivery_total}</dd>
+                  </div>
+                )}
+                {cart.tax_total && parseFloat(cart.tax_total) > 0 && (
+                  <div>
+                    <dt>{tc("tax")}</dt>
+                    <dd>{cart.display_tax_total}</dd>
+                  </div>
+                )}
+                <div className="cart-summary__total">
+                  <dt>{tc("total")}</dt>
+                  <dd>{cart.display_total}</dd>
+                </div>
 
-            <div className="mt-6 space-y-3">
-              <Button size="lg" asChild className="w-full">
-                <Link href={`${basePath}/checkout/${cart.id}`}>
-                  {t("proceedToCheckout")}
-                </Link>
-              </Button>
-              <Button variant="link" asChild className="w-full">
-                <Link href={`${basePath}/products`}>
+                {cart.gift_card &&
+                parseFloat(cart.gift_card_total ?? "0") > 0 ? (
+                  <div className="cart-summary__saving">
+                    <dt>{t("giftCard")}</dt>
+                    <dd>-{cart.display_gift_card_total}</dd>
+                  </div>
+                ) : cart.store_credit_total &&
+                  parseFloat(cart.store_credit_total) > 0 ? (
+                  <div className="cart-summary__saving">
+                    <dt>{t("storeCredit")}</dt>
+                    <dd>-{cart.display_store_credit_total}</dd>
+                  </div>
+                ) : null}
+
+                {cart.amount_due &&
+                  cart.amount_due !== cart.total &&
+                  parseFloat(cart.amount_due) > 0 && (
+                    <div className="cart-summary__total">
+                      <dt>{t("amountDue")}</dt>
+                      <dd>{cart.display_amount_due}</dd>
+                    </div>
+                  )}
+              </dl>
+
+              <div className="cart-summary__actions">
+                <Button size="lg" asChild className="cart-page__primary-action">
+                  <Link href={`${basePath}/checkout/${cart.id}`}>
+                    {t("proceedToCheckout")}
+                  </Link>
+                </Button>
+                <Link
+                  href={`${basePath}/products`}
+                  className="cart-summary__secondary-action"
+                >
                   {tc("continueShopping")}
                 </Link>
-              </Button>
+              </div>
             </div>
-          </div>
+          </aside>
         </div>
       </div>
-    </div>
+    </main>
   );
 }

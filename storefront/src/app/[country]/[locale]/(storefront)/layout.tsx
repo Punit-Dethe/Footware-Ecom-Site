@@ -1,9 +1,13 @@
-import type { Category } from "@/types/commerce";
 import Link from "next/link";
 import { cache, Suspense } from "react";
+import "lenis/dist/lenis.css";
+import "../../../cart-page.css";
+import { BrandSplash } from "@/components/layout/BrandSplash";
 import { Footer, FooterCategoryLinks } from "@/components/layout/Footer";
 import { Header, HeaderMobileMenu } from "@/components/layout/Header";
+import { SmoothScroll } from "@/components/layout/SmoothScroll";
 import { getCategories } from "@/lib/data/categories";
+import type { Category } from "@/types/commerce";
 
 interface StorefrontLayoutProps {
   children: React.ReactNode;
@@ -129,6 +133,8 @@ export default async function StorefrontLayout({
 
   return (
     <>
+      <BrandSplash />
+      <SmoothScroll />
       <Header
         basePath={basePath}
         locale={locale as Locale}
@@ -149,7 +155,7 @@ export default async function StorefrontLayout({
           locale={locale}
         />
       </Suspense>
-      <main className="flex-1">{children}</main>
+      <main className="storefront-main flex-1">{children}</main>
       <Footer
         basePath={basePath}
         locale={locale as Locale}

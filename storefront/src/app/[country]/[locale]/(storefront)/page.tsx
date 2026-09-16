@@ -1,16 +1,26 @@
 import type { Metadata } from "next";
+import { EB_Garamond } from "next/font/google";
+import "../../../home-experiment.css";
+import "../../../home-folio-two.css";
+import "../../../home-folio-three.css";
 import {
-  ClosingStatement,
-  CraftSection,
-  CultureMosaicSection,
-  EditorialProductRow,
-  MoreProductsSection,
-} from "@/components/home/EditorialSections";
+  CollectionStories,
+  CraftStory,
+} from "@/components/home/CollectionStories";
 import { FeaturedProductsSection } from "@/components/home/FeaturedProductsSection";
 import { HeroSection } from "@/components/home/HeroSection";
+import { HomeProductScroller } from "@/components/home/HomeProductScroller";
 import { WholesaleSection } from "@/components/home/WholesaleSection";
 import { resolveCurrency } from "@/lib/data/markets";
 import { generateHomeMetadata } from "@/lib/metadata/home";
+
+const folioItalic = EB_Garamond({
+  variable: "--font-folio-italic",
+  subsets: ["latin"],
+  style: "italic",
+  weight: "400",
+  display: "swap",
+});
 
 interface HomePageProps {
   params: Promise<{
@@ -32,7 +42,7 @@ export default async function HomePage({ params }: HomePageProps) {
   const currency = await resolveCurrency(country);
 
   return (
-    <div className="home-page">
+    <div className={`home-page mirza-home ${folioItalic.variable}`}>
       <HeroSection basePath={basePath} locale={locale} />
       <FeaturedProductsSection
         basePath={basePath}
@@ -40,19 +50,14 @@ export default async function HomePage({ params }: HomePageProps) {
         country={country}
         currency={currency}
       />
-      <CraftSection basePath={basePath} locale={locale} />
-      <EditorialProductRow
+      <CraftStory basePath={basePath} locale={locale} />
+      <HomeProductScroller
         basePath={basePath}
         locale={locale}
+        country={country}
         currency={currency}
       />
-      <CultureMosaicSection locale={locale} />
-      <MoreProductsSection
-        basePath={basePath}
-        locale={locale}
-        currency={currency}
-      />
-      <ClosingStatement locale={locale} />
+      <CollectionStories basePath={basePath} locale={locale} />
       <WholesaleSection basePath={basePath} locale={locale} />
     </div>
   );

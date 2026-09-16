@@ -5,9 +5,18 @@
   backdrop-filter: blur(12px);
   transition: background-color .28s ease, border-color .28s ease, box-shadow .28s ease, backdrop-filter .28s ease;
 }
+
+/* The page surface covers the fixed footer until its real final section
+   scrolls away, creating the shared footer reveal without extra content. */
+.storefront-main {
+  position: relative;
+  z-index: 1;
+  background: #f3efe8;
+}
 .editorial-header--solid { background: #fffefc; border-color: #dcd7d1; box-shadow: 0 8px 24px rgba(35, 25, 18, .05); backdrop-filter: blur(12px); }
-body:has(.home-page) .editorial-header { position: fixed; inset-inline: 0; }
-body:has(.home-page) .editorial-header:not(.editorial-header--solid) { background: transparent; border-color: transparent; box-shadow: none; backdrop-filter: none; }
+/* Activity-cached homepages stay in the DOM; only the visible page owns chrome. */
+body:has(.home-page:not([style*="display: none"])) .editorial-header { position: fixed; inset-inline: 0; }
+body:has(.home-page:not([style*="display: none"])) .editorial-header:not(.editorial-header--solid) { background: transparent; border-color: transparent; box-shadow: none; backdrop-filter: none; }
 
 .editorial-header > div > div,
 .editorial-header > div:last-child > div {
@@ -21,6 +30,61 @@ body:has(.home-page) .editorial-header:not(.editorial-header--solid) { backgroun
 .editorial-brand__descriptor { margin-top: 8px; padding-left: .52em; font-size: 8px; font-weight: 600; letter-spacing: .52em; line-height: 1; }
 .editorial-header button { color: #211b17; }
 .editorial-header button:hover { background: #f3efeb; }
+
+.mirza-splash {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: #e9e2d6;
+  color: #30261f;
+  animation: mirza-splash-field 2.3s cubic-bezier(.76, 0, .24, 1) forwards;
+}
+
+html[data-mirza-splash="seen"] .mirza-splash {
+  display: none;
+}
+
+.mirza-splash__signature {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transform: translateY(8px);
+  filter: blur(5px);
+  opacity: 0;
+  animation: mirza-splash-signature 2.15s cubic-bezier(.42, 0, .2, 1) forwards;
+}
+
+.mirza-splash__signature span {
+  padding-left: .3em;
+  font-family: var(--font-editorial-text), Georgia, serif;
+  font-size: clamp(48px, 5.5vw, 76px);
+  font-weight: 400;
+  letter-spacing: .3em;
+  line-height: .82;
+}
+
+.mirza-splash__signature small {
+  margin-top: 17px;
+  padding-left: .46em;
+  font-family: var(--font-geist), sans-serif;
+  font-size: clamp(7px, .62vw, 10px);
+  font-weight: 500;
+  letter-spacing: .46em;
+  line-height: 1;
+}
+
+@keyframes mirza-splash-signature {
+  0%, 10% { transform: translateY(8px); filter: blur(5px); opacity: 0; }
+  36%, 70% { transform: translateY(0); filter: blur(0); opacity: 1; }
+  100% { transform: translateY(-5px); filter: blur(3px); opacity: 0; }
+}
+
+@keyframes mirza-splash-field {
+  0%, 72% { opacity: 1; }
+  100% { opacity: 0; visibility: hidden; }
+}
 
 .home-page { --home-ink: #211b17; --home-muted: #675c55; --home-line: #dfd9d3; color: var(--home-ink); background: #fffefc; font-family: var(--font-editorial-text), Georgia, serif; }
 .home-display { font-family: var(--font-editorial-display), Georgia, serif; font-weight: 500; letter-spacing: -.026em; line-height: .94; }
@@ -195,4 +259,15 @@ body:has(.home-page) .editorial-header:not(.editorial-header--solid) { backgroun
 
 @media (prefers-reduced-motion: reduce) {
   .home-button { transition: none; }
+
+  .mirza-splash,
+  .mirza-splash__signature {
+    animation: none;
+  }
+
+  .mirza-splash__signature {
+    transform: none;
+    filter: none;
+    opacity: 1;
+  }
 }

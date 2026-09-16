@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
 import { CatalogHero } from "@/components/products/CatalogHero";
 import { ProductListing } from "@/components/products/ProductListing";
 import { ProductListingSkeleton } from "@/components/products/ProductListingSkeleton";
+import { CATEGORY_PAGE_EXPAND, getCachedCategory } from "@/lib/data/cached";
+import { getCategoryProducts } from "@/lib/data/categories";
 import { resolveCurrency } from "@/lib/data/markets";
 import { getProductFilters, getProducts } from "@/lib/data/products";
 import { generateProductsMetadata } from "@/lib/metadata/products";
@@ -49,19 +52,40 @@ async function ProductsPageContent({
   ]);
   const basePath = `/${country}/${locale}`;
 
-  const [currency, t] = await Promise.all([
+  const listingState = parseListingSearchParams(rawSearchParams);
+  const query = listingState.query;
+  const categoryParam = Array.isArray(rawSearchParams.category)
+    ? rawSearchParams.category[0]
+    : rawSearchParams.category;
+
+  const [currency, t, category] = await Promise.all([
     resolveCurrency(country),
     getTranslations({
       locale: locale as Locale,
       namespace: "products",
     }),
+    categoryParam
+      ? getCachedCategory(categoryParam, CATEGORY_PAGE_EXPAND).catch(() => null)
+      : Promise.resolve(null),
   ]);
 
-  const listingState = parseListingSearchParams(rawSearchParams);
-  const query = listingState.query;
+  if (categoryParam && !category) notFound();
 
-  const listId = query ? "search-results" : "all-products";
-  const listName = query ? "Search Results" : "All Products";
+  const fetchProducts = category
+    ? getCategoryProducts.bind(null, category.id)
+    : getProducts;
+  const baseParams = category ? { in_category: category.id } : undefined;
+
+  const listId = query
+    ? "search-results"
+    : category
+      ? `category-${category.id}`
+      : "all-products";
+  const listName = query
+    ? "Search Results"
+    : category
+      ? `Category: ${category.name}`
+      : "All Products";
 
   return (
     <div className="catalog-page">
@@ -71,11 +95,10 @@ async function ProductsPageContent({
         </div>
       ) : (
         <CatalogHero
-          title={t("allProducts")}
+          title={category?.name ?? t("allProducts")}
           eyebrow={t("catalogEyebrow")}
           intro={t("catalogIntro")}
           note={t("catalogNote")}
-          signature={t("catalogSignature")}
         />
       )}
 
@@ -86,7 +109,9 @@ async function ProductsPageContent({
         locale={locale as Locale}
         listId={listId}
         listName={listName}
-        fetchProducts={getProducts}
+        categoryId={category?.id}
+        baseParams={baseParams}
+        fetchProducts={fetchProducts}
         fetchFilters={getProductFilters}
         emptyMessage={
           query ? t("noMatchingProducts", { query }) : t("tryAdjustingFilters")
@@ -97,6 +122,11 @@ async function ProductsPageContent({
           label: t("editorialLabel"),
           title: t("editorialTitle"),
           action: t("editorialAction"),
+        }}
+        editorialGridFeature={!query}
+        editorialGridCopy={{
+          title: t("productStoryTitle"),
+          description: t("editorialTitle"),
         }}
       />
     </div>

@@ -40,11 +40,24 @@ export function SearchToggle({
 }: SearchToggleProps) {
   const t = useTranslations("header");
   const [searchOpen, setSearchOpen] = useState(false);
-  const [isScrolled, setIsScrolled] = useState(false);
+  const headerRef = useRef<HTMLElement>(null);
+  const isScrolledRef = useRef(false);
+  const searchOpenRef = useRef(searchOpen);
   const searchTriggerRef = useRef<HTMLButtonElement>(null);
+  searchOpenRef.current = searchOpen;
 
   useEffect(() => {
-    const updateScroll = () => setIsScrolled(window.scrollY > 28);
+    const updateScroll = () => {
+      const isScrolled = window.scrollY > 28;
+      if (isScrolled === isScrolledRef.current) return;
+
+      isScrolledRef.current = isScrolled;
+      headerRef.current?.classList.toggle(
+        "editorial-header--solid",
+        isScrolled || searchOpenRef.current,
+      );
+    };
+
     updateScroll();
     window.addEventListener("scroll", updateScroll, { passive: true });
     return () => window.removeEventListener("scroll", updateScroll);
@@ -57,8 +70,9 @@ export function SearchToggle({
 
   return (
     <header
+      ref={headerRef}
       className={`editorial-header sticky top-0 z-50 h-[74px] border-b ${
-        isScrolled || searchOpen ? "editorial-header--solid" : ""
+        isScrolledRef.current || searchOpen ? "editorial-header--solid" : ""
       }`}
     >
       {/* Normal header content */}

@@ -1,0 +1,145 @@
+/* A cinematic procession continues the product edit's mineral field. */
+.mirza-home .folio-three-collections {
+  position: relative;
+  padding-block: clamp(112px, 8.5vw, 136px) clamp(124px, 9vw, 148px);
+  overflow: hidden;
+  background: var(--mirza-mineral);
+  color: var(--mirza-ink);
+}
+
+.mirza-home .folio-three-collections__inner {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  gap: 34px;
+}
+
+.mirza-home .folio-three-collections__title {
+  max-width: 10ch;
+  margin: 0 auto 38px;
+  font-size: clamp(58px, 6vw, 88px);
+  line-height: 1;
+  text-align: center;
+}
+
+.mirza-home .folio-three-scene {
+  display: block;
+  width: 88%;
+  color: inherit;
+  text-decoration: none;
+}
+
+.mirza-home .folio-three-scene--traditional {
+  justify-self: start;
+}
+
+.mirza-home .folio-three-scene--office {
+  justify-self: end;
+}
+
+.mirza-home .folio-three-scene__image {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 2.8;
+  overflow: hidden;
+  background: #514035;
+}
+
+.mirza-home .folio-three-scene__image img {
+  object-fit: cover;
+  object-position: center 56%;
+}
+
+.mirza-home .folio-three-scene--office .folio-three-scene__image img {
+  object-position: 58% 52%;
+}
+
+.mirza-home .folio-three-scene__caption {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  width: min(470px, 46%);
+  min-height: 122px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 28px;
+  margin-top: -54px;
+  padding: 24px 0 0;
+  background: var(--mirza-mineral);
+}
+
+.mirza-home .folio-three-scene--office .folio-three-scene__caption {
+  margin-left: auto;
+  padding-left: 30px;
+}
+
+.mirza-home .folio-three-scene__caption h3 {
+  font-size: clamp(38px, 3.7vw, 56px);
+  line-height: 1;
+}
+
+.mirza-home .folio-three-scene__caption p {
+  margin-top: 8px;
+  color: var(--mirza-muted);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.mirza-home .folio-three-scene__caption > svg {
+  flex: none;
+}
+
+.mirza-home .folio-three-scene:hover h3,
+.mirza-home .folio-three-scene:focus-visible h3 {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 7px;
+}
+
+.mirza-home .folio-three-scene:focus-visible {
+  outline: 2px solid var(--mirza-focus);
+  outline-offset: 6px;
+}
+
+@media (max-width: 760px) {
+  .mirza-home .folio-three-collections {
+    padding-block: 104px 96px;
+  }
+
+  .mirza-home .folio-three-collections__inner {
+    gap: 38px;
+  }
+
+  .mirza-home .folio-three-collections__title {
+    margin-bottom: 16px;
+    font-size: clamp(48px, 12vw, 64px);
+  }
+
+  .mirza-home .folio-three-scene {
+    width: 100%;
+  }
+
+  .mirza-home .folio-three-scene__image {
+    aspect-ratio: 1.2;
+  }
+
+  .mirza-home .folio-three-scene__caption {
+    width: 88%;
+    min-height: 104px;
+    margin-top: -42px;
+    padding-top: 20px;
+  }
+
+  .mirza-home .folio-three-scene--office .folio-three-scene__caption {
+    padding-left: 20px;
+  }
+
+  .mirza-home .folio-three-scene__caption h3 {
+    font-size: 38px;
+  }
+
+  .mirza-home .folio-three-scene__caption p {
+    max-width: 27ch;
+    font-size: 12px;
+  }
+}
