@@ -63,7 +63,7 @@ export function ParallaxSceneImage({
     // When progress goes from 0 -> 1, offset moves smoothly from -maxOffset to +maxOffset
     const offset = (progress - 0.5) * maxOffset * 2;
 
-    inner.style.transform = `translate3d(0, ${offset.toFixed(1)}px, 0) scale(1.06)`;
+    inner.style.transform = `translate3d(0, ${offset.toFixed(1)}px, 0)`;
   }, [speed]);
 
   // Sync with Lenis smooth-scroll ticks
