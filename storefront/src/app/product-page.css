@@ -148,7 +148,7 @@ body:has(.pdp-page:not([style*="display: none"])) .editorial-footer {
 .pdp-worn__control:focus-visible { outline: 2px solid var(--pdp-ink); outline-offset: 3px; }
 .pdp-worn__control:disabled { opacity: .28; }
 .pdp-worn__control--previous { left: 12px; }
-.pdp-worn__control--next { right: -24px; }
+.pdp-worn__control--next { right: 20px; }
 
 .pdp-related { padding: 38px 0 66px; }
 .pdp-related__heading { display: flex; align-items: baseline; justify-content: space-between; gap: 18px; }
@@ -210,7 +210,7 @@ body:has(.pdp-page:not([style*="display: none"])) .editorial-footer__bottom { ma
   .pdp-worn__track { min-height: 390px; padding: 34px 36px 44px 24px; }
   .pdp-worn__figure { flex-basis: 88%; }
   .pdp-worn__control--previous { left: 5px; }
-  .pdp-worn__control--next { right: -22px; }
+  .pdp-worn__control--next { right: 12px; }
   .pdp-related { padding-inline: 20px; }
   .pdp-related__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 24px; }
   .pdp-information--trade { display: block; }
