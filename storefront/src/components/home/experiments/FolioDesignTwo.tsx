@@ -26,7 +26,13 @@ export function CraftDesignTwo({ basePath, copy }: EditorialStudyProps) {
           />
         </div>
         <div className="folio-two-craft__copy">
-          <p>{copy.craftAltDescription}</p>
+          <p className="folio-two-craft__narrative">
+            {copy.craftAltNarrative ||
+              "Every silhouette begins with a patient study of balance and form. In the workshop, artisans hand-shape full-grain hides over carved lasts, guiding each contour into an intuitive fit that softens with every step."}
+          </p>
+          <p className="folio-two-craft__description">
+            {copy.craftAltDescription}
+          </p>
           <Link
             className="mirza-link"
             href={`${basePath}/c/categories/traditional`}

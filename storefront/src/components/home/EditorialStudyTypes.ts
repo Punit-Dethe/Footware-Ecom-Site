@@ -11,6 +11,7 @@ export interface EditorialStudyCopy {
   finishedImageAlt: string;
   craftAltTitle: string;
   craftAltAccent: string;
+  craftAltNarrative?: string;
   craftAltDescription: string;
   collectionsHeading: ReactNode;
   traditionalTitle: string;

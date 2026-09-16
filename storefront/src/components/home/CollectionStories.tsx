@@ -25,6 +25,7 @@ async function getStudyCopy(locale: string) {
     finishedImageAlt: t("heroImageAlt"),
     craftAltTitle: t("craftAltTitle"),
     craftAltAccent: t("craftAltAccent"),
+    craftAltNarrative: t("craftAltNarrative"),
     craftAltDescription: t("craftAltDescription"),
     collectionsHeading: t.rich("collectionsTitle", {
       em: (chunks) => <em>{chunks}</em>,

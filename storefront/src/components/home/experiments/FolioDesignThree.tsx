@@ -1,7 +1,7 @@
 import { ArrowUpRight } from "lucide-react";
-import Image from "next/image";
 import Link from "next/link";
 import type { EditorialStudyProps } from "../EditorialStudyTypes";
+import { ParallaxSceneImage } from "../ParallaxSceneImage";
 
 export function CollectionsDesignThree({
   basePath,
@@ -25,14 +25,12 @@ export function CollectionsDesignThree({
           className="folio-three-scene folio-three-scene--traditional"
           aria-labelledby="mirza-traditional-title-three"
         >
-          <div className="folio-three-scene__image">
-            <Image
-              src="/editorial/traditional-collection.webp"
-              alt={copy.traditionalTitle}
-              fill
-              sizes="(max-width: 760px) calc(100vw - 48px), (max-width: 1600px) 80vw, 1260px"
-            />
-          </div>
+          <ParallaxSceneImage
+            src="/editorial/traditional-collection.webp"
+            alt={copy.traditionalTitle}
+            sizes="(max-width: 760px) calc(100vw - 48px), (max-width: 1600px) 80vw, 1260px"
+            speed={0.28}
+          />
           <div className="folio-three-scene__caption">
             <div>
               <h3 id="mirza-traditional-title-three" className="mirza-display">
@@ -49,14 +47,12 @@ export function CollectionsDesignThree({
           className="folio-three-scene folio-three-scene--office"
           aria-labelledby="mirza-office-title-three"
         >
-          <div className="folio-three-scene__image">
-            <Image
-              src="/editorial/worn/worn-01.jpg"
-              alt={copy.officeImageAlt}
-              fill
-              sizes="(max-width: 760px) calc(100vw - 48px), (max-width: 1600px) 80vw, 1260px"
-            />
-          </div>
+          <ParallaxSceneImage
+            src="/editorial/worn/worn-01.jpg"
+            alt={copy.officeImageAlt}
+            sizes="(max-width: 760px) calc(100vw - 48px), (max-width: 1600px) 80vw, 1260px"
+            speed={0.28}
+          />
           <div className="folio-three-scene__caption">
             <div>
               <h3 id="mirza-office-title-three" className="mirza-display">
