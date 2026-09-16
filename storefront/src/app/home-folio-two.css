@@ -7,16 +7,20 @@
   color: var(--mirza-ink);
 }
 
-.mirza-home .folio-two-craft::before {
+.mirza-home .folio-two-craft::before,
+.mirza-home .folio-two-craft::after {
   position: absolute;
   z-index: 2;
-  top: -18px;
   right: 0;
   left: 0;
   height: 118px;
   filter: blur(12px);
   pointer-events: none;
   content: "";
+}
+
+.mirza-home .folio-two-craft::before {
+  top: -18px;
   background: linear-gradient(
     180deg,
     var(--mirza-mineral) 0%,
@@ -26,8 +30,13 @@
 }
 
 .mirza-home .folio-two-craft::after {
-  display: none;
-  content: none;
+  bottom: -18px;
+  background: linear-gradient(
+    180deg,
+    rgba(233, 226, 214, 0) 0%,
+    rgba(243, 239, 232, .72) 62%,
+    var(--mirza-mineral) 100%
+  );
 }
 
 .mirza-home .folio-two-craft__composition {
@@ -132,14 +141,10 @@
     padding-block: 112px 96px;
   }
 
-  .mirza-home .folio-two-craft::before {
+  .mirza-home .folio-two-craft::before,
+  .mirza-home .folio-two-craft::after {
     height: 82px;
     filter: blur(9px);
-  }
-
-  .mirza-home .folio-two-craft::after {
-    display: none;
-    content: none;
   }
 
   .mirza-home .folio-two-craft__composition {
