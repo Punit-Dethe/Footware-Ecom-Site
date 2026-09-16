@@ -51,7 +51,7 @@ export function CollectionsDesignThree({
         >
           <div className="folio-three-scene__image">
             <Image
-              src="/editorial/office-architecture.webp"
+              src="/editorial/worn/worn-01.jpg"
               alt={copy.officeImageAlt}
               fill
               sizes="(max-width: 760px) calc(100vw - 48px), (max-width: 1600px) 80vw, 1260px"
