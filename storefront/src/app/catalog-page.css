@@ -568,7 +568,7 @@ body:has(.catalog-page:not([style*="display: none"])) :is(.editorial-header, .ed
 /* Carry the homepage signature through the close of the catalog. */
 body:has(.catalog-page:not([style*="display: none"])) .editorial-footer {
   border: 0;
-  background: #e9e3d9;
+  background: #e9e2d6;
   color: var(--catalog-ink, #30261f);
 }
 

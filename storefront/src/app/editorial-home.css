@@ -174,7 +174,7 @@ html[data-mirza-splash="seen"] .mirza-splash {
 .home-closing p { position: relative; max-width: 980px; font-size: clamp(31px, 3.6vw, 53px); font-style: italic; }
 .home-closing span { position: relative; margin-top: 18px; font-size: 9px; font-weight: 600; letter-spacing: .35em; text-transform: uppercase; }
 
-.editorial-footer { border-top: 1px solid #dcd7d1; background: #fffefc; color: #29221d; }
+.editorial-footer { border-top: 1px solid #dcd7d1; background: #e9e2d6; color: #29221d; }
 .editorial-footer__inner { max-width: 1600px; margin: 0 auto; padding: 50px clamp(24px, 4vw, 68px) 22px; }
 .editorial-footer__grid { display: grid; grid-template-columns: 2fr repeat(3, 1fr); gap: clamp(24px, 4vw, 64px); }
 .editorial-footer__brand { display: inline-flex; flex-direction: column; align-items: flex-start; font-family: var(--font-editorial-display), Georgia, serif; font-size: 39px; font-weight: 600; letter-spacing: .22em; line-height: .78; }

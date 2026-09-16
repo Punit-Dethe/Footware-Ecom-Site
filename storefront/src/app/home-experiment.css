@@ -723,7 +723,7 @@ body:has(.home-page.mirza-home:not([style*="display: none"])) .editorial-footer 
    tied to the visible home root, including when a cached home is retained. */
 body:has(.home-page.mirza-home:not([style*="display: none"])) .editorial-footer {
   border: 0;
-  background: #e9e3d9;
+  background: #e9e2d6;
   color: #30261f;
 }
 

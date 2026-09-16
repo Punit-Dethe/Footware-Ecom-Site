@@ -163,7 +163,7 @@ body:has(.pdp-page:not([style*="display: none"])) .editorial-footer {
 .pdp-related .product-card__price { font-family: var(--font-editorial-text), Georgia, serif; font-size: 16px; font-weight: 400; }
 
 /* Carry the approved homepage signature through the close of the product page. */
-body:has(.pdp-page:not([style*="display: none"])) .editorial-footer { border: 0; background: #e9e3d9; color: #30261f; }
+body:has(.pdp-page:not([style*="display: none"])) .editorial-footer { border: 0; background: #e9e2d6; color: #30261f; }
 body:has(.pdp-page:not([style*="display: none"])) .editorial-footer__inner { max-width: 1600px; padding: 78px clamp(24px, 4.45vw, 80px) 26px; }
 body:has(.pdp-page:not([style*="display: none"])) .editorial-footer__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 50px 54px; }
 body:has(.pdp-page:not([style*="display: none"])) .editorial-footer__grid > div:first-child { display: grid; grid-template-columns: minmax(0, 1.9fr) minmax(0, 1fr); grid-column: 1 / -1; align-items: center; gap: 65px; padding-bottom: 56px; border-bottom: 1px solid #cfc4b6; }

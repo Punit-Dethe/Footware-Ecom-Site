@@ -406,7 +406,7 @@ body:has(.cart-page:not([style*="display: none"])) .editorial-header button:hove
 
 body:has(.cart-page:not([style*="display: none"])) .editorial-footer {
   border: 0;
-  background: #e9e3d9;
+  background: #e9e2d6;
   color: #30261f;
 }
 
