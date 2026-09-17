@@ -25,7 +25,7 @@ test.describe("Brand Splash Lifecycle & Regression", () => {
     );
     expect(overflowLocked).toBe("hidden");
 
-    // Wait for splash to complete (2350ms duration + margin)
+    // Wait for splash to complete (2400ms duration + margin)
     await expect(splash).not.toBeVisible({ timeout: 6000 });
 
     // Verify computed html overflow is restored
@@ -34,10 +34,12 @@ test.describe("Brand Splash Lifecycle & Regression", () => {
     );
     expect(overflowRestored).not.toBe("hidden");
 
-    // Verify scrolling works
-    await page.evaluate(() => window.scrollTo(0, 500));
-    const scrollY = await page.evaluate(() => window.scrollY);
-    expect(scrollY).toBeGreaterThan(0);
+    // Verify wheel scrolling after splash completion on first visit
+    const beforeFirst = await page.evaluate(() => window.scrollY);
+    await page.mouse.wheel(0, 500);
+    await expect
+      .poll(() => page.evaluate(() => window.scrollY))
+      .toBeGreaterThan(beforeFirst);
   });
 
   test("B: Normal reload - splash never visible, immediately scrollable, no dead period", async ({
@@ -72,16 +74,26 @@ test.describe("Brand Splash Lifecycle & Regression", () => {
     );
     expect(bodyOverflow).not.toBe("hidden");
 
-    // Scroll immediately without waiting 2.35s
-    await page.evaluate(() => window.scrollTo(0, 300));
-    const scrollY = await page.evaluate(() => window.scrollY);
-    expect(scrollY).toBeGreaterThan(0);
-
     // Ensure no dataset="first" survives
     const dataset = await page.evaluate(
       () => document.documentElement.dataset.mirzaSplash,
     );
     expect(dataset).not.toBe("first");
+
+    // Ensure content is ready and client components have hydrated
+    await expect(page.locator("h1")).toBeVisible();
+    await page.waitForTimeout(400);
+
+    // Real user-scroll regression: verify wheel scroll occurs immediately, not after splash duration (2.4s)
+    const before = await page.evaluate(() => window.scrollY);
+    const scrollStartTime = Date.now();
+    await page.mouse.wheel(0, 500);
+    await expect
+      .poll(() => page.evaluate(() => window.scrollY), { timeout: 3000 })
+      .toBeGreaterThan(before);
+    const scrollElapsed = Date.now() - scrollStartTime;
+    // Must succeed well before the 2400ms splash animation duration
+    expect(scrollElapsed).toBeLessThan(2000);
   });
 
   test("C: Subsequent navigation - splash does not rerun or acquire lock", async ({

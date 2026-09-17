@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 export function BrandSplashOverlay() {
   const [visible, setVisible] = useState(true);
+  const [exiting, setExiting] = useState(false);
 
   useEffect(() => {
     if (document.documentElement.dataset.mirzaSplash !== "first") {
@@ -15,28 +16,39 @@ export function BrandSplashOverlay() {
       "(prefers-reduced-motion: reduce)",
     ).matches;
 
-    const timer = window.setTimeout(
-      () => {
-        document.documentElement.dataset.mirzaSplash = "seen";
-        document.documentElement.style.removeProperty("overflow");
-        setVisible(false);
-      },
-      reducedMotion ? 180 : 2350,
-    );
+    if (reducedMotion) {
+      document.documentElement.dataset.mirzaSplash = "seen";
+      setVisible(false);
+      return;
+    }
+
+    // Single authoritative lifecycle timer
+    const exitTimer = window.setTimeout(() => {
+      // Release scroll lock immediately at dismissal start
+      document.documentElement.dataset.mirzaSplash = "seen";
+      setExiting(true);
+    }, 2050);
+
+    const unmountTimer = window.setTimeout(() => {
+      setVisible(false);
+    }, 2400);
 
     return () => {
-      window.clearTimeout(timer);
+      window.clearTimeout(exitTimer);
+      window.clearTimeout(unmountTimer);
       if (document.documentElement.dataset.mirzaSplash === "first") {
         document.documentElement.dataset.mirzaSplash = "seen";
       }
-      document.documentElement.style.removeProperty("overflow");
     };
   }, []);
 
   if (!visible) return null;
 
   return (
-    <div className="mirza-splash" aria-hidden="true">
+    <div
+      className={`mirza-splash${exiting ? " mirza-splash--exiting" : ""}`}
+      aria-hidden="true"
+    >
       <div className="mirza-splash__signature">
         <span>MIRZA</span>
         <small>FOOTWEAR</small>
