@@ -32,6 +32,14 @@ body:has(.home-page:not([style*="display: none"])) .editorial-header:not(.editor
 .editorial-header button:hover { background: #f3efeb; }
 
 .mirza-splash {
+  display: none;
+}
+
+html[data-mirza-splash="first"] {
+  overflow: hidden;
+}
+
+html[data-mirza-splash="first"] .mirza-splash {
   position: fixed;
   z-index: 100;
   inset: 0;
@@ -39,11 +47,7 @@ body:has(.home-page:not([style*="display: none"])) .editorial-header:not(.editor
   place-items: center;
   background: #e9e2d6;
   color: #30261f;
-  animation: mirza-splash-field 2.3s cubic-bezier(.76, 0, .24, 1) forwards;
-}
-
-html[data-mirza-splash="seen"] .mirza-splash {
-  display: none;
+  animation: mirza-splash-field 2.35s cubic-bezier(.76, 0, .24, 1) forwards;
 }
 
 .mirza-splash__signature {
@@ -83,7 +87,7 @@ html[data-mirza-splash="seen"] .mirza-splash {
 
 @keyframes mirza-splash-field {
   0%, 72% { opacity: 1; }
-  100% { opacity: 0; visibility: hidden; }
+  100% { opacity: 0; }
 }
 
 .home-page { --home-ink: #211b17; --home-muted: #675c55; --home-line: #dfd9d3; color: var(--home-ink); background: #fffefc; font-family: var(--font-editorial-text), Georgia, serif; }

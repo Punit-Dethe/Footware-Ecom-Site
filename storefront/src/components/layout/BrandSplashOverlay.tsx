@@ -14,21 +14,22 @@ export function BrandSplashOverlay() {
     const reducedMotion = window.matchMedia(
       "(prefers-reduced-motion: reduce)",
     ).matches;
-    const previousOverflow = document.documentElement.style.overflow;
-    document.documentElement.style.overflow = "hidden";
 
     const timer = window.setTimeout(
       () => {
+        document.documentElement.dataset.mirzaSplash = "seen";
+        document.documentElement.style.removeProperty("overflow");
         setVisible(false);
-        document.documentElement.style.overflow = previousOverflow;
-        delete document.documentElement.dataset.mirzaSplash;
       },
       reducedMotion ? 180 : 2350,
     );
 
     return () => {
       window.clearTimeout(timer);
-      document.documentElement.style.overflow = previousOverflow;
+      if (document.documentElement.dataset.mirzaSplash === "first") {
+        document.documentElement.dataset.mirzaSplash = "seen";
+      }
+      document.documentElement.style.removeProperty("overflow");
     };
   }, []);
 

@@ -106,7 +106,11 @@ async function StorefrontCategoryNavigation({
   if (rootCategories.length === 0) return null;
 
   return (
-    <nav aria-label="Category navigation" className="sr-only">
+    <nav
+      aria-label="Category navigation"
+      className="sr-only"
+      suppressHydrationWarning
+    >
       <CategoryLinks categories={rootCategories} basePath={basePath} />
     </nav>
   );
