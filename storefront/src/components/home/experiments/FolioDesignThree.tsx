@@ -26,10 +26,10 @@ export function CollectionsDesignThree({
           aria-labelledby="mirza-traditional-title-three"
         >
           <ParallaxSceneImage
-            src="/editorial/category-traditional.webp"
+            src="/editorial/category-traditional-v3.webp"
             alt={copy.traditionalTitle}
             sizes="(max-width: 760px) calc(100vw - 48px), (max-width: 1600px) 80vw, 1260px"
-            speed={0.22}
+            speed={0.28}
           />
           <div className="folio-three-scene__caption">
             <div>
@@ -48,10 +48,10 @@ export function CollectionsDesignThree({
           aria-labelledby="mirza-office-title-three"
         >
           <ParallaxSceneImage
-            src="/editorial/category-office.webp"
+            src="/editorial/category-office-v3.webp"
             alt={copy.officeTitle}
             sizes="(max-width: 760px) calc(100vw - 48px), (max-width: 1600px) 80vw, 1260px"
-            speed={0.22}
+            speed={0.28}
           />
           <div className="folio-three-scene__caption">
             <div>
