@@ -40,26 +40,26 @@
 .mirza-home .folio-three-scene__image {
   position: relative;
   width: 100%;
-  aspect-ratio: 2.8;
+  aspect-ratio: 2.48;
   overflow: hidden;
   background: #514035;
 }
 
 .mirza-home .folio-three-scene__image-inner {
   position: absolute;
-  top: -30%;
+  top: -20%;
   left: 0;
   width: 100%;
-  height: 160%;
+  height: 140%;
 }
 
 .mirza-home .folio-three-scene__image img {
   object-fit: cover;
-  object-position: center 50%;
+  object-position: center center;
 }
 
 .mirza-home .folio-three-scene--office .folio-three-scene__image img {
-  object-position: center 50%;
+  object-position: center center;
 }
 
 .mirza-home .folio-three-scene__caption {
@@ -128,12 +128,12 @@
   }
 
   .mirza-home .folio-three-scene__image {
-    aspect-ratio: 1.2;
+    aspect-ratio: 2.1;
   }
 
   .mirza-home .folio-three-scene__image-inner {
-    top: -20%;
-    height: 140%;
+    top: -16%;
+    height: 132%;
   }
 
   .mirza-home .folio-three-scene__caption {

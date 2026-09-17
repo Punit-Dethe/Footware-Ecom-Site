@@ -45,7 +45,12 @@ export function ParallaxSceneImage({
   }, []);
 
   const update = useCallback(() => {
-    if (reducedMotionRef.current) return;
+    if (reducedMotionRef.current || speed === 0) {
+      if (innerRef.current && innerRef.current.style.transform !== "none") {
+        innerRef.current.style.transform = "none";
+      }
+      return;
+    }
     const container = containerRef.current;
     const inner = innerRef.current;
     if (!container || !inner) return;
