@@ -16,9 +16,7 @@ vi.mock("@/components/layout/Header", () => ({
 vi.mock("@/components/layout/BrandSplash", () => ({
   BrandSplash: () => null,
 }));
-vi.mock("@/components/layout/SmoothScroll", () => ({
-  SmoothScroll: () => null,
-}));
+
 vi.mock("@/components/layout/Footer", () => ({
   Footer: () => null,
   FooterCategoryLinks: () => null,
@@ -27,7 +25,7 @@ vi.mock("@/components/layout/Footer", () => ({
 import { BrandSplash } from "@/components/layout/BrandSplash";
 import { Footer } from "@/components/layout/Footer";
 import { Header } from "@/components/layout/Header";
-import { SmoothScroll } from "@/components/layout/SmoothScroll";
+
 import StorefrontLayout from "./layout";
 
 interface LayoutElementProps {
@@ -47,13 +45,12 @@ describe("StorefrontLayout", () => {
 
     expect(layout.type).toBe(Fragment);
 
-    const [splash, smoothScroll, header, hiddenNavigation, main, footer] =
+    const [splash, header, hiddenNavigation, main, footer] =
       Children.toArray(
         layout.props.children,
       ) as ReactElement<LayoutElementProps>[];
 
     expect(splash.type).toBe(BrandSplash);
-    expect(smoothScroll.type).toBe(SmoothScroll);
     expect(header.type).toBe(Header);
     expect(hiddenNavigation.type).toBe(Suspense);
     expect(main.type).toBe("main");

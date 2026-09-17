@@ -80,20 +80,19 @@ test.describe("Brand Splash Lifecycle & Regression", () => {
     );
     expect(dataset).not.toBe("first");
 
-    // Ensure content is ready and client components have hydrated
+    // Ensure content is ready
     await expect(page.locator("h1")).toBeVisible();
-    await page.waitForTimeout(400);
 
-    // Real user-scroll regression: verify wheel scroll occurs immediately, not after splash duration (2.4s)
+    // Real user-scroll regression: verify wheel scroll occurs immediately with native scrolling authority
     const before = await page.evaluate(() => window.scrollY);
     const scrollStartTime = Date.now();
     await page.mouse.wheel(0, 500);
     await expect
-      .poll(() => page.evaluate(() => window.scrollY), { timeout: 3000 })
+      .poll(() => page.evaluate(() => window.scrollY), { timeout: 2000 })
       .toBeGreaterThan(before);
     const scrollElapsed = Date.now() - scrollStartTime;
-    // Must succeed well before the 2400ms splash animation duration
-    expect(scrollElapsed).toBeLessThan(2000);
+    // With native scrolling, wheel responds immediately without the old ~400-500ms Lenis freeze
+    expect(scrollElapsed).toBeLessThan(1000);
   });
 
   test("C: Subsequent navigation - splash does not rerun or acquire lock", async ({
@@ -174,5 +173,43 @@ test.describe("Brand Splash Lifecycle & Regression", () => {
       () => window.getComputedStyle(document.documentElement).overflow,
     );
     expect(computedOverflow).not.toBe("hidden");
+  });
+
+  test("F: Native scrolling authority - immediate wheel responsiveness, anchor jump, and touch scroll", async ({
+    page,
+  }) => {
+    // Prime session so splash does not run
+    await page.addInitScript(() => {
+      sessionStorage.setItem("mirza-brand-splash-v1", "seen");
+    });
+    await page.goto("/us/en");
+    await expect(page.locator("h1")).toBeVisible();
+
+    // 1. Wheel scroll responds immediately without Lenis interception
+    const before = await page.evaluate(() => window.scrollY);
+    const scrollStart = Date.now();
+    await page.mouse.wheel(0, 300);
+    await expect
+      .poll(() => page.evaluate(() => window.scrollY), { timeout: 1500 })
+      .toBeGreaterThan(before);
+    const scrollElapsed = Date.now() - scrollStart;
+    expect(scrollElapsed).toBeLessThan(800);
+
+    // 2. Same-page anchor jump to #craft works natively
+    const craftAnchor = page.locator("header a[href*='#craft']").first();
+    if ((await craftAnchor.count()) > 0) {
+      await craftAnchor.click();
+      await expect
+        .poll(() => page.evaluate(() => window.scrollY))
+        .toBeGreaterThan(500);
+    }
+
+    // 3. Native touch scroll / instant scroll works
+    const beforeTouch = await page.evaluate(() => window.scrollY);
+    await page.evaluate(() => {
+      window.scrollBy({ top: 200, behavior: "instant" });
+    });
+    const afterTouch = await page.evaluate(() => window.scrollY);
+    expect(afterTouch).toBeGreaterThan(beforeTouch);
   });
 });
