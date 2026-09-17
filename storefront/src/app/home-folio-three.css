@@ -40,17 +40,17 @@
 .mirza-home .folio-three-scene__image {
   position: relative;
   width: 100%;
-  aspect-ratio: 2.25;
+  aspect-ratio: 2.8;
   overflow: hidden;
   background: #514035;
 }
 
 .mirza-home .folio-three-scene__image-inner {
   position: absolute;
-  top: -24%;
+  top: -30%;
   left: 0;
   width: 100%;
-  height: 148%;
+  height: 160%;
 }
 
 .mirza-home .folio-three-scene__image img {
