@@ -162,21 +162,27 @@ async function testTarget(targetName, url) {
 }
 
 async function main() {
-  const prod = await testTarget("PRODUCTION (with Lenis)", "https://mirzafootwear.vercel.app/us/en");
-  const preview = await testTarget("PREVIEW (no Lenis)", "https://storefront-3k4cveyqe-watrmallone.vercel.app/us/en");
+  const prod = await testTarget("CURRENT PRODUCTION (custom ActiveScrollRaf)", "https://mirzafootwear.vercel.app/us/en");
+  const noLenis = await testTarget("NO-LENIS BASELINE (native scroll authority)", "https://storefront-3k4cveyqe-watrmallone.vercel.app/us/en");
+  const autoRaf = await testTarget("PREVIEW (autoRaf: true Lenis)", "https://storefront-fystu072m-watrmallone.vercel.app/us/en");
 
   console.log("\n\n############################################################");
   console.log("FINAL COMPARATIVE A/B REPORT");
   console.log("############################################################");
-  console.log(`PRODUCTION (with Lenis):`);
+  console.log(`CURRENT PRODUCTION (custom ActiveScrollRaf):`);
   console.log(`  Runs: ${prod.results.map(r => r.firstScrollTime + 'ms').join(', ')}`);
   console.log(`  Median: ${prod.median}ms`);
   console.log(`  Max: ${prod.max}ms`);
 
-  console.log(`\nPREVIEW (no Lenis):`);
-  console.log(`  Runs: ${preview.results.map(r => r.firstScrollTime + 'ms').join(', ')}`);
-  console.log(`  Median: ${preview.median}ms`);
-  console.log(`  Max: ${preview.max}ms`);
+  console.log(`\nNO-LENIS BASELINE (native scroll):`);
+  console.log(`  Runs: ${noLenis.results.map(r => r.firstScrollTime + 'ms').join(', ')}`);
+  console.log(`  Median: ${noLenis.median}ms`);
+  console.log(`  Max: ${noLenis.max}ms`);
+
+  console.log(`\nPREVIEW (autoRaf: true Lenis):`);
+  console.log(`  Runs: ${autoRaf.results.map(r => r.firstScrollTime + 'ms').join(', ')}`);
+  console.log(`  Median: ${autoRaf.median}ms`);
+  console.log(`  Max: ${autoRaf.max}ms`);
 }
 
 main().catch(console.error);
