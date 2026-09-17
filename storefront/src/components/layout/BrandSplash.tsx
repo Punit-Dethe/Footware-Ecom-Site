@@ -8,7 +8,7 @@ const splashBootstrap = `
       document.documentElement.dataset.mirzaSplash = seen ? "seen" : "first";
       if (!seen) window.sessionStorage.setItem(key, "seen");
     } catch {
-      document.documentElement.dataset.mirzaSplash = "first";
+      document.documentElement.dataset.mirzaSplash = "seen";
     }
   })();
 `;
