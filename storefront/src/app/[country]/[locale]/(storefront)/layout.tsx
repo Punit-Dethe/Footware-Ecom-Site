@@ -134,7 +134,7 @@ export default async function StorefrontLayout({
   return (
     <>
       <BrandSplash />
-      <SmoothScroll />
+      {/* <SmoothScroll /> -- disabled for production scroll freeze A/B test */}
       <Header
         basePath={basePath}
         locale={locale as Locale}
