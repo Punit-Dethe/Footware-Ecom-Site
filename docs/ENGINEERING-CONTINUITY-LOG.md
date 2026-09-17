@@ -35,12 +35,10 @@ B1 through B10 are **COMPLETE / MERGED / DEPLOYED / PRODUCTION VERIFIED**.
 Current `main` head (ahead of the B10 backend baseline):
 
 ```text
-6c504be  Expand homepage editorial imagery and closing scene
+ab2ce2bb2c6a8e6cf3cca8db1ca4451745a2b055  Merge branch 'audit/ui-regression-splash' into main
 ```
 
-`main` has moved **12 commits past the B10 merge**. All 12 are storefront UI work
-belonging to the **FINAL UI IMPLEMENTATION** phase. No backend/phase work is
-outstanding.
+`main` incorporates the accepted P0 splash reload scroll-lock regression fix (`c2fd722d6b5446714527b770a4979c2b35ad8445`). All work belongs to the **FINAL UI IMPLEMENTATION** phase. No backend/phase work is outstanding.
 
 Diff versus the B10 backend baseline:
 
@@ -1247,6 +1245,22 @@ Do not assume older `ARCHITECTURE.md`, old specification docs, or old performanc
 ---
 
 ## 16. Rolling change log
+
+### 2026-09-17 — P0 splash reload scroll-lock regression — FIXED
+
+- Accepted branch: `audit/ui-regression-splash`
+- Accepted SHA: `c2fd722d6b5446714527b770a4979c2b35ad8445`
+- Merged-main SHA: `ab2ce2bb2c6a8e6cf3cca8db1ca4451745a2b055`
+- Starting main: `0dda7f700cb26e67f9d77a99dcb4c0d3d018073f`
+- Resolution summary:
+  1. **Dual-clock race eliminated**: Deleted independent `@keyframes mirza-splash-field` from `editorial-home.css`. `BrandSplashOverlay.tsx` is the sole lifecycle authority; it clears the dataset scroll lock selector (`data-mirza-splash="first" -> "seen"`) at dismissal start (2050ms, or immediately on `prefers-reduced-motion`) and transitions opacity smoothly via `.mirza-splash--exiting` before unmounting. Invariant enforced: if the splash is visually gone, the scroll lock must already be gone.
+  2. **Imperative overflow cleanup removed (0 count)**: Removed all calls to `document.documentElement.style.removeProperty("overflow")`. Declarative CSS selector `html[data-mirza-splash="first"] { overflow: hidden; }` is the sole owner, preventing accidental clearing of modal/drawer scroll locks.
+  3. **Real user-scroll regression added**: Added Playwright test verifying real `page.mouse.wheel(0, 500)` scroll completes immediately on reload (`< 2000ms`, measured ~150ms post-hydration tick) and after first-visit splash completion.
+  4. **`suppressHydrationWarning` reverted**: Removed from category `<nav>` in `layout.tsx`. Documented independent Radix UI Dialog / `data-aria-hidden` attribute injection finding during mobile dialog interactions.
+- Post-merge validation:
+  * TypeScript `tsc --noEmit`: 0 errors
+  * Playwright focused splash regression suite (`splash-regression.spec.ts`): 5/5 passing
+  * Editorial UI regression audit suite (`editorial-ui-regression-audit.spec.ts`): 6/6 passing
 
 ### 2026-09-14 — Documentation reconciliation + editorial UI phase in progress
 
