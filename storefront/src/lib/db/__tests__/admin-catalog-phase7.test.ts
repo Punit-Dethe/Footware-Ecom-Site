@@ -39,6 +39,10 @@ describe("Admin Catalog Phase 7 DAL Tests", () => {
               total_variants: 217,
               total_stock: 1450,
               active_zero_stock_products: 2,
+              total_orders: 12,
+              orders_today: 3,
+              guest_orders: 4,
+              registered_customers: 8,
             },
           ],
         })
@@ -74,6 +78,10 @@ describe("Admin Catalog Phase 7 DAL Tests", () => {
         totalVariants: 217,
         totalStock: 1450,
         activeZeroStockProducts: 2,
+        totalOrders: 12,
+        ordersToday: 3,
+        guestOrders: 4,
+        registeredCustomers: 8,
       });
 
       // Verify recent products with Media Contract v1 delivery
@@ -100,6 +108,8 @@ describe("Admin Catalog Phase 7 DAL Tests", () => {
 
       expect(overview.metrics.totalProducts).toBe(0);
       expect(overview.metrics.activeProducts).toBe(0);
+      expect(overview.metrics.totalOrders).toBe(0);
+      expect(overview.metrics.ordersToday).toBe(0);
       expect(overview.recentProducts).toHaveLength(0);
     });
   });

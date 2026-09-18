@@ -13,6 +13,13 @@ const mockDal = vi.hoisted(() => ({
   getAdminCatalogOverview: vi.fn(),
 }));
 
+const mockCommerceDal = vi.hoisted(() => ({
+  listAdminOrdersPage: vi.fn(),
+  getAdminOrderDetail: vi.fn(),
+  listAdminCustomersPage: vi.fn(),
+  getAdminCustomerDetail: vi.fn(),
+}));
+
 const mockNavigation = vi.hoisted(() => ({
   redirect: vi.fn(),
   notFound: vi.fn(),
@@ -38,6 +45,13 @@ vi.mock("@/lib/db/admin-catalog", () => ({
   listAdminCategories: mockDal.listAdminCategories,
   getAdminCategory: mockDal.getAdminCategory,
   getAdminCatalogOverview: mockDal.getAdminCatalogOverview,
+}));
+
+vi.mock("@/lib/db/admin-commerce", () => ({
+  listAdminOrdersPage: mockCommerceDal.listAdminOrdersPage,
+  getAdminOrderDetail: mockCommerceDal.getAdminOrderDetail,
+  listAdminCustomersPage: mockCommerceDal.listAdminCustomersPage,
+  getAdminCustomerDetail: mockCommerceDal.getAdminCustomerDetail,
 }));
 
 vi.mock("next/server", () => ({
@@ -76,6 +90,10 @@ import ProductDetailPage from "../admin/products/[id]/page";
 import AdminCategoriesPage from "../admin/categories/page";
 import { AdminIndexPageContent } from "../admin/page";
 import { AdminMediaPageContent } from "../admin/media/page";
+import AdminOrdersPage from "../admin/orders/page";
+import AdminOrderDetailPage from "../admin/orders/[id]/page";
+import AdminCustomersPage from "../admin/customers/page";
+import AdminCustomerDetailPage from "../admin/customers/[id]/page";
 import { listMediaLibraryAssets } from "@/lib/db/media-v1";
 
 describe("Admin Pages Direct Authorization Enforcement", () => {
@@ -140,6 +158,34 @@ describe("Admin Pages Direct Authorization Enforcement", () => {
         AdminMediaPageContent({ params: testParams, searchParams: Promise.resolve({}) }),
       ).rejects.toThrow("Admin authorization required.");
       expect(listMediaLibraryAssets).not.toHaveBeenCalled();
+    });
+
+    it("orders page: rejects before calling listAdminOrdersPage (DAL calls = 0)", async () => {
+      await expect(
+        AdminOrdersPage({ params: testParams, searchParams: Promise.resolve({}) }),
+      ).rejects.toThrow("Admin authorization required.");
+      expect(mockCommerceDal.listAdminOrdersPage).not.toHaveBeenCalled();
+    });
+
+    it("order detail page: rejects before calling getAdminOrderDetail (DAL calls = 0)", async () => {
+      await expect(
+        AdminOrderDetailPage({ params: detailParams }),
+      ).rejects.toThrow("Admin authorization required.");
+      expect(mockCommerceDal.getAdminOrderDetail).not.toHaveBeenCalled();
+    });
+
+    it("customers page: rejects before calling listAdminCustomersPage (DAL calls = 0)", async () => {
+      await expect(
+        AdminCustomersPage({ params: testParams, searchParams: Promise.resolve({}) }),
+      ).rejects.toThrow("Admin authorization required.");
+      expect(mockCommerceDal.listAdminCustomersPage).not.toHaveBeenCalled();
+    });
+
+    it("customer detail page: rejects before calling getAdminCustomerDetail (DAL calls = 0)", async () => {
+      await expect(
+        AdminCustomerDetailPage({ params: detailParams }),
+      ).rejects.toThrow("Admin authorization required.");
+      expect(mockCommerceDal.getAdminCustomerDetail).not.toHaveBeenCalled();
     });
   });
 
@@ -269,6 +315,54 @@ describe("Admin Pages Direct Authorization Enforcement", () => {
         categories: [],
         variants: [],
       });
+      mockCommerceDal.listAdminOrdersPage.mockResolvedValue({
+        orders: [],
+        totalCount: 0,
+        page: 1,
+        pageSize: 30,
+        totalPages: 1,
+      });
+      mockCommerceDal.getAdminOrderDetail.mockResolvedValue({
+        id: "11111111-1111-4111-8111-111111111111",
+        orderNumber: "MRZ-TEST123456",
+        userId: null,
+        email: "guest@example.com",
+        status: "placed",
+        currency: "USD",
+        subtotalInCents: 25000,
+        taxInCents: 0,
+        shippingInCents: 0,
+        totalInCents: 25000,
+        shippingAddressSnapshot: {},
+        billingAddressSnapshot: {},
+        sourceCartId: "cart-1",
+        surface: "dtc",
+        completedAt: new Date(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        isRegisteredCustomer: false,
+        customerName: null,
+        items: [],
+      });
+      mockCommerceDal.listAdminCustomersPage.mockResolvedValue({
+        customers: [],
+        totalCount: 0,
+        page: 1,
+        pageSize: 30,
+        totalPages: 1,
+      });
+      mockCommerceDal.getAdminCustomerDetail.mockResolvedValue({
+        id: "11111111-1111-4111-8111-111111111111",
+        email: "customer@example.com",
+        firstName: "Test",
+        lastName: "Customer",
+        phone: null,
+        role: "customer",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        addresses: [],
+        orders: [],
+      });
     });
 
     it("products page: executes listAdminProductsPage and listAdminCategories when authorized", async () => {
@@ -313,6 +407,40 @@ describe("Admin Pages Direct Authorization Enforcement", () => {
       });
       expect(res).toBeDefined();
       expect(listMediaLibraryAssets).toHaveBeenCalledTimes(1);
+    });
+
+    it("orders page: executes listAdminOrdersPage when authorized", async () => {
+      const res = await AdminOrdersPage({
+        params: testParams,
+        searchParams: Promise.resolve({}),
+      });
+      expect(res).toBeDefined();
+      expect(mockCommerceDal.listAdminOrdersPage).toHaveBeenCalledTimes(1);
+    });
+
+    it("order detail page: executes getAdminOrderDetail when authorized", async () => {
+      const res = await AdminOrderDetailPage({ params: detailParams });
+      expect(res).toBeDefined();
+      expect(mockCommerceDal.getAdminOrderDetail).toHaveBeenCalledWith(
+        "11111111-1111-4111-8111-111111111111",
+      );
+    });
+
+    it("customers page: executes listAdminCustomersPage when authorized", async () => {
+      const res = await AdminCustomersPage({
+        params: testParams,
+        searchParams: Promise.resolve({}),
+      });
+      expect(res).toBeDefined();
+      expect(mockCommerceDal.listAdminCustomersPage).toHaveBeenCalledTimes(1);
+    });
+
+    it("customer detail page: executes getAdminCustomerDetail when authorized", async () => {
+      const res = await AdminCustomerDetailPage({ params: detailParams });
+      expect(res).toBeDefined();
+      expect(mockCommerceDal.getAdminCustomerDetail).toHaveBeenCalledWith(
+        "11111111-1111-4111-8111-111111111111",
+      );
     });
   });
 });

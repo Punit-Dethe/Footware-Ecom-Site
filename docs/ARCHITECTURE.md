@@ -221,13 +221,13 @@ Strict database TLS is a hard invariant. Do not regress to
 
 ## 8. Validation Baseline
 
-Measured on `feat/editorial-admin-catalog` (Phase 7), 2026-09-18:
+Measured on `feat/editorial-admin-commerce` (Phase 8), 2026-09-18:
 
 ```text
-Vitest        76 suites / 855 tests passing (100% pass)
+Vitest        77 suites / 870 tests passing (100% pass)
 TypeScript    tsc --noEmit clean (0 errors)
-Biome         lint clean (0 errors, 0 warnings across 365 files)
-Next.js       Production build clean (103/103 static pages generated)
+Biome         lint clean (0 errors, 0 warnings across 372 files)
+Next.js       Production build clean (111/111 static pages generated)
 ```
 
 ---
@@ -258,4 +258,40 @@ The Mirza Admin Studio (`/(admin)/admin/*`) provides a unified, editorial contro
 3. **Storefront Isolation**:
    - Customer-facing bundle impact = 0 bytes JS.
    - Zero customer catalog query changes or database schema migrations.
+
+---
+
+## 11. Mirza Admin Commerce Control Plane (Phase 8)
+
+Phase 8 introduces read-only operational domains for **Orders** and **Customers** within the unified Mirza Admin Studio (`/(admin)/admin/*`), completing the business control plane alongside Catalog:
+
+1. **Navigation Structure**:
+   - `AdminTopNav.tsx` organizes Studio navigation into logical operational groups:
+     - **Studio**: Overview (`/admin`)
+     - **Catalog**: Products (`/admin/products`), Categories (`/admin/categories`), Media (`/admin/media`)
+     - **Commerce**: Orders (`/admin/orders`), Customers (`/admin/customers`)
+   - Includes full keyboard focus rings, active path matching, and responsive horizontal overflow handling (`scrollbar-none`).
+
+2. **Orders Domain (`src/lib/db/admin-commerce.ts`)**:
+   - **Snapshot Authority**: Orders and line items are immutable records. Line items are read directly from `order_items` (`price_in_cents`, `quantity`, `product_name_snapshot`, `variant_title_snapshot`, `sku_snapshot`, `image_url_snapshot`), never dynamically re-priced or re-linked to mutated catalog records.
+   - **Address Snapshots**: Customer delivery and billing locations are read directly from `shipping_address_snapshot` and `billing_address_snapshot` on `orders`.
+   - **Stored Totals**: Subtotal, shipping total, tax total, and grand total are read strictly from stored cent integers (`subtotal_in_cents`, `total_in_cents`, etc.), guaranteeing audit integrity.
+   - **Single-CTE Pagination**: `listAdminOrdersPage()` paginates orders with single-query CTE aggregation (default 30/page), supporting URL state (`?q=&status=&customer=&sort=&page=`), joining line item counts and unit totals with 0 N+1 queries.
+   - **Bounded Detail Query**: `getAdminOrderDetail()` executes in exactly 2 bounded queries (order snapshot + line items with Media Contract v1 public URLs).
+   - **Strict Read-Only Guarantee**: Zero operational mutation controls for payment capture, fulfillment, shipment creation, carrier tracking, refunds, or cancellations.
+
+3. **Customers Domain (`src/lib/db/admin-commerce.ts`)**:
+   - **Identity Authority**: Direct server join between `public.profiles` (`role = 'customer'`) and `auth.users` (`u.email`).
+   - **Order Association Authority**: Order counts and historical spend are linked strictly via `orders.user_id = customer.id`. Guest orders sharing an email address are never merged or counted toward customer spend.
+   - **Single-CTE Directory**: `listAdminCustomersPage()` delivers customer directory pagination (default 30/page) with URL search and sorting (`newest`, `oldest`, `orders_desc`, `spend_desc`), calculating order count and historical spend without N+1 queries.
+   - **Bounded Profile & History**: `getAdminCustomerDetail()` executes in exactly 3 bounded queries (profile + auth email, saved addresses from `public.addresses`, and bounded order history).
+   - **Security Guardrails**: Zero customer credentials, password hashes, auth tokens, or session tokens exposed to the client.
+
+4. **Catalog Overview Extension**:
+   - `getAdminCatalogOverview()` in `admin-catalog.ts` aggregates commerce metrics (`total_orders`, `orders_today`, `guest_orders`, `registered_customers`) inside the existing CTE query, maintaining the strict 2-query budget.
+
+5. **Storefront Isolation**:
+   - Zero customer storefront JS bundle impact (0 bytes).
+   - Zero customer database migrations or schema alterations.
+
 

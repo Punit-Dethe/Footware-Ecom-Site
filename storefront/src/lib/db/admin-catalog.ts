@@ -53,6 +53,10 @@ export interface AdminCatalogOverview {
     totalVariants: number;
     totalStock: number;
     activeZeroStockProducts: number;
+    totalOrders: number;
+    ordersToday: number;
+    guestOrders: number;
+    registeredCustomers: number;
   };
   recentProducts: Array<{
     id: string;
@@ -377,7 +381,11 @@ export async function getAdminCatalogOverview(): Promise<AdminCatalogOverview> {
           GROUP BY product_id
         ) vs ON vs.product_id = ap.id
         WHERE ap.status = 'active' AND COALESCE(vs.stock, 0) = 0
-      ) AS active_zero_stock_products
+      ) AS active_zero_stock_products,
+      (SELECT COUNT(*)::int FROM public.orders) AS total_orders,
+      (SELECT COUNT(*)::int FROM public.orders WHERE completed_at >= CURRENT_DATE) AS orders_today,
+      (SELECT COUNT(*)::int FROM public.orders WHERE user_id IS NULL) AS guest_orders,
+      (SELECT COUNT(*)::int FROM public.profiles WHERE role = 'customer') AS registered_customers
     FROM public.products p;
   `;
 
@@ -434,6 +442,10 @@ export async function getAdminCatalogOverview(): Promise<AdminCatalogOverview> {
       total_variants: number;
       total_stock: number;
       active_zero_stock_products: number;
+      total_orders: number;
+      orders_today: number;
+      guest_orders: number;
+      registered_customers: number;
     }>(metricsSql),
     query<{
       id: string;
@@ -458,6 +470,10 @@ export async function getAdminCatalogOverview(): Promise<AdminCatalogOverview> {
     total_variants: 0,
     total_stock: 0,
     active_zero_stock_products: 0,
+    total_orders: 0,
+    orders_today: 0,
+    guest_orders: 0,
+    registered_customers: 0,
   };
 
   return {
@@ -471,6 +487,10 @@ export async function getAdminCatalogOverview(): Promise<AdminCatalogOverview> {
       totalVariants: Number(m.total_variants) || 0,
       totalStock: Number(m.total_stock) || 0,
       activeZeroStockProducts: Number(m.active_zero_stock_products) || 0,
+      totalOrders: Number(m.total_orders) || 0,
+      ordersToday: Number(m.orders_today) || 0,
+      guestOrders: Number(m.guest_orders) || 0,
+      registeredCustomers: Number(m.registered_customers) || 0,
     },
     recentProducts: recentRes.rows.map((row) => ({
       id: row.id,

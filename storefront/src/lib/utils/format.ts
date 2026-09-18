@@ -54,3 +54,22 @@ export function getFulfillmentStatusColor(state: string | null): string {
       return "bg-gray-100 text-gray-800";
   }
 }
+
+export function formatMoney(
+  cents: number,
+  currency = "USD",
+  locale = "en-US",
+): string {
+  const amount = (cents || 0) / 100;
+  try {
+    return new Intl.NumberFormat(locale, {
+      style: "currency",
+      currency: (currency || "USD").toUpperCase(),
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(amount);
+  } catch {
+    return `$${amount.toFixed(2)}`;
+  }
+}
+
