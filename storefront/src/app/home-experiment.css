@@ -1316,9 +1316,7 @@ body:has(.home-page.mirza-home:not([style*="display: none"])) .editorial-footer_
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .mirza-home *,
-  body:has(.home-page.mirza-home:not([style*="display: none"])) .editorial-header * {
-    animation: none;
+  .mirza-home .product-card__image img {
     transition: none;
   }
 

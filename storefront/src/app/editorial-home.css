@@ -270,8 +270,6 @@ html[data-mirza-splash="first"] .mirza-splash {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .home-button { transition: none; }
-
   .mirza-splash,
   .mirza-splash__signature {
     animation: none;
@@ -281,5 +279,9 @@ html[data-mirza-splash="first"] .mirza-splash {
     transform: none;
     filter: none;
     opacity: 1;
+  }
+
+  .mirza-splash.mirza-splash--exiting {
+    transition: opacity 0.25s ease;
   }
 }
