@@ -130,7 +130,7 @@ All placement actions invalidate `updateTag("catalog-public")` upon success and 
 - **Deletion Ordering**:
   1. Executes database deletion (`DELETE FROM public.media_assets WHERE id = $1`). This is guarded by foreign key `ON DELETE RESTRICT` in `public.product_media`, preventing race conditions where another admin attaches the image concurrently.
   2. Executes Supabase Storage object cleanup (`deleteStorageObjects([storage_path])`).
-  3. If storage deletion fails, logs an alert and returns `{ success: true, warning: "Media asset record deleted from database, but storage cleanup encountered an error. Path queued for background cleanup." }`.
+  3. If storage deletion fails, logs an alert and returns `{ success: true, warning: "Media asset record deleted from database, but storage cleanup encountered an error. Physical storage object may require manual removal." }`.
   4. Invalidates `updateTag("catalog-public")`.
 
 ---

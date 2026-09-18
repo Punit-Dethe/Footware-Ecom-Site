@@ -620,7 +620,7 @@ export async function deleteMediaLibraryAssetAction(
       return {
         success: true,
         warning:
-          "Media asset record deleted from database, but storage cleanup encountered an error. Path queued for background cleanup.",
+          "Media asset record deleted from database, but storage cleanup encountered an error. Physical storage object may require manual removal.",
       };
     }
 
