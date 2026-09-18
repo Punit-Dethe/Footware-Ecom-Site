@@ -221,12 +221,12 @@ Strict database TLS is a hard invariant. Do not regress to
 
 ## 8. Validation Baseline
 
-Measured on `feat/product-media-library-integration` (Phase 6B), 2026-09-18:
+Measured on `feat/editorial-admin-catalog` (Phase 7), 2026-09-18:
 
 ```text
-Vitest        73 suites / 823 tests passing
-TypeScript    tsc --noEmit clean
-Biome         lint clean (0 errors, 0 warnings across 360 files)
+Vitest        76 suites / 855 tests passing (100% pass)
+TypeScript    tsc --noEmit clean (0 errors)
+Biome         lint clean (0 errors, 0 warnings across 365 files)
 Next.js       Production build clean (103/103 static pages generated)
 ```
 
@@ -239,4 +239,23 @@ Following Phase 6B:
 - **Admin Product Media Authority**: Media Contract v1 (`public.product_media` + `public.media_assets`).
 - **Global Media Library Authority**: Media Contract v1 (`public.media_assets` direct signed uploads + Sharp processing).
 - **Legacy `public.product_images` Status**: Retained exclusively for emergency rollback and historical migration reference. Active admin read/write dependency count: 0.
+
+---
+
+## 10. Mirza Admin Studio Control Plane (Phase 7)
+
+The Mirza Admin Studio (`/(admin)/admin/*`) provides a unified, editorial control plane adhering to the brand's aesthetic language:
+
+1. **Design Tokens & Typography**:
+   - Shared CSS variables (`--admin-canvas`, `--admin-surface`, `--admin-secondary`, `--admin-stone`, `--admin-ink`, `--admin-muted`, `--admin-border`).
+   - Fonts: `Playfair Display` (`--font-editorial-display`), `Newsreader` (`--font-editorial-text`), and `Geist` (`--font-geist`).
+   - Replaced generic SaaS gray tables, shadow-sm, and bright pill badges with quiet typography, thin warm dividers, and flat surfaces.
+2. **Data Access Models**:
+   - **Overview (`/admin`)**: `getAdminCatalogOverview()` executes bounded metric queries and recent product delivery in exactly 2 SQL queries with Media Contract v1 hero resolution.
+   - **Products Index (`/admin/products`)**: `listAdminProductsPage()` executes single bounded CTE pagination (default 30/page), supporting URL state (`?q=&status=&category=&sort=&page=`), aggregating variants and categories, and delivering Media Contract v1 heroes with 0 N+1 lookups.
+   - **Product Edit (`/admin/products/[id]`)**: Integrates Radix dialog confirmations for archiving (no browser `confirm()`), unsaved form dirty tracking, accessible category checkboxes, compact variants editor, and preserved Media Contract v1 Product Media Manager.
+   - **Categories (`/admin/categories`)**: Replaced browser `alert()`/`confirm()` with Radix Create/Edit Dialog and Safe Delete Dialog with server-validated product-count guards.
+3. **Storefront Isolation**:
+   - Customer-facing bundle impact = 0 bytes JS.
+   - Zero customer catalog query changes or database schema migrations.
 

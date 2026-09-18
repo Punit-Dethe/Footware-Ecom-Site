@@ -21,6 +21,53 @@ export interface AdminProductSummary {
   updatedAt: Date;
 }
 
+export interface AdminProductListItem extends AdminProductSummary {
+  heroThumbnailUrl: string | null;
+}
+
+export interface AdminProductsPageResult {
+  products: AdminProductListItem[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export interface ListAdminProductsPageInput {
+  query?: string;
+  status?: "all" | "draft" | "active" | "archived";
+  categoryId?: string;
+  sort?: "updated_desc" | "name_asc" | "stock_asc" | "stock_desc";
+  page?: number;
+  pageSize?: number;
+}
+
+export interface AdminCatalogOverview {
+  metrics: {
+    totalProducts: number;
+    activeProducts: number;
+    draftProducts: number;
+    archivedProducts: number;
+    totalCategories: number;
+    managedMediaCount: number;
+    totalVariants: number;
+    totalStock: number;
+    activeZeroStockProducts: number;
+  };
+  recentProducts: Array<{
+    id: string;
+    name: string;
+    slug: string;
+    sku: string | null;
+    status: "draft" | "active" | "archived";
+    updatedAt: Date;
+    heroThumbnailUrl: string | null;
+    totalStock: number;
+    variantCount: number;
+  }>;
+}
+
+
 export interface AdminVariantRecord {
   id: string;
   productId: string;
@@ -304,6 +351,322 @@ export async function listAdminProducts(): Promise<AdminProductSummary[]> {
     updatedAt: row.updated_at,
   }));
 }
+
+/**
+ * Returns catalog operations overview metrics and recently updated products.
+ * Executes at most 2 bounded SQL queries without N+1.
+ * Hero thumbnails are resolved strictly from Media Contract v1 managed assets.
+ */
+export async function getAdminCatalogOverview(): Promise<AdminCatalogOverview> {
+  const metricsSql = `
+    SELECT
+      COUNT(*)::int AS total_products,
+      COUNT(*) FILTER (WHERE p.status = 'active')::int AS active_products,
+      COUNT(*) FILTER (WHERE p.status = 'draft')::int AS draft_products,
+      COUNT(*) FILTER (WHERE p.status = 'archived')::int AS archived_products,
+      (SELECT COUNT(*)::int FROM public.categories) AS total_categories,
+      (SELECT COUNT(*)::int FROM public.media_assets WHERE storage_provider != 'legacy_public') AS managed_media_count,
+      (SELECT COUNT(*)::int FROM public.variants) AS total_variants,
+      (SELECT COALESCE(SUM(quantity_on_hand), 0)::int FROM public.variants) AS total_stock,
+      (
+        SELECT COUNT(*)::int
+        FROM public.products ap
+        LEFT JOIN (
+          SELECT product_id, COALESCE(SUM(quantity_on_hand), 0) AS stock
+          FROM public.variants
+          GROUP BY product_id
+        ) vs ON vs.product_id = ap.id
+        WHERE ap.status = 'active' AND COALESCE(vs.stock, 0) = 0
+      ) AS active_zero_stock_products
+    FROM public.products p;
+  `;
+
+  const recentSql = `
+    WITH recent AS (
+      SELECT id, name, slug, sku, status, updated_at
+      FROM public.products
+      ORDER BY updated_at DESC
+      LIMIT 5
+    ),
+    variant_agg AS (
+      SELECT
+        v.product_id,
+        COUNT(v.id)::int AS variant_count,
+        COALESCE(SUM(v.quantity_on_hand), 0)::int AS total_stock
+      FROM public.variants v
+      JOIN recent r ON r.id = v.product_id
+      GROUP BY v.product_id
+    ),
+    heroes AS (
+      SELECT DISTINCT ON (pm.product_id)
+        pm.product_id,
+        ma.storage_path
+      FROM public.product_media pm
+      JOIN recent r ON r.id = pm.product_id
+      JOIN public.media_assets ma ON ma.id = pm.media_asset_id
+      WHERE ma.storage_provider != 'legacy_public'
+      ORDER BY pm.product_id, pm.is_hero DESC, pm.position ASC
+    )
+    SELECT
+      r.id,
+      r.name,
+      r.slug,
+      r.sku,
+      r.status,
+      r.updated_at,
+      COALESCE(va.variant_count, 0)::int AS variant_count,
+      COALESCE(va.total_stock, 0)::int AS total_stock,
+      h.storage_path AS hero_storage_path
+    FROM recent r
+    LEFT JOIN variant_agg va ON va.product_id = r.id
+    LEFT JOIN heroes h ON h.product_id = r.id
+    ORDER BY r.updated_at DESC;
+  `;
+
+  const [metricsRes, recentRes] = await Promise.all([
+    query<{
+      total_products: number;
+      active_products: number;
+      draft_products: number;
+      archived_products: number;
+      total_categories: number;
+      managed_media_count: number;
+      total_variants: number;
+      total_stock: number;
+      active_zero_stock_products: number;
+    }>(metricsSql),
+    query<{
+      id: string;
+      name: string;
+      slug: string;
+      sku: string | null;
+      status: "draft" | "active" | "archived";
+      updated_at: Date;
+      variant_count: number;
+      total_stock: number;
+      hero_storage_path: string | null;
+    }>(recentSql),
+  ]);
+
+  const m = metricsRes.rows[0] || {
+    total_products: 0,
+    active_products: 0,
+    draft_products: 0,
+    archived_products: 0,
+    total_categories: 0,
+    managed_media_count: 0,
+    total_variants: 0,
+    total_stock: 0,
+    active_zero_stock_products: 0,
+  };
+
+  return {
+    metrics: {
+      totalProducts: Number(m.total_products) || 0,
+      activeProducts: Number(m.active_products) || 0,
+      draftProducts: Number(m.draft_products) || 0,
+      archivedProducts: Number(m.archived_products) || 0,
+      totalCategories: Number(m.total_categories) || 0,
+      managedMediaCount: Number(m.managed_media_count) || 0,
+      totalVariants: Number(m.total_variants) || 0,
+      totalStock: Number(m.total_stock) || 0,
+      activeZeroStockProducts: Number(m.active_zero_stock_products) || 0,
+    },
+    recentProducts: recentRes.rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      slug: row.slug,
+      sku: row.sku,
+      status: row.status,
+      updatedAt: row.updated_at,
+      variantCount: Number(row.variant_count) || 0,
+      totalStock: Number(row.total_stock) || 0,
+      heroThumbnailUrl: row.hero_storage_path ? getStoragePublicUrl(row.hero_storage_path) : null,
+    })),
+  };
+}
+
+/**
+ * Server-side paginated product listing with filters, sorting, and Media Contract v1 hero resolution.
+ * Bounded query model that aggregates variant stats, categories, and hero thumbnail in 1 bounded SQL query.
+ */
+export async function listAdminProductsPage(
+  input: ListAdminProductsPageInput = {},
+): Promise<AdminProductsPageResult> {
+  const page = Math.max(1, Number(input.page) || 1);
+  const pageSize = Math.min(100, Math.max(1, Number(input.pageSize) || 30));
+  const offset = (page - 1) * pageSize;
+
+  const whereClauses: string[] = ["1=1"];
+  const params: unknown[] = [];
+
+  if (input.query?.trim()) {
+    params.push(`%${input.query.trim()}%`);
+    const qIdx = params.length;
+    whereClauses.push(
+      `(p.name ILIKE $${qIdx} OR p.slug ILIKE $${qIdx} OR (p.sku IS NOT NULL AND p.sku ILIKE $${qIdx}))`,
+    );
+  }
+
+  if (input.status && input.status !== "all") {
+    params.push(input.status);
+    whereClauses.push(`p.status = $${params.length}`);
+  }
+
+  if (input.categoryId && isValidUuid(input.categoryId)) {
+    params.push(input.categoryId);
+    whereClauses.push(
+      `p.id IN (SELECT product_id FROM public.product_categories WHERE category_id = $${params.length})`,
+    );
+  }
+
+  let rankedOrderBy = "fp.updated_at DESC, fp.id DESC";
+  let outerOrderBy = "rp.updated_at DESC, rp.id DESC";
+  if (input.sort === "name_asc") {
+    rankedOrderBy = "fp.name ASC, fp.id DESC";
+    outerOrderBy = "rp.name ASC, rp.id DESC";
+  } else if (input.sort === "stock_asc") {
+    rankedOrderBy = "COALESCE(vs.total_stock, 0) ASC, fp.updated_at DESC, fp.id DESC";
+    outerOrderBy = "rp.total_stock ASC, rp.updated_at DESC, rp.id DESC";
+  } else if (input.sort === "stock_desc") {
+    rankedOrderBy = "COALESCE(vs.total_stock, 0) DESC, fp.updated_at DESC, fp.id DESC";
+    outerOrderBy = "rp.total_stock DESC, rp.updated_at DESC, rp.id DESC";
+  }
+
+  params.push(pageSize);
+  const limitIdx = params.length;
+  params.push(offset);
+  const offsetIdx = params.length;
+
+  const sql = `
+    WITH filtered_products AS (
+      SELECT p.id, p.name, p.slug, p.sku, p.status, p.created_at, p.updated_at
+      FROM public.products p
+      WHERE ${whereClauses.join(" AND ")}
+    ),
+    variant_stats AS (
+      SELECT
+        v.product_id,
+        COUNT(v.id)::int AS variant_count,
+        MIN(v.price_in_cents) AS min_price_in_cents,
+        MAX(v.price_in_cents) AS max_price_in_cents,
+        COALESCE(SUM(v.quantity_on_hand), 0)::int AS total_stock
+      FROM public.variants v
+      JOIN filtered_products fp ON fp.id = v.product_id
+      GROUP BY v.product_id
+    ),
+    ranked_products AS (
+      SELECT
+        fp.id,
+        fp.name,
+        fp.slug,
+        fp.sku,
+        fp.status,
+        fp.created_at,
+        fp.updated_at,
+        COALESCE(vs.variant_count, 0)::int AS variant_count,
+        vs.min_price_in_cents,
+        vs.max_price_in_cents,
+        COALESCE(vs.total_stock, 0)::int AS total_stock,
+        COUNT(*) OVER()::int AS total_count
+      FROM filtered_products fp
+      LEFT JOIN variant_stats vs ON vs.product_id = fp.id
+      ORDER BY ${rankedOrderBy}
+      LIMIT $${limitIdx} OFFSET $${offsetIdx}
+    ),
+    cat_agg AS (
+      SELECT
+        pc.product_id,
+        COALESCE(
+          json_agg(jsonb_build_object('id', c.id, 'name', c.name, 'slug', c.slug) ORDER BY c.name)
+          FILTER (WHERE c.id IS NOT NULL),
+          '[]'::json
+        ) AS categories
+      FROM public.product_categories pc
+      JOIN public.categories c ON c.id = pc.category_id
+      JOIN ranked_products rp ON rp.id = pc.product_id
+      GROUP BY pc.product_id
+    ),
+    heroes AS (
+      SELECT DISTINCT ON (pm.product_id)
+        pm.product_id,
+        ma.storage_path
+      FROM public.product_media pm
+      JOIN ranked_products rp ON rp.id = pm.product_id
+      JOIN public.media_assets ma ON ma.id = pm.media_asset_id
+      WHERE ma.storage_provider != 'legacy_public'
+      ORDER BY pm.product_id, pm.is_hero DESC, pm.position ASC
+    )
+    SELECT
+      rp.*,
+      COALESCE(ca.categories, '[]'::json) AS categories,
+      h.storage_path AS hero_storage_path
+    FROM ranked_products rp
+    LEFT JOIN cat_agg ca ON ca.product_id = rp.id
+    LEFT JOIN heroes h ON h.product_id = rp.id
+    ORDER BY ${outerOrderBy};
+  `;
+
+  const res = await query<{
+    id: string;
+    name: string;
+    slug: string;
+    sku: string | null;
+    status: "draft" | "active" | "archived";
+    created_at: Date;
+    updated_at: Date;
+    variant_count: number;
+    min_price_in_cents: number | null;
+    max_price_in_cents: number | null;
+    total_stock: number;
+    total_count: number;
+    categories: Array<{ id: string; name: string; slug: string }>;
+    hero_storage_path: string | null;
+  }>(sql, params);
+
+  let totalCount = 0;
+  if (res.rows.length > 0) {
+    totalCount = Number(res.rows[0].total_count) || 0;
+  } else if (offset > 0) {
+    // If offset past total, run count query with the same filters
+    const countSql = `
+      SELECT COUNT(*)::int AS count
+      FROM public.products p
+      WHERE ${whereClauses.join(" AND ")};
+    `;
+    // params without limit and offset
+    const countParams = params.slice(0, -2);
+    const countRes = await query<{ count: number }>(countSql, countParams);
+    totalCount = Number(countRes.rows[0]?.count) || 0;
+  }
+
+  const products: AdminProductListItem[] = res.rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    slug: row.slug,
+    sku: row.sku,
+    status: row.status,
+    variantCount: Number(row.variant_count) || 0,
+    minPriceInCents: row.min_price_in_cents != null ? Number(row.min_price_in_cents) : null,
+    maxPriceInCents: row.max_price_in_cents != null ? Number(row.max_price_in_cents) : null,
+    totalStock: Number(row.total_stock) || 0,
+    categories: Array.isArray(row.categories) ? row.categories : [],
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    heroThumbnailUrl: row.hero_storage_path ? getStoragePublicUrl(row.hero_storage_path) : null,
+  }));
+
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+
+  return {
+    products,
+    totalCount,
+    page,
+    pageSize,
+    totalPages,
+  };
+}
+
 
 /**
  * Retrieves a single product with full category and variant detail.

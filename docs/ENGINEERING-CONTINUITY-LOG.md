@@ -25,36 +25,36 @@
 * **Phase 4 (Storefront Cutover to Media Contract v1)**: MERGED (`feat/media-v1-storefront-cutover`).
 * **Phase 5 (Global Media Library Backend + Upload Pipeline)**: MERGED (`feat/media-library-backend`).
 * **Phase 6A (Editorial Admin Foundation & Global Media Library UI)**: MERGED into `main` at `5c0edbf6ce94bd09d563a5b93fcc45cbe2c90fbe`.
-* **Phase 6B (Product ↔ Media Library Integration)**: **COMPLETE / VERIFIED** on branch `feat/product-media-library-integration`.
-  - Cut Admin Product Detail read model from `product_images` over to Media Contract v1 (`listProductMediaV1`).
-  - Completely replaced legacy `ProductMediaManager.tsx` with Mirza editorial product media experience.
-  - Added `ProductMediaLibraryPicker.tsx` with Radix accessible dialog, deep-search, sort, pagination, and multi-selection.
-  - Enforced server-side active product last-media safety guard and automatic hero promotion on detachment.
-  - Enforced Media Contract v1 publish invariant: active products require >= 1 managed media asset before activation.
-  - Protected unsaved form metadata/variant state during all media operations using `getProductMediaV1Action`.
-  - Automated cache tag invalidation (`catalog-public`) on all mutations.
-  - Zero active admin reads from legacy `public.product_images`.
-  - Full test suite: 73 test files, 823 tests passing.
-  - Live integration smoke verified against temporary draft product; canonical 31 products untouched; zero DB count drift.
-  - Visual QA verified at 1920, 1440, 768, 390.
-  - Production build: 103/103 static pages generated cleanly.
-  - Ready for supervisor review. Do NOT merge to main yet.
+* **Phase 6B (Product ↔ Media Library Integration)**: MERGED into `main` at `22144864d96c5828619d1df626eef2311e6e571c`.
+* **Phase 7 (Complete Editorial Catalog Admin Redesign)**: **COMPLETE / VERIFIED** on branch `feat/editorial-admin-catalog`.
+  - Replaced `/admin` redirect with real Mirza Studio Overview (`getAdminCatalogOverview()` bounded to 2 SQL queries, 0 N+1, Media Contract v1 hero thumbnails, 0 `product_images`).
+  - Rebuilt `/admin/products` index with bounded pagination (`listAdminProductsPage()`, default 30/page, URL state `?q=&status=&category=&sort=&page=`, quiet uppercase status, aggregated variants and categories).
+  - Redesigned `/admin/products/[id]` (`ProductEditForm.tsx`): editorial typography, live storefront link (`View on storefront ↗`), Radix Archive confirmation dialog (replaces browser `confirm()`), unsaved dirty state tracking, clean accessible category checkboxes, compact variants editor, preserved Phase 6B `ProductMediaManager` without regression.
+  - Redesigned `/admin/products/new` (`ProductNewForm.tsx`) with draft registration helper notice.
+  - Redesigned `/admin/categories` (`CategoryManager.tsx`): Radix Create/Edit Dialog and Radix Safe Delete Dialog (blocks when `productCount > 0`, confirms when 0; no browser `alert()` or `confirm()`).
+  - Extended `storefront/src/app/admin.css` with shared editorial design tokens (`--admin-canvas`, `--admin-surface`, `--admin-secondary`, `--admin-stone`, `--admin-ink`, `--admin-muted`, `--admin-border`).
+  - Top navigation updated to: Overview, Products, Categories, Media.
+  - Full test suite: 76 test files, 855 passed, 0 failures.
+  - TypeScript `tsc --noEmit`: 0 errors. Biome lint: 0 errors, 0 warnings.
+  - Visual QA verified at 1920, 1440, 768, and 390 viewports with zero errors.
+  - Production build: 103/103 static pages generated cleanly. Zero storefront JS or catalog query impact. Zero database schema migrations.
+  - Ready for supervisor review. Do NOT merge to main.
 
 ### Current working head
 
-Starting `main` SHA for Phase 6B:
+Starting `main` SHA for Phase 7:
 
 ```text
-5c0edbf6ce94bd09d563a5b93fcc45cbe2c90fbe  Merge branch 'feat/editorial-media-library-ui' into main
+22144864d96c5828619d1df626eef2311e6e571c  fix(media): implement Phase 6B final hero promotion fix
 ```
 
-Branch: `feat/product-media-library-integration`
+Branch: `feat/editorial-admin-catalog`
 
 Current phase:
 
 ```text
-MIRZA MEDIA MODERNIZATION — PHASE 6B: PRODUCT ↔ MEDIA LIBRARY INTEGRATION — COMPLETE (Awaiting Supervisor Review)
-Next: PHASE 7 — STOREFRONT REFINEMENT & CATEGORIES (or subsequent milestone)
+MIRZA ADMIN — PHASE 7: COMPLETE EDITORIAL CATALOG ADMIN REDESIGN — COMPLETE (Awaiting Supervisor Review)
+Next: PHASE 8 — ORDERS & CUSTOMERS CONTROL PLANE
 ```
 
 Canonical B10 references:

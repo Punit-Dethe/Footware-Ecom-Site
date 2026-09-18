@@ -67,98 +67,125 @@ export function ProductNewForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="max-w-2xl bg-white p-6 rounded-lg shadow-sm border border-gray-200 space-y-6">
+    <form onSubmit={handleSubmit} className="admin-section space-y-6">
+      <div className="admin-section-header">
+        <h2 className="admin-section-title">Product Details</h2>
+        <span className="admin-section-subtitle">Core silhouette information</span>
+      </div>
+
       {error && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-md text-sm text-red-800">
-          {error}
+        <div className="admin-feedback admin-feedback--error" role="alert">
+          <svg className="w-5 h-5 shrink-0 text-[#8f2d2d]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div>
+            <div className="font-semibold">Creation Error</div>
+            <div className="mt-0.5">{error}</div>
+          </div>
         </div>
       )}
 
       <div className="space-y-4">
         <div>
-          <label className="block text-xs font-semibold text-gray-700 mb-1">Product Name *</label>
+          <label htmlFor="new-product-name" className="admin-label">Product Name *</label>
           <input
+            id="new-product-name"
             type="text"
             required
             value={name}
             onChange={(e) => handleNameChange(e.target.value)}
-            className="w-full text-sm px-3 py-2 border rounded-md border-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-900"
+            className="admin-input w-full"
             placeholder="e.g. The Sovereign Wholecut Oxford"
           />
-          {fieldErrors.name && <p className="text-xs text-red-600 mt-1">{fieldErrors.name}</p>}
+          {fieldErrors.name && <p className="admin-field-error">{fieldErrors.name}</p>}
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-gray-700 mb-1">Slug *</label>
+          <label htmlFor="new-product-slug" className="admin-label">Slug *</label>
           <input
+            id="new-product-slug"
             type="text"
             required
             value={slug}
             onChange={(e) => setSlug(e.target.value.toLowerCase())}
-            className="w-full text-sm px-3 py-2 border rounded-md border-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-900"
-            placeholder="e.g. office-footwear-01"
+            className="admin-input w-full font-mono text-xs"
+            placeholder="e.g. sovereign-wholecut-oxford"
           />
-          {fieldErrors.slug && <p className="text-xs text-red-600 mt-1">{fieldErrors.slug}</p>}
+          {fieldErrors.slug && <p className="admin-field-error">{fieldErrors.slug}</p>}
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-gray-700 mb-1">Base Product SKU (Optional for Draft)</label>
+          <label htmlFor="new-product-sku" className="admin-label">Base Product SKU (Optional for Draft)</label>
           <input
+            id="new-product-sku"
             type="text"
             value={sku}
             onChange={(e) => setSku(e.target.value.toUpperCase())}
-            className="w-full text-sm px-3 py-2 border rounded-md border-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-900 font-mono"
-            placeholder="e.g. MIRZA-OFF-001"
+            className="admin-input w-full font-mono text-xs"
+            placeholder="e.g. SHOE-2026-09-032"
           />
-          {fieldErrors.sku && <p className="text-xs text-red-600 mt-1">{fieldErrors.sku}</p>}
+          {fieldErrors.sku && <p className="admin-field-error">{fieldErrors.sku}</p>}
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-gray-700 mb-1">
+          <label htmlFor="new-product-desc" className="admin-label">
             Description (Plain text — HTML characters safely escaped)
           </label>
           <textarea
+            id="new-product-desc"
             rows={4}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            className="w-full text-sm px-3 py-2 border rounded-md border-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-900"
-            placeholder="Enter product description..."
+            className="admin-input w-full font-sans leading-relaxed"
+            placeholder="Enter plain text description. Double newlines create paragraphs."
           />
+          {fieldErrors.description && (
+            <p className="admin-field-error">{fieldErrors.description}</p>
+          )}
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-gray-700 mb-2">Category Membership</label>
-          <div className="grid grid-cols-2 gap-2">
-            {categories.map((c) => (
-              <label
-                key={c.id}
-                className="flex items-center space-x-2 text-sm text-gray-700 p-2 border rounded-md cursor-pointer hover:bg-gray-50"
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedCategoryIds.includes(c.id)}
-                  onChange={() => handleCategoryToggle(c.id)}
-                  className="size-4 text-gray-900 rounded border-gray-300"
-                />
-                <span>{c.name}</span>
-              </label>
-            ))}
+          <label className="admin-label mb-2">Category Membership</label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            {categories.map((c) => {
+              const isSelected = selectedCategoryIds.includes(c.id);
+              return (
+                <label
+                  key={c.id}
+                  className={`flex items-center gap-3 p-3 border rounded-[2px] cursor-pointer transition-colors ${
+                    isSelected
+                      ? "bg-[#e9e2d6]/60 border-[#30261f]"
+                      : "bg-[#fffefc] border-[#cfc4b6] hover:bg-[#ece7de]/30"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => handleCategoryToggle(c.id)}
+                    className="w-4 h-4 accent-[#30261f] cursor-pointer"
+                  />
+                  <span className="text-xs font-medium text-[#30261f] select-none">
+                    {c.name}
+                  </span>
+                </label>
+              );
+            })}
           </div>
         </div>
       </div>
 
-      <div className="pt-4 border-t flex items-center justify-end space-x-3">
+      <div className="pt-5 border-t border-[#cfc4b6] flex items-center justify-end gap-3">
         <button
           type="button"
           onClick={() => router.back()}
-          className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+          className="admin-btn admin-btn-secondary"
         >
           Cancel
         </button>
         <button
           type="submit"
           disabled={saving}
-          className="px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white rounded-md text-sm font-semibold disabled:opacity-50"
+          className="admin-btn admin-btn-primary"
         >
           {saving ? "Creating Draft..." : "Create Draft Product"}
         </button>

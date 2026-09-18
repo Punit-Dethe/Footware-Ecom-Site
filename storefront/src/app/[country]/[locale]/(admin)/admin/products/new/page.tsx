@@ -16,19 +16,32 @@ export default async function ProductNewPage({ params }: ProductNewPageProps) {
   const basePath = `/${country}/${locale}/admin`;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center space-x-2 text-xs text-gray-500">
-        <Link href={`${basePath}/products`} className="hover:text-gray-900">
+    <div className="space-y-8 max-w-3xl">
+      {/* Route Breadcrumbs */}
+      <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-xs text-[#706257]">
+        <Link href={`${basePath}/products`} className="hover:text-[#30261f] transition-colors">
           Products
         </Link>
         <span>/</span>
-        <span className="text-gray-900 font-medium">New Product</span>
+        <span className="text-[#30261f] font-medium">New Product</span>
+      </nav>
+
+      {/* Header */}
+      <div className="border-b border-[#cfc4b6] pb-6">
+        <span className="admin-eyebrow">Catalog Draft</span>
+        <h1 className="admin-title mt-1">New Product</h1>
+        <p className="admin-subtitle mt-1">
+          Initial draft registration for a new footwear silhouette.
+        </p>
       </div>
 
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Create Draft Product</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          Initial products are saved as drafts and hidden from the public storefront until published.
+      {/* Editorial Helper Notice */}
+      <div className="admin-feedback admin-feedback--warning">
+        <svg className="w-5 h-5 shrink-0 text-[#79571e]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <p className="text-xs text-[#79571e] leading-relaxed">
+          Products begin as drafts so imagery, variants, and publishing details can be completed in the editor before public release.
         </p>
       </div>
 

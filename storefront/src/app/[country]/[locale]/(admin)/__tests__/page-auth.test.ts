@@ -6,9 +6,11 @@ const mockAuth = vi.hoisted(() => ({
 
 const mockDal = vi.hoisted(() => ({
   listAdminProducts: vi.fn(),
+  listAdminProductsPage: vi.fn(),
   getAdminProduct: vi.fn(),
   listAdminCategories: vi.fn(),
   getAdminCategory: vi.fn(),
+  getAdminCatalogOverview: vi.fn(),
 }));
 
 const mockNavigation = vi.hoisted(() => ({
@@ -31,9 +33,11 @@ vi.mock("@/lib/auth/admin", () => {
 
 vi.mock("@/lib/db/admin-catalog", () => ({
   listAdminProducts: mockDal.listAdminProducts,
+  listAdminProductsPage: mockDal.listAdminProductsPage,
   getAdminProduct: mockDal.getAdminProduct,
   listAdminCategories: mockDal.listAdminCategories,
   getAdminCategory: mockDal.getAdminCategory,
+  getAdminCatalogOverview: mockDal.getAdminCatalogOverview,
 }));
 
 vi.mock("next/server", () => ({
@@ -93,11 +97,12 @@ describe("Admin Pages Direct Authorization Enforcement", () => {
       );
     });
 
-    it("products page: rejects before calling listAdminProducts (DAL calls = 0)", async () => {
+    it("products page: rejects before calling listAdminProductsPage (DAL calls = 0)", async () => {
       await expect(AdminProductsPage({ params: testParams })).rejects.toThrow(
         "Admin authorization required.",
       );
-      expect(mockDal.listAdminProducts).not.toHaveBeenCalled();
+      expect(mockDal.listAdminProductsPage).not.toHaveBeenCalled();
+      expect(mockDal.listAdminCategories).not.toHaveBeenCalled();
     });
 
     it("new product page: rejects before calling listAdminCategories (DAL calls = 0)", async () => {
@@ -122,10 +127,11 @@ describe("Admin Pages Direct Authorization Enforcement", () => {
       expect(mockDal.listAdminCategories).not.toHaveBeenCalled();
     });
 
-    it("admin root redirect page: rejects before redirecting", async () => {
+    it("admin root overview page: rejects before calling getAdminCatalogOverview", async () => {
       await expect(
         AdminIndexPageContent({ params: testParams }),
       ).rejects.toThrow("Admin authorization required.");
+      expect(mockDal.getAdminCatalogOverview).not.toHaveBeenCalled();
       expect(mockNavigation.redirect).not.toHaveBeenCalled();
     });
 
@@ -148,7 +154,8 @@ describe("Admin Pages Direct Authorization Enforcement", () => {
       await expect(AdminProductsPage({ params: testParams })).rejects.toThrow(
         "Admin authorization required.",
       );
-      expect(mockDal.listAdminProducts).not.toHaveBeenCalled();
+      expect(mockDal.listAdminProductsPage).not.toHaveBeenCalled();
+      expect(mockDal.listAdminCategories).not.toHaveBeenCalled();
     });
 
     it("categories page: customer request blocks DAL (calls = 0)", async () => {
@@ -173,7 +180,8 @@ describe("Admin Pages Direct Authorization Enforcement", () => {
       await expect(AdminProductsPage({ params: testParams })).rejects.toThrow(
         "Auth service infrastructure outage",
       );
-      expect(mockDal.listAdminProducts).not.toHaveBeenCalled();
+      expect(mockDal.listAdminProductsPage).not.toHaveBeenCalled();
+      expect(mockDal.listAdminCategories).not.toHaveBeenCalled();
     });
 
     it("fails closed on product detail page (DAL calls = 0)", async () => {
@@ -196,7 +204,8 @@ describe("Admin Pages Direct Authorization Enforcement", () => {
       await expect(AdminProductsPage({ params: testParams })).rejects.toThrow(
         "PostgreSQL pool connection timeout",
       );
-      expect(mockDal.listAdminProducts).not.toHaveBeenCalled();
+      expect(mockDal.listAdminProductsPage).not.toHaveBeenCalled();
+      expect(mockDal.listAdminCategories).not.toHaveBeenCalled();
     });
 
     it("fails closed on categories page (DAL calls = 0)", async () => {
@@ -222,7 +231,27 @@ describe("Admin Pages Direct Authorization Enforcement", () => {
           updated_at: new Date(),
         },
       });
-      mockDal.listAdminProducts.mockResolvedValue([]);
+      mockDal.listAdminProductsPage.mockResolvedValue({
+        products: [],
+        totalCount: 0,
+        page: 1,
+        pageSize: 30,
+        totalPages: 1,
+      });
+      mockDal.getAdminCatalogOverview.mockResolvedValue({
+        metrics: {
+          totalProducts: 0,
+          activeProducts: 0,
+          draftProducts: 0,
+          archivedProducts: 0,
+          totalCategories: 0,
+          managedMediaCount: 0,
+          totalVariants: 0,
+          totalStock: 0,
+          activeZeroStockProducts: 0,
+        },
+        recentProducts: [],
+      });
       mockDal.listAdminCategories.mockResolvedValue([]);
       mockDal.getAdminProduct.mockResolvedValue({
         id: "11111111-1111-4111-8111-111111111111",
@@ -242,10 +271,11 @@ describe("Admin Pages Direct Authorization Enforcement", () => {
       });
     });
 
-    it("products page: executes listAdminProducts when authorized", async () => {
+    it("products page: executes listAdminProductsPage and listAdminCategories when authorized", async () => {
       const res = await AdminProductsPage({ params: testParams });
       expect(res).toBeDefined();
-      expect(mockDal.listAdminProducts).toHaveBeenCalledTimes(1);
+      expect(mockDal.listAdminProductsPage).toHaveBeenCalledTimes(1);
+      expect(mockDal.listAdminCategories).toHaveBeenCalledTimes(1);
     });
 
     it("new product page: executes listAdminCategories when authorized", async () => {
@@ -269,9 +299,11 @@ describe("Admin Pages Direct Authorization Enforcement", () => {
       expect(mockDal.listAdminCategories).toHaveBeenCalledTimes(1);
     });
 
-    it("admin root redirect page: redirects to products when authorized", async () => {
-      await AdminIndexPageContent({ params: testParams });
-      expect(mockNavigation.redirect).toHaveBeenCalledWith("/us/en/admin/products");
+    it("admin root overview page: executes getAdminCatalogOverview without redirect when authorized", async () => {
+      const res = await AdminIndexPageContent({ params: testParams });
+      expect(res).toBeDefined();
+      expect(mockDal.getAdminCatalogOverview).toHaveBeenCalledTimes(1);
+      expect(mockNavigation.redirect).not.toHaveBeenCalled();
     });
 
     it("media library page: executes listMediaLibraryAssets when authorized", async () => {
