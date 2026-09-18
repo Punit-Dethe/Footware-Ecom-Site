@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
+import { Dialog as DialogPrimitive } from "radix-ui";
 import { createClient } from "@supabase/supabase-js";
 import {
   requestMediaLibraryUploadAction,
@@ -21,12 +22,14 @@ interface MediaUploadModalProps {
   isOpen: boolean;
   onClose: () => void;
   onUploadSuccess: (newAssetId: string) => void;
+  triggerRef?: React.RefObject<HTMLElement | null>;
 }
 
 export function MediaUploadModal({
   isOpen,
   onClose,
   onUploadSuccess,
+  triggerRef,
 }: MediaUploadModalProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -36,37 +39,50 @@ export function MediaUploadModal({
   >("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const activeElementBeforeOpen = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
-    if (!isOpen) {
-      setSelectedFile(null);
-      setPreviewUrl(null);
-      setStatus("idle");
-      setErrorMessage(null);
+    if (isOpen) {
+      if (!activeElementBeforeOpen.current && typeof document !== "undefined" && document.activeElement instanceof HTMLElement) {
+        activeElementBeforeOpen.current = document.activeElement;
+      }
+    } else {
+      activeElementBeforeOpen.current = null;
     }
   }, [isOpen]);
 
+  // Reset state on open/close
+  useEffect(() => {
+    if (!isOpen) {
+      setSelectedFile(null);
+      setPreviewUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
+      setStatus("idle");
+      setErrorMessage(null);
+      setIsDragOver(false);
+    }
+  }, [isOpen]);
+
+  // Handle selected file object URL
   useEffect(() => {
     if (selectedFile) {
       const objectUrl = URL.createObjectURL(selectedFile);
       setPreviewUrl(objectUrl);
       return () => URL.revokeObjectURL(objectUrl);
-    } else {
-      setPreviewUrl(null);
     }
+    setPreviewUrl(null);
   }, [selectedFile]);
 
+  // Clean up object URL on unmount
   useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape" && isOpen && status !== "uploading" && status !== "validating") {
-        onClose();
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
       }
-    }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, status, onClose]);
-
-  if (!isOpen) return null;
+    };
+  }, [previewUrl]);
 
   function handleFileSelection(file: File) {
     setErrorMessage(null);
@@ -173,148 +189,179 @@ export function MediaUploadModal({
   const isWorking = status === "uploading" || status === "validating";
 
   return (
-    <>
-      <div
-        className="admin-drawer-backdrop"
-        onClick={() => {
-          if (!isWorking) onClose();
-        }}
-      />
-      <div className="admin-modal-panel p-6 sm:p-8" role="dialog" aria-modal="true">
-        <div className="flex items-baseline justify-between border-b border-[#cfc4b6] pb-4 mb-6">
-          <div>
-            <span className="admin-eyebrow">Studio Intake</span>
-            <h2 className="admin-title text-2xl mt-0.5">Upload Media</h2>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={isWorking}
-            className="text-[#706257] hover:text-[#30261f] text-sm p-1 transition-colors"
-            aria-label="Close dialog"
-          >
-            ✕
-          </button>
-        </div>
-
-        {/* Dropzone */}
-        {!selectedFile ? (
-          <div
-            className={`admin-dropzone ${isDragOver ? "admin-dropzone--active" : ""}`}
-            onDragOver={(e) => {
+    <DialogPrimitive.Root
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open && !isWorking) {
+          onClose();
+        }
+      }}
+    >
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay className="admin-drawer-backdrop" />
+        <DialogPrimitive.Content
+          className="admin-modal-panel p-6 sm:p-8 outline-none"
+          onEscapeKeyDown={(e) => {
+            if (isWorking) {
               e.preventDefault();
-              setIsDragOver(true);
-            }}
-            onDragLeave={() => setIsDragOver(false)}
-            onDrop={(e) => {
+            }
+          }}
+          onCloseAutoFocus={(e) => {
+            const target = triggerRef?.current ?? activeElementBeforeOpen.current;
+            if (target && typeof target.focus === "function") {
               e.preventDefault();
-              setIsDragOver(false);
-              const file = e.dataTransfer.files?.[0];
-              if (file) handleFileSelection(file);
-            }}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/avif"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handleFileSelection(file);
-              }}
-            />
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-[#30261f]">
-                Drop product or visual assets here, or{" "}
-                <span className="underline cursor-pointer">browse files</span>
-              </p>
-              <p className="text-xs text-[#706257]">
-                Supported: WebP, JPEG, PNG, AVIF up to 10 MB.
-              </p>
-              <p className="text-[11px] text-[#8c7e73]">
-                Direct encrypted upload to Supabase Storage with server-side Sharp verification.
-              </p>
+              target.focus();
+            }
+          }}
+        >
+          <DialogPrimitive.Description className="sr-only">
+            Upload product or visual assets to the Mirza media library.
+          </DialogPrimitive.Description>
+          <div className="flex items-baseline justify-between border-b border-[#cfc4b6] pb-4 mb-6">
+            <div>
+              <span className="admin-eyebrow">Studio Intake</span>
+              <DialogPrimitive.Title asChild>
+                <h2 className="admin-title text-2xl mt-0.5">Upload Media</h2>
+              </DialogPrimitive.Title>
             </div>
-          </div>
-        ) : (
-          <div className="bg-[#fffefc] border border-[#cfc4b6] p-4 rounded-[2px] flex items-center gap-4">
-            <div className="w-16 h-16 bg-[#ece7de] flex-shrink-0 flex items-center justify-center overflow-hidden border border-[#d8d0c5]">
-              {previewUrl && (
-                <Image
-                  src={previewUrl}
-                  alt="Upload preview"
-                  width={64}
-                  height={64}
-                  unoptimized
-                  className="w-full h-full object-contain"
-                />
-              )}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-[#30261f] truncate">
-                {selectedFile.name}
-              </p>
-              <p className="text-xs text-[#706257]">
-                {(selectedFile.size / 1024).toFixed(1)} KB &bull; {selectedFile.type}
-              </p>
-              {status === "uploading" && (
-                <p className="text-[11px] text-[#706257] mt-1 italic animate-pulse">
-                  Uploading directly to Supabase Storage...
-                </p>
-              )}
-              {status === "validating" && (
-                <p className="text-[11px] text-[#706257] mt-1 italic animate-pulse">
-                  Verifying format &amp; computing SHA-256 with Sharp...
-                </p>
-              )}
-            </div>
-            {!isWorking && (
+            <DialogPrimitive.Close asChild>
               <button
                 type="button"
-                onClick={() => {
-                  setSelectedFile(null);
-                  setStatus("idle");
-                }}
-                className="text-xs text-[#706257] hover:text-[#30261f] underline"
+                disabled={isWorking}
+                className="text-[#706257] hover:text-[#30261f] text-sm p-1 transition-colors"
+                aria-label="Close dialog"
               >
-                Change
+                ✕
               </button>
-            )}
+            </DialogPrimitive.Close>
           </div>
-        )}
 
-        {/* Error message */}
-        {errorMessage && (
-          <div className="mt-4 p-3 bg-[#faefef] border border-[#deb8b8] text-[#8f2d2d] text-xs rounded-[2px]">
-            {errorMessage}
+          {/* Dropzone */}
+          {!selectedFile ? (
+            <>
+              <input
+                ref={fileInputRef}
+                type="file"
+                tabIndex={-1}
+                aria-hidden="true"
+                accept="image/jpeg,image/png,image/webp,image/avif"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleFileSelection(file);
+                }}
+              />
+              <button
+                type="button"
+                aria-label="Upload media file. Drop files here or press Enter or Space to browse files"
+                className={`admin-dropzone w-full block ${isDragOver ? "admin-dropzone--active" : ""}`}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setIsDragOver(true);
+                }}
+                onDragLeave={() => setIsDragOver(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setIsDragOver(false);
+                  const file = e.dataTransfer.files?.[0];
+                  if (file) handleFileSelection(file);
+                }}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <div className="space-y-2 pointer-events-none">
+                  <p className="text-sm font-medium text-[#30261f]">
+                    Drop product or visual assets here, or{" "}
+                    <span className="underline">browse files</span>
+                  </p>
+                  <p className="text-xs text-[#706257]">
+                    Supported: WebP, JPEG, PNG, AVIF up to 10 MB.
+                  </p>
+                  <p className="text-[11px] text-[#8c7e73]">
+                    Direct encrypted upload to Supabase Storage with server-side Sharp verification.
+                  </p>
+                </div>
+              </button>
+            </>
+          ) : (
+
+            <div className="bg-[#fffefc] border border-[#cfc4b6] p-4 rounded-[2px] flex items-center gap-4">
+              <div className="w-16 h-16 bg-[#ece7de] flex-shrink-0 flex items-center justify-center overflow-hidden border border-[#d8d0c5]">
+                {previewUrl && (
+                  <Image
+                    src={previewUrl}
+                    alt="Upload preview"
+                    width={64}
+                    height={64}
+                    unoptimized
+                    className="w-full h-full object-contain"
+                  />
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-[#30261f] truncate">
+                  {selectedFile.name}
+                </p>
+                <p className="text-xs text-[#706257]">
+                  {(selectedFile.size / 1024).toFixed(1)} KB &bull; {selectedFile.type}
+                </p>
+                {status === "uploading" && (
+                  <p className="text-[11px] text-[#706257] mt-1 italic animate-pulse">
+                    Uploading directly to Supabase Storage...
+                  </p>
+                )}
+                {status === "validating" && (
+                  <p className="text-[11px] text-[#706257] mt-1 italic animate-pulse">
+                    Verifying format &amp; computing SHA-256 with Sharp...
+                  </p>
+                )}
+              </div>
+              {!isWorking && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedFile(null);
+                    setStatus("idle");
+                  }}
+                  className="text-xs text-[#706257] hover:text-[#30261f] underline"
+                >
+                  Change
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Error message */}
+          {errorMessage && (
+            <div className="mt-4 p-3 bg-[#faefef] border border-[#deb8b8] text-[#8f2d2d] text-xs rounded-[2px]">
+              {errorMessage}
+            </div>
+          )}
+
+          {/* Footer actions */}
+          <div className="mt-8 flex items-center justify-end gap-3 pt-4 border-t border-[#cfc4b6]">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isWorking}
+              className="admin-btn admin-btn-quiet"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleUpload}
+              disabled={!selectedFile || isWorking}
+              className="admin-btn admin-btn-primary"
+            >
+              {isWorking
+                ? status === "uploading"
+                  ? "Uploading..."
+                  : "Validating..."
+                : "Upload Asset"}
+            </button>
           </div>
-        )}
-
-        {/* Footer actions */}
-        <div className="mt-8 flex items-center justify-end gap-3 pt-4 border-t border-[#cfc4b6]">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={isWorking}
-            className="admin-btn admin-btn-quiet"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleUpload}
-            disabled={!selectedFile || isWorking}
-            className="admin-btn admin-btn-primary"
-          >
-            {isWorking
-              ? status === "uploading"
-                ? "Uploading..."
-                : "Validating..."
-              : "Upload Asset"}
-          </button>
-        </div>
-      </div>
-    </>
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
   );
 }

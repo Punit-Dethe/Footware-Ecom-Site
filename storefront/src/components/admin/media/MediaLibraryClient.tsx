@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useEffect, useCallback } from "react";
+import { useState, useRef, useTransition, useEffect, useCallback } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import type { MediaLibraryAssetItem } from "@/lib/db/media-v1";
@@ -40,6 +40,7 @@ export function MediaLibraryClient({
     null,
   );
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const activeTriggerRef = useRef<HTMLElement | null>(null);
 
   // Sync state if URL param changes externally
   useEffect(() => {
@@ -106,7 +107,10 @@ export function MediaLibraryClient({
 
         <button
           type="button"
-          onClick={() => setIsUploadModalOpen(true)}
+          onClick={(e) => {
+            activeTriggerRef.current = e.currentTarget;
+            setIsUploadModalOpen(true);
+          }}
           className="admin-btn admin-btn-primary self-start sm:self-auto"
         >
           + Upload Media
@@ -196,9 +200,14 @@ export function MediaLibraryClient({
               const isLegacy = asset.storage_provider === "legacy_public";
 
               return (
-                <div
+                <button
+                  type="button"
                   key={asset.id}
-                  onClick={() => setSelectedAsset(asset)}
+                  onClick={(e) => {
+                    activeTriggerRef.current = e.currentTarget;
+                    setSelectedAsset(asset);
+                  }}
+                  aria-label={`Inspect ${asset.original_filename || asset.id}`}
                   className={`admin-media-card ${isSelected ? "admin-media-card--selected" : ""}`}
                 >
                   {/* Image Canvas with baked stone background */}
@@ -209,7 +218,7 @@ export function MediaLibraryClient({
                         alt={asset.original_filename || "Asset thumbnail"}
                         fill
                         sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, (max-width: 1280px) 25vw, 20vw"
-                        className="object-contain p-2"
+                        className="object-contain p-2 pointer-events-none"
                         placeholder={asset.lqip ? "blur" : "empty"}
                         blurDataURL={asset.lqip || undefined}
                       />
@@ -219,7 +228,7 @@ export function MediaLibraryClient({
                   </div>
 
                   {/* Card Meta Content */}
-                  <div className="p-2.5 bg-[#fffefc] border-t border-[#d8d0c5] flex-1 flex flex-col justify-between">
+                  <div className="p-2.5 bg-[#fffefc] border-t border-[#d8d0c5] flex-1 flex flex-col justify-between w-full">
                     <div>
                       <p className="text-xs font-medium text-[#30261f] truncate" title={asset.original_filename || asset.id}>
                         {asset.original_filename || "Untitled Asset"}
@@ -247,8 +256,9 @@ export function MediaLibraryClient({
                       )}
                     </div>
                   </div>
-                </div>
+                </button>
               );
+
             })}
           </div>
         ) : (
@@ -322,6 +332,7 @@ export function MediaLibraryClient({
           setSelectedAsset(null);
           router.refresh();
         }}
+        triggerRef={activeTriggerRef}
       />
 
       {/* Upload Modal */}
@@ -331,6 +342,7 @@ export function MediaLibraryClient({
         onUploadSuccess={(newAssetId) => {
           router.refresh();
         }}
+        triggerRef={activeTriggerRef}
       />
     </div>
   );

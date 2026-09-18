@@ -260,11 +260,25 @@
   overflow: hidden;
   cursor: pointer;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  text-align: left;
+  width: 100%;
+  padding: 0;
+  margin: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  font: inherit;
+  color: inherit;
 }
 
 .admin-media-card:hover {
   border-color: var(--admin-border);
   box-shadow: 0 4px 16px rgba(48, 38, 31, 0.06);
+}
+
+.admin-media-card:focus-visible {
+  outline: 2px solid var(--admin-ink);
+  outline-offset: 2px;
+  border-color: var(--admin-ink);
 }
 
 .admin-media-card--selected {
@@ -330,6 +344,7 @@
   text-align: center;
   cursor: pointer;
   transition: border-color 0.2s ease, background-color 0.2s ease;
+  outline: none;
 }
 
 .admin-dropzone:hover,
@@ -337,6 +352,14 @@
   border-color: var(--admin-ink);
   background-color: var(--admin-secondary);
 }
+
+.admin-dropzone:focus-visible {
+  outline: 2px solid var(--admin-ink);
+  outline-offset: 2px;
+  border-color: var(--admin-ink);
+  background-color: var(--admin-secondary);
+}
+
 
 /* Subtle separator rule */
 .admin-divider {
