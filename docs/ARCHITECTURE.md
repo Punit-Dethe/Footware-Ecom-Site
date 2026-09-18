@@ -175,6 +175,20 @@ are strictly preserved as rollback/transitional data. Legacy admin media mutatio
 in `ProductMediaManager` have been guarded with a migration warning while the global Media Library
 and admin redesign are pending.
 
+### 6.1 Media Contract v1 & Media Library Backend (Phases 1–5)
+1. **Physical & Placement Decoupling**:
+   - `public.media_assets`: Global reusable assets (`storage_provider`, `storage_path`, dimensions, dominant color, LQIP, `content_sha256`).
+   - `public.product_media`: Product placement, gallery positioning (`position`), hero designation (`is_hero`), and contextual alt text (`alt_text`).
+2. **Direct-to-Storage Ingestion**:
+   - Client requests single-use signed URL via `requestMediaLibraryUploadAction`.
+   - Client uploads image binary directly to Supabase Storage path `media/{assetId}/original.{ext}`.
+   - Client invokes `finalizeMediaLibraryUploadAction`: Server downloads buffer, validates and decodes with Sharp (format, dimensions, dominant color, LQIP), computes SHA-256 integrity hash, and inserts idempotent record into `public.media_assets`.
+3. **Placement & Deletion Safety**:
+   - Products are attached via `attachMediaAssetToProductAction` without file duplication.
+   - Asset deletion (`deleteMediaLibraryAssetAction`) enforces strict foreign-key protection: rejects deletion of assets currently attached to products (`usage_count > 0`), rejects deletion of legacy rollback assets, and performs DB deletion before Storage object cleanup.
+4. **Cache Invalidation**:
+   - All product media mutations invoke `updateTag("catalog-public")` to revalidate customer-facing Next.js PPR cache.
+
 The retired 38-product demo catalog (`office-footwear-01`,
 `traditional-footwear-NN`, categories `formal-office` / `traditional-indian`) is
 gone. Any documentation or smoke test still referencing those identifiers is stale.

@@ -28,7 +28,21 @@ export function getStorageAdminClient() {
 }
 
 /**
- * Generates a collision-resistant unique storage path for a product media item.
+ * Generates a collision-resistant unique storage path for a global media asset.
+ * Format: media/<asset-id>/original.<ext>
+ */
+export function generateGlobalMediaStoragePath(
+  ext: string,
+  assetId: string = crypto.randomUUID(),
+): { assetId: string; storagePath: string } {
+  const cleanExt = ext.replace(/^\./, "").toLowerCase() || "webp";
+  const storagePath = `media/${assetId}/original.${cleanExt}`;
+  return { assetId, storagePath };
+}
+
+/**
+ * @deprecated LEGACY — DO NOT USE FOR NEW ADMIN MEDIA.
+ * Generates a collision-resistant unique storage path for a product-owned media item.
  * Format: products/<product-id>/<media-id>/original.<ext>
  */
 export function generateMediaStoragePath(
