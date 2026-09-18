@@ -17,7 +17,7 @@ over container surfaces styled with `#ece7de` (or `#ebe5dc` on the PDP).
 While visually effective, this runtime blending introduced:
 1. **GPU compositing overhead** across homepage ambient carousels, catalog grids, and PDP galleries.
 2. **Inconsistent background rendering** between native and canvas surfaces.
-3. **Email client failures**: email renderers (Gmail, Apple Mail, Outlook) do not support `mix-blend-mode`, leading to stark white rectangular boxes over stone backgrounds in outbound emails.
+3. **Email client visual portability**: email renderers (Gmail, Apple Mail, Outlook) do not support `mix-blend-mode`. While the transactional email delivery failure itself was resolved separately by establishing absolute canonical URLs rather than root-relative paths, baking the stone background directly eliminates the stark white perimeter on email surfaces and provides consistent visual rendering across all email clients.
 
 ### The Phase 2 Offline Solution
 

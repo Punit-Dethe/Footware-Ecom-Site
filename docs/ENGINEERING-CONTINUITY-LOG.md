@@ -1246,11 +1246,41 @@ Do not assume older `ARCHITECTURE.md`, old specification docs, or old performanc
 
 ## 16. Rolling change log
 
-### 2026-09-18 — Media Modernization Phase 2: Final Stone Product Master Pipeline — IN REVIEW
+### 2026-09-18 — Media Modernization Phase 3: Supabase Stone-Asset Migration — IN REVIEW
+
+- Branch: `feat/stone-media-supabase-migration`
+- Starting main: `d632ee50899e75a5a66f6a1b1d1491f75cc067a7` (incorporating Phase 2 stone master pipeline)
+- Status: Implemented, verified, pushed to origin; awaiting supervisor review (do NOT merge).
+- Scope: Supabase Storage upload of the 31 stone-baked master WebPs, creation of deterministic `media_assets` rows, canonical `product_media` hero associations, preservation of legacy rollback assets, and zero modification to `public.product_images`.
+- Changes:
+  1. **Operational Migration Script (`storefront/scripts/migrate-stone-media-to-supabase.ts`)**:
+     - Idempotent CLI script with dry-run default, `--apply`, and `--rollback` modes.
+     - Deterministic asset UUID generation via RFC 4122 v5 over `productSlug:sha256` under fixed Mirza media namespace (`e8c07e26-f762-4b71-b0e6-54a7c0618031`).
+     - Uploads to Supabase Storage bucket `product-media` under canonical namespace `media/{assetId}/original.webp`. Avoids blind overwrites; verifies existing files and halts on hash collisions.
+     - Performs public HTTP 200 GET verification across all 31 objects, checking `image/webp` content type, exact byte length, and SHA-256 hash match without session credentials.
+     - Executes atomic PostgreSQL transaction: demotes legacy `legacy_public` assets to non-hero (`position = 1, is_hero = false`), inserts 31 new stone `media_assets` (`storage_provider = 'supabase'`), and attaches them as the new heroes in `product_media` (`position = 0, is_hero = true`).
+     - Emits local operational evidence manifest `artifacts/media-v1/supabase-stone-migration.json` (gitignored).
+     - Idempotent second run verified: post-migration dry-run detects 31/31 storage objects present and 31/31 database associations complete, proposing 0 uploads and 0 database updates.
+     - Rollback dry run verified: correctly targets strictly the 31 migration-created assets without touching demo or user media.
+  2. **Zero Storefront Read Path Modification**:
+     - `public.product_images` was completely untouched (remains 69 rows).
+     - Storefront catalog queries continue reading `/catalog-shoes/shoe-NN.webp` with zero runtime disruption.
+  3. **Automated Vitest Regression Suite (`storefront/src/lib/media/__tests__/stone-media-migration.test.ts`)**:
+     - 10 automated unit tests covering deterministic UUID v5 generation, canonical slug filtering (excluding archived demo products), storage idempotency and collision halting, hero state transition, and safe rollback targeting.
+- Validation:
+  * TypeScript `tsc --noEmit`: 0 errors
+  * Biome lint: 0 errors, 0 warnings (347 files checked)
+  * Vitest full test suite: 67 test files / 736 tests passing (100% pass)
+  * Next.js production build: 101 routes compiled successfully
+  * Storefront client JS impact: 0 bytes
+  * Storefront query impact: 0 queries (all customer flows continue reading `product_images`)
+
+### 2026-09-18 — Media Modernization Phase 2: Final Stone Product Master Pipeline — MERGED
 
 - Branch: `feat/stone-media-pipeline`
-- Starting main: `10a027df4154dee0a4ec715aa8e478a3f3964ce8` (incorporating Phase 1 Media Contract v1 foundation)
-- Status: Implemented, verified, pushed to origin; awaiting supervisor review (do NOT merge).
+- Merged-main SHA: `d632ee50899e75a5a66f6a1b1d1491f75cc067a7`
+- Starting main: `10a027df4154dee0a4ec715aa8e478a3f3964ce8`
+- Status: Accepted by supervisor and merged into main.
 - Scope: Deterministic offline pipeline producing final Mirza 31-product candidate images with canonical stone background (`#ece7de`) baked directly into the pixels.
 - Changes:
   1. **Deterministic Preparation Pipeline (`scripts/catalog/prepare-stone-shoe-images.mjs`)**:
