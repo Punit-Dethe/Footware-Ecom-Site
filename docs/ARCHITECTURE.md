@@ -276,7 +276,7 @@ Phase 8 introduces read-only operational domains for **Orders** and **Customers*
    - **Snapshot Authority**: Orders and line items are immutable records. Line items are read directly from `order_items` schema columns (`product_name`, `sku`, `size_option`, `price_in_cents`, `quantity`, `total_in_cents`, `thumbnail_url`), never dynamically re-priced or re-linked to mutated catalog records.
    - **Address Snapshots**: Customer delivery and billing locations are read directly from `shipping_address_snapshot` and `billing_address_snapshot` on `orders`.
    - **Stored Totals**: Subtotal, shipping total, tax total, and grand total are read strictly from stored cent integers (`subtotal_in_cents`, `total_in_cents`, etc.), guaranteeing audit integrity.
-   - **Single-CTE Pagination**: `listAdminOrdersPage()` paginates orders with single-query CTE aggregation (default 30/page; normal = 1 query, worst case out-of-range = 2 queries), supporting URL state (`?q=&status=&customer=&sort=&page=`), joining line item counts and unit totals with 0 N+1 queries.
+   - **Single-CTE Pagination**: `listAdminOrdersPage()` paginates orders with single-query CTE aggregation (default 30/page; normal = 1 query, worst case out-of-range = 2 queries), supporting URL state (`?q=&status=&customer=&sort=&page=`), joining line item counts and unit totals with 0 N+1 queries. Sort options: `newest`, `oldest`. (Invalid cross-currency total sort options removed).
    - **Bounded Detail Query**: `getAdminOrderDetail()` executes in exactly 2 bounded queries (order snapshot + line items with Media Contract v1 public URLs).
    - **Strict Read-Only Guarantee**: Payment capture, fulfillment, shipment management, refunds, and admin cancellation workflows are not implemented in the current Mirza commerce backend. Zero operational mutation buttons are provided.
 
@@ -288,7 +288,7 @@ Phase 8 introduces read-only operational domains for **Orders** and **Customers*
      - Totals are grouped strictly by currency (`placedOrderTotals: Array<{ currency: string; totalInCents: number }>`). Currencies are never summed together or silently converted.
      - Sort options: `newest`, `oldest`, `latest_order`, `most_orders`. (Invalid cross-currency `highest_order_total` sort removed).
    - **Single-CTE Directory**: `listAdminCustomersPage()` delivers customer directory pagination (default 30/page; normal = 1 query, worst case out-of-range = 2 queries) with URL search and sorting, calculating order count and currency-grouped placed order totals without N+1 queries.
-   - **Bounded Profile & History**: `getAdminCustomerDetail()` executes in exactly 3 bounded queries (profile + auth email + full-history aggregates from SQL, saved addresses from `public.addresses`, and bounded order history LIMIT 50). Full-history aggregates are computed in SQL, strictly independent of the bounded 50 rows returned in order history.
+   - **Bounded Profile & History**: `getAdminCustomerDetail()` executes in exactly 3 bounded queries (profile + auth email + full-history aggregates from SQL, saved addresses from `public.addresses` bounded to 100, and bounded order history LIMIT 50). Full-history aggregates are computed in SQL, strictly independent of the bounded 50 rows returned in order history.
    - **Security Guardrails**: Zero customer credentials, password hashes, auth tokens, or session tokens exposed to the client.
 
 4. **Catalog Overview Extension**:

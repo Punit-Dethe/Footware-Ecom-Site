@@ -430,6 +430,51 @@ describe("Admin Pages Direct Authorization Enforcement", () => {
       );
     });
 
+    it("order detail page: missing address country does NOT display US", async () => {
+      mockCommerceDal.getAdminOrderDetail.mockResolvedValueOnce({
+        id: "11111111-1111-4111-8111-111111111111",
+        orderNumber: "MRZ-TEST123456",
+        userId: null,
+        email: "guest@example.com",
+        status: "placed",
+        currency: "GBP",
+        subtotalInCents: 25000,
+        taxInCents: 0,
+        shippingInCents: 0,
+        totalInCents: 25000,
+        shippingAddressSnapshot: {
+          first_name: "Sherlock",
+          last_name: "Holmes",
+          address1: "221B Baker St",
+          city: "London",
+          postal_code: "NW1 6XE",
+          // country_iso omitted
+        },
+        billingAddressSnapshot: {
+          first_name: "Sherlock",
+          last_name: "Holmes",
+          address1: "221B Baker St",
+          city: "London",
+          postal_code: "NW1 6XE",
+          // country_iso omitted
+        },
+        sourceCartId: "cart-1",
+        surface: "dtc",
+        completedAt: new Date(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        isRegisteredCustomer: false,
+        customerName: null,
+        items: [],
+      });
+
+      const jsx = await AdminOrderDetailPage({ params: detailParams });
+      const serialized = JSON.stringify(jsx);
+      expect(serialized).toContain("221B Baker St");
+      // Must NOT fabricate "US"
+      expect(serialized).not.toContain('"US"');
+    });
+
     it("customers page: executes listAdminCustomersPage when authorized", async () => {
       const res = await AdminCustomersPage({
         params: testParams,

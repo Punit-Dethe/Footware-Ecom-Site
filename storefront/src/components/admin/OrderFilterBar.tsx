@@ -148,8 +148,6 @@ export function OrderFilterBar({
             >
               <option value="newest">Newest First</option>
               <option value="oldest">Oldest First</option>
-              <option value="total_desc">Highest Total</option>
-              <option value="total_asc">Lowest Total</option>
             </select>
           </div>
 

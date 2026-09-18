@@ -100,7 +100,7 @@ All admin routes reside under `src/app/[country]/[locale]/(admin)/admin` and req
   * Search: Order number (e.g. `MRZ-XXXXXXXXXX`), customer email, and line item SKU ILIKE matching.
   * Status filter: `all`, `placed`, `cancelled`.
   * Customer filter: `all`, `registered` (`user_id IS NOT NULL`), `guest` (`user_id IS NULL`).
-  * Sort options: Newest, Oldest, Highest total, Lowest total.
+  * Sort options: Newest, Oldest. (Invalid cross-currency total sort options removed).
   * Default pagination: 30 orders/page.
   * Read-only record: displays order number, placed date, customer/email, member vs guest badge, quiet status, items count, total, and surface (`DTC` or `Wholesale`).
 
@@ -111,7 +111,7 @@ All admin routes reside under `src/app/[country]/[locale]/(admin)/admin` and req
   * Strictly executes exactly 2 bounded SQL queries.
   * Order items, address snapshots, and totals are permanently fixed at checkout time.
   * Items Table: renders immutable historical snapshots using schema columns: `product_name`, `sku`, `size_option`, `price_in_cents`, `quantity`, `total_in_cents`, and `thumbnail_url`.
-  * Customer & Address Grid: displays customer identity, shipping address snapshot, and billing address snapshot directly from stored `shipping_address_snapshot` and `billing_address_snapshot` JSONB columns.
+  * Customer & Address Grid: displays customer identity, shipping address snapshot, and billing address snapshot directly from stored `shipping_address_snapshot` and `billing_address_snapshot` JSONB columns. Stored country ISO is displayed when present without fabricating default countries.
   * Totals: subtotal, tax, shipping, and total displayed directly from stored cents columns (no price recomputation).
   * **Strictly Read-Only**: Payment capture, fulfillment, shipment management, refunds, and admin cancellation workflows are not implemented in the current Mirza commerce backend, and operational mutation buttons are deliberately absent.
 
@@ -133,7 +133,7 @@ All admin routes reside under `src/app/[country]/[locale]/(admin)/admin` and req
 * **Full-History SQL Aggregates & Query Bound**:
   * Strictly executes exactly 3 bounded SQL queries:
     1. Customer Profile + Auth Email + Full-History Order Aggregates (`total_order_count`, `placed_order_count`, `placed_order_totals` grouped by currency, `latest_order_at`).
-    2. Saved Delivery Addresses (`public.addresses WHERE user_id = $1`).
+    2. Saved Delivery Addresses (`public.addresses WHERE user_id = $1 LIMIT 100`).
     3. Bounded Order History (`public.orders WHERE user_id = $1 LIMIT 50`).
   * Displayed metrics are computed across the full historical database record in SQL, strictly independent of the bounded 50 rows returned in order history.
   * Terminology: `Orders` (total count), `Placed Orders` (placed count), `Placed Order Value` (separated per currency). Zero implication of payment capture or fulfillment completion.

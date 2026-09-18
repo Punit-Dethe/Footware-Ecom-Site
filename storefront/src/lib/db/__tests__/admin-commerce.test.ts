@@ -364,11 +364,121 @@ describe("Admin Commerce Phase 8 DAL Tests", () => {
       expect(profileSql).toContain("placed_order_totals");
       expect(profileSql).toContain("sub_o.status = 'placed'");
 
+      // Verify Query 2 strictly bounded addresses query with LIMIT 100
+      const addressesSql = String(mockDb.query.mock.calls[1][0]);
+      expect(addressesSql).toContain("public.addresses");
+      expect(addressesSql).toContain("LIMIT 100");
+
       // Verify Query 3 strictly used orders.user_id = $1
       const orderHistorySql = String(mockDb.query.mock.calls[2][0]);
       expect(orderHistorySql).toContain("o.user_id = $1");
       expect(orderHistorySql).toContain("LIMIT 50");
       expect(orderHistorySql).not.toContain("o.email");
+    });
+  });
+
+  describe("Order & Address Integrity Invariants", () => {
+    it("proves order total cross-currency sort options (total_desc, total_asc) no longer exist and DAL falls back to completed_at DESC in SQL", async () => {
+      mockDb.query.mockResolvedValueOnce({ rows: [] });
+
+      // @ts-expect-error - testing runtime rejection of removed total_desc sort
+      await listAdminOrdersPage({ sort: "total_desc" });
+
+      expect(mockDb.query).toHaveBeenCalledTimes(1);
+      const [sql] = mockDb.query.mock.calls[0];
+      expect(sql).not.toContain("ORDER BY fo.total_in_cents");
+      expect(sql).not.toContain("ORDER BY ro.total_in_cents");
+      expect(sql).toContain("fo.completed_at DESC, fo.id DESC");
+    });
+
+    it("proves total_asc is also rejected and falls back to newest sort in SQL", async () => {
+      mockDb.query.mockResolvedValueOnce({ rows: [] });
+
+      // @ts-expect-error - testing runtime rejection of removed total_asc sort
+      await listAdminOrdersPage({ sort: "total_asc" });
+
+      expect(mockDb.query).toHaveBeenCalledTimes(1);
+      const [sql] = mockDb.query.mock.calls[0];
+      expect(sql).not.toContain("ORDER BY fo.total_in_cents");
+      expect(sql).not.toContain("ORDER BY ro.total_in_cents");
+      expect(sql).toContain("fo.completed_at DESC, fo.id DESC");
+    });
+
+    it("passes through stored order currency (e.g. JPY, EUR, GBP) unchanged without defaulting to USD", async () => {
+      mockDb.query.mockResolvedValueOnce({
+        rows: [
+          {
+            id: TEST_ORDER_ID,
+            order_number: "MRZ-TESTJPY",
+            user_id: TEST_USER_ID,
+            email: "shoelover@example.com",
+            status: "placed",
+            currency: "JPY",
+            total_in_cents: 28500,
+            surface: "dtc",
+            completed_at: new Date("2026-09-18T10:00:00Z"),
+            created_at: new Date("2026-09-18T09:55:00Z"),
+            item_count: 1,
+            total_units: 1,
+            is_registered_customer: true,
+            total_count: 1,
+          },
+        ],
+      });
+
+      const res = await listAdminOrdersPage({ page: 1, pageSize: 30 });
+      expect(res.orders[0].currency).toBe("JPY");
+    });
+
+    it("preserves missing address snapshot country without fabricating US", async () => {
+      mockDb.query
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              id: TEST_ORDER_ID,
+              order_number: "MRZ-TEST123456",
+              user_id: TEST_USER_ID,
+              email: "shoelover@example.com",
+              status: "placed",
+              currency: "GBP",
+              subtotal_in_cents: 25000,
+              tax_in_cents: 0,
+              shipping_in_cents: 0,
+              total_in_cents: 25000,
+              shipping_address_snapshot: {
+                first_name: "Sherlock",
+                last_name: "Holmes",
+                address1: "221B Baker St",
+                city: "London",
+                postal_code: "NW1 6XE",
+                // country_iso omitted
+              },
+              billing_address_snapshot: {
+                first_name: "Sherlock",
+                last_name: "Holmes",
+                address1: "221B Baker St",
+                city: "London",
+                postal_code: "NW1 6XE",
+                // country_iso omitted
+              },
+              source_cart_id: null,
+              surface: "dtc",
+              completed_at: new Date("2026-09-18T10:00:00Z"),
+              created_at: new Date("2026-09-18T09:55:00Z"),
+              updated_at: new Date("2026-09-18T10:00:00Z"),
+              is_registered_customer: true,
+              customer_first_name: "Sherlock",
+              customer_last_name: "Holmes",
+            },
+          ],
+        })
+        .mockResolvedValueOnce({ rows: [] });
+
+      const order = await getAdminOrderDetail(TEST_ORDER_ID);
+      expect(order).not.toBeNull();
+      expect(order?.currency).toBe("GBP");
+      expect(order?.shippingAddressSnapshot.country_iso).toBeUndefined();
+      expect(order?.billingAddressSnapshot.country_iso).toBeUndefined();
     });
   });
 
@@ -385,6 +495,36 @@ describe("Admin Commerce Phase 8 DAL Tests", () => {
       expect(sql).not.toContain("COALESCE(cos.historical_order_total_in_cents, 0) DESC");
       // Falls back to safe newest sort (created_at DESC)
       expect(sql).toContain("cp.created_at DESC, cp.id DESC");
+    });
+
+    it("rejects and skips malformed customer currency aggregate items without relabeling as USD", async () => {
+      mockDb.query.mockResolvedValueOnce({
+        rows: [
+          {
+            id: TEST_USER_ID,
+            email: "shoelover@example.com",
+            first_name: "Jane",
+            last_name: "Doe",
+            phone: "+1234567890",
+            created_at: new Date("2026-09-01T12:00:00Z"),
+            order_count: 2,
+            placed_order_count: 2,
+            placed_order_totals: [
+              { currency: "", totalInCents: 5000 }, // empty currency -> skipped
+              { currency: null, totalInCents: 4000 }, // null currency -> skipped
+              { totalInCents: 3000 }, // missing currency -> skipped
+              { currency: "EUR", totalInCents: 15000 }, // valid -> kept
+            ],
+            latest_order_at: new Date("2026-09-18T10:00:00Z"),
+            address_count: 1,
+            total_count: 1,
+          },
+        ],
+      });
+
+      const res = await listAdminCustomersPage({ page: 1, pageSize: 30 });
+      expect(res.customers[0].placedOrderTotals).toHaveLength(1);
+      expect(res.customers[0].placedOrderTotals[0]).toEqual({ currency: "EUR", totalInCents: 15000 });
     });
 
     it("verifies multi-currency placedOrderTotals format accurately without assuming USD", async () => {

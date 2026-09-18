@@ -9,7 +9,7 @@ export interface ListAdminOrdersInput {
   query?: string;
   status?: "all" | "placed" | "cancelled";
   customerType?: "all" | "registered" | "guest";
-  sort?: "newest" | "oldest" | "total_desc" | "total_asc";
+  sort?: "newest" | "oldest";
 }
 
 export interface AdminOrderListItem {
@@ -228,12 +228,6 @@ export async function listAdminOrdersPage(
   if (input.sort === "oldest") {
     rankedOrderBy = "fo.completed_at ASC, fo.id ASC";
     outerOrderBy = "ro.completed_at ASC, ro.id ASC";
-  } else if (input.sort === "total_desc") {
-    rankedOrderBy = "fo.total_in_cents DESC, fo.completed_at DESC, fo.id DESC";
-    outerOrderBy = "ro.total_in_cents DESC, ro.completed_at DESC, ro.id DESC";
-  } else if (input.sort === "total_asc") {
-    rankedOrderBy = "fo.total_in_cents ASC, fo.completed_at DESC, fo.id DESC";
-    outerOrderBy = "ro.total_in_cents ASC, ro.completed_at DESC, ro.id DESC";
   }
 
   params.push(pageSize);
@@ -329,7 +323,7 @@ export async function listAdminOrdersPage(
     userId: row.user_id,
     email: row.email,
     status: row.status,
-    currency: row.currency || "USD",
+    currency: row.currency,
     totalInCents: Number(row.total_in_cents),
     surface: row.surface || "dtc",
     completedAt: new Date(row.completed_at),
@@ -481,7 +475,7 @@ export async function getAdminOrderDetail(
     userId: orderRow.user_id,
     email: orderRow.email,
     status: orderRow.status,
-    currency: orderRow.currency || "USD",
+    currency: orderRow.currency,
     subtotalInCents: Number(orderRow.subtotal_in_cents),
     taxInCents: Number(orderRow.tax_in_cents || 0),
     shippingInCents: Number(orderRow.shipping_in_cents || 0),
@@ -654,10 +648,15 @@ export async function listAdminCustomersPage(
     const rawTotals = row.placed_order_totals;
     const parsedTotals = typeof rawTotals === "string" ? JSON.parse(rawTotals) : rawTotals;
     const placedOrderTotals: CustomerPlacedOrderTotal[] = Array.isArray(parsedTotals)
-      ? parsedTotals.map((item: { currency?: unknown; totalInCents?: unknown }) => ({
-          currency: String(item.currency || "USD"),
-          totalInCents: Number(item.totalInCents || 0),
-        }))
+      ? parsedTotals
+          .filter(
+            (item): item is { currency: string; totalInCents?: unknown } =>
+              Boolean(item && typeof item.currency === "string" && item.currency.trim()),
+          )
+          .map((item) => ({
+            currency: item.currency.trim(),
+            totalInCents: Number(item.totalInCents || 0),
+          }))
       : [];
 
     return {
@@ -789,7 +788,8 @@ export async function getAdminCustomerDetail(
       updated_at
     FROM public.addresses
     WHERE user_id = $1
-    ORDER BY is_default_shipping DESC, is_default_billing DESC, created_at ASC;
+    ORDER BY is_default_shipping DESC, is_default_billing DESC, created_at ASC
+    LIMIT 100;
   `;
 
   const addressesRes = await query<{
@@ -866,7 +866,7 @@ export async function getAdminCustomerDetail(
     id: row.id,
     orderNumber: row.order_number,
     status: row.status,
-    currency: row.currency || "USD",
+    currency: row.currency,
     totalInCents: Number(row.total_in_cents),
     surface: row.surface || "dtc",
     completedAt: new Date(row.completed_at),
@@ -876,10 +876,15 @@ export async function getAdminCustomerDetail(
   const rawTotals = profile.placed_order_totals;
   const parsedTotals = typeof rawTotals === "string" ? JSON.parse(rawTotals) : rawTotals;
   const placedOrderTotals: CustomerPlacedOrderTotal[] = Array.isArray(parsedTotals)
-    ? parsedTotals.map((item: { currency?: unknown; totalInCents?: unknown }) => ({
-        currency: String(item.currency || "USD"),
-        totalInCents: Number(item.totalInCents || 0),
-      }))
+    ? parsedTotals
+        .filter(
+          (item): item is { currency: string; totalInCents?: unknown } =>
+            Boolean(item && typeof item.currency === "string" && item.currency.trim()),
+        )
+        .map((item) => ({
+          currency: item.currency.trim(),
+          totalInCents: Number(item.totalInCents || 0),
+        }))
     : [];
 
   return {

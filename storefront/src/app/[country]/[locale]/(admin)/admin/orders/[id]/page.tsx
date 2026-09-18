@@ -262,7 +262,9 @@ export default async function AdminOrderDetailPage({
                     .filter(Boolean)
                     .join(", ")}
                 </p>
-                <p>{String(order.shippingAddressSnapshot.country_iso || "US")}</p>
+                {order.shippingAddressSnapshot.country_iso ? (
+                  <p>{String(order.shippingAddressSnapshot.country_iso)}</p>
+                ) : null}
                 {order.shippingAddressSnapshot.phone && (
                   <p className="font-mono text-[11px] mt-1">
                     Phone: {String(order.shippingAddressSnapshot.phone)}
@@ -303,7 +305,9 @@ export default async function AdminOrderDetailPage({
                     .filter(Boolean)
                     .join(", ")}
                 </p>
-                <p>{String(order.billingAddressSnapshot.country_iso || "US")}</p>
+                {order.billingAddressSnapshot.country_iso ? (
+                  <p>{String(order.billingAddressSnapshot.country_iso)}</p>
+                ) : null}
                 {order.billingAddressSnapshot.phone && (
                   <p className="font-mono text-[11px] mt-1">
                     Phone: {String(order.billingAddressSnapshot.phone)}

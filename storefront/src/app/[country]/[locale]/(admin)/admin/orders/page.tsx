@@ -39,8 +39,7 @@ export default async function AdminOrdersPage({
   const query = sParams.q || "";
   const status = (sParams.status as "all" | "placed" | "cancelled") || "all";
   const customerType = (sParams.customer as "all" | "registered" | "guest") || "all";
-  const sort =
-    (sParams.sort as "newest" | "oldest" | "total_desc" | "total_asc") || "newest";
+  const sort = sParams.sort === "oldest" ? "oldest" : "newest";
 
   const { orders, totalCount, totalPages, pageSize } = await listAdminOrdersPage({
     page,
