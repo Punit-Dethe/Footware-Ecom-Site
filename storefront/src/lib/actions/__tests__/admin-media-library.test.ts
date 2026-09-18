@@ -571,21 +571,160 @@ describe("Admin Media Library Server Actions (Phase 5)", () => {
         expect(mockAttachMediaToProduct).toHaveBeenCalledTimes(3);
         expect(mockAttachMediaToProduct).toHaveBeenNthCalledWith(
           1,
-          { productId: VALID_PROD_ID, mediaAssetId: VALID_ASSET_ID },
+          { productId: VALID_PROD_ID, mediaAssetId: VALID_ASSET_ID, isHero: true },
           mockTxClient,
         );
         expect(mockAttachMediaToProduct).toHaveBeenNthCalledWith(
           2,
-          { productId: VALID_PROD_ID, mediaAssetId: VALID_ASSET_ID_2 },
+          { productId: VALID_PROD_ID, mediaAssetId: VALID_ASSET_ID_2, isHero: false },
           mockTxClient,
         );
         expect(mockAttachMediaToProduct).toHaveBeenNthCalledWith(
           3,
-          { productId: VALID_PROD_ID, mediaAssetId: VALID_ASSET_ID_3 },
+          { productId: VALID_PROD_ID, mediaAssetId: VALID_ASSET_ID_3, isHero: false },
           mockTxClient,
         );
         expect(mockUpdateTag).toHaveBeenCalledTimes(1);
         expect(mockUpdateTag).toHaveBeenCalledWith("catalog-public");
+      });
+    });
+
+    describe("Managed Hero Promotion Invariants (Cases A through E)", () => {
+      it("Case A: no media + attach A -> A becomes hero", async () => {
+        mockQuery.mockResolvedValueOnce({
+          rows: [{ count: "0" }],
+        });
+
+        const res = await attachMediaAssetToProductAction(VALID_PROD_ID, VALID_ASSET_ID);
+
+        expect(res.success).toBe(true);
+        expect(mockAttachMediaToProduct).toHaveBeenCalledWith({
+          productId: VALID_PROD_ID,
+          mediaAssetId: VALID_ASSET_ID,
+          isHero: true,
+          altText: undefined,
+        });
+        expect(mockUpdateTag).toHaveBeenCalledWith("catalog-public");
+      });
+
+      it("Case B: legacy rollback hero only + attach A -> A becomes managed hero, legacy demoted", async () => {
+        // Query filters storage_provider != 'legacy_public', so managed count is 0
+        mockQuery.mockResolvedValueOnce({
+          rows: [{ count: "0" }],
+        });
+
+        const res = await attachMediaAssetToProductAction(VALID_PROD_ID, VALID_ASSET_ID);
+
+        expect(res.success).toBe(true);
+        expect(mockAttachMediaToProduct).toHaveBeenCalledWith({
+          productId: VALID_PROD_ID,
+          mediaAssetId: VALID_ASSET_ID,
+          isHero: true,
+          altText: undefined,
+        });
+        expect(mockUpdateTag).toHaveBeenCalledWith("catalog-public");
+      });
+
+      it("Case C: legacy rollback hero only + batch attach [A, B, C] -> A becomes hero, B/C gallery", async () => {
+        mockTxClient.query.mockImplementation(async (sql: string) => {
+          if (sql.includes("SELECT id FROM public.products")) {
+            return { rows: [{ id: VALID_PROD_ID }] };
+          }
+          if (sql.includes("SELECT id, storage_provider FROM public.media_assets")) {
+            return {
+              rows: [
+                { id: VALID_ASSET_ID, storage_provider: "supabase" },
+                { id: VALID_ASSET_ID_2, storage_provider: "supabase" },
+                { id: VALID_ASSET_ID_3, storage_provider: "supabase" },
+              ],
+            };
+          }
+          if (sql.includes("FROM public.product_media pm") && sql.includes("storage_provider != 'legacy_public'")) {
+            return { rows: [{ count: "0" }] }; // only legacy rollback exists, so 0 managed
+          }
+          return { rows: [] };
+        });
+
+        const res = await attachMediaAssetsToProductAction(VALID_PROD_ID, [
+          VALID_ASSET_ID,
+          VALID_ASSET_ID_2,
+          VALID_ASSET_ID_3,
+        ]);
+
+        expect(res.success).toBe(true);
+        expect(mockAttachMediaToProduct).toHaveBeenCalledTimes(3);
+        expect(mockAttachMediaToProduct).toHaveBeenNthCalledWith(
+          1,
+          { productId: VALID_PROD_ID, mediaAssetId: VALID_ASSET_ID, isHero: true },
+          mockTxClient,
+        );
+        expect(mockAttachMediaToProduct).toHaveBeenNthCalledWith(
+          2,
+          { productId: VALID_PROD_ID, mediaAssetId: VALID_ASSET_ID_2, isHero: false },
+          mockTxClient,
+        );
+        expect(mockAttachMediaToProduct).toHaveBeenNthCalledWith(
+          3,
+          { productId: VALID_PROD_ID, mediaAssetId: VALID_ASSET_ID_3, isHero: false },
+          mockTxClient,
+        );
+        expect(mockUpdateTag).toHaveBeenCalledTimes(1);
+      });
+
+      it("Case D: existing managed hero A + attach B -> A remains hero, B is gallery", async () => {
+        mockQuery.mockResolvedValueOnce({
+          rows: [{ count: "1" }],
+        });
+
+        const res = await attachMediaAssetToProductAction(VALID_PROD_ID, VALID_ASSET_ID_2);
+
+        expect(res.success).toBe(true);
+        expect(mockAttachMediaToProduct).toHaveBeenCalledWith({
+          productId: VALID_PROD_ID,
+          mediaAssetId: VALID_ASSET_ID_2,
+          isHero: false,
+          altText: undefined,
+        });
+        expect(mockUpdateTag).toHaveBeenCalledWith("catalog-public");
+      });
+
+      it("Case E: existing managed hero A + batch attach [B, C] -> A remains hero, B/C are gallery", async () => {
+        mockTxClient.query.mockImplementation(async (sql: string) => {
+          if (sql.includes("SELECT id FROM public.products")) {
+            return { rows: [{ id: VALID_PROD_ID }] };
+          }
+          if (sql.includes("SELECT id, storage_provider FROM public.media_assets")) {
+            return {
+              rows: [
+                { id: VALID_ASSET_ID_2, storage_provider: "supabase" },
+                { id: VALID_ASSET_ID_3, storage_provider: "supabase" },
+              ],
+            };
+          }
+          if (sql.includes("FROM public.product_media pm") && sql.includes("storage_provider != 'legacy_public'")) {
+            return { rows: [{ count: "1" }] }; // managed hero already exists
+          }
+          return { rows: [] };
+        });
+
+        const res = await attachMediaAssetsToProductAction(VALID_PROD_ID, [
+          VALID_ASSET_ID_2,
+          VALID_ASSET_ID_3,
+        ]);
+
+        expect(res.success).toBe(true);
+        expect(mockAttachMediaToProduct).toHaveBeenCalledTimes(2);
+        expect(mockAttachMediaToProduct).toHaveBeenNthCalledWith(
+          1,
+          { productId: VALID_PROD_ID, mediaAssetId: VALID_ASSET_ID_2, isHero: false },
+          mockTxClient,
+        );
+        expect(mockAttachMediaToProduct).toHaveBeenNthCalledWith(
+          2,
+          { productId: VALID_PROD_ID, mediaAssetId: VALID_ASSET_ID_3, isHero: false },
+          mockTxClient,
+        );
+        expect(mockUpdateTag).toHaveBeenCalledTimes(1);
       });
     });
 

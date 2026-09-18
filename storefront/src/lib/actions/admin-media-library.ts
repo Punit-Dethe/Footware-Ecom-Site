@@ -439,10 +439,24 @@ export async function attachMediaAssetToProductAction(
       );
     }
 
+    // Determine whether product currently has any managed placements
+    const managedCountRes = await query<{ count: string }>(
+      `SELECT COUNT(*)::int AS count
+       FROM public.product_media pm
+       JOIN public.media_assets ma ON ma.id = pm.media_asset_id
+       WHERE pm.product_id = $1 AND ma.storage_provider != 'legacy_public';`,
+      [productId],
+    );
+    const managedCount = Number(managedCountRes.rows[0]?.count || 0);
+
+    // If managed count is zero: first newly attached managed asset must be isHero = true
+    // If managed media already exists: gallery (isHero = false), unless explicit options.isHero is true
+    const isHero = managedCount === 0 ? true : Boolean(options?.isHero);
+
     await attachMediaToProduct({
       productId,
       mediaAssetId,
-      isHero: options?.isHero,
+      isHero,
       altText: options?.altText,
     });
 
@@ -457,6 +471,8 @@ export async function attachMediaAssetToProductAction(
  * Attaches multiple global media assets to a product in a single atomic database transaction.
  * All-or-nothing: any failure rolls back all attachments in the batch.
  * Rejects duplicates, missing assets, and legacy_public assets before mutation.
+ * Managed-aware: if product has zero managed placements, the first attached asset becomes hero
+ * and remaining assets become gallery; if managed placements already exist, all become gallery.
  * Invalidates public catalog cache once, strictly after successful transaction commit.
  */
 export async function attachMediaAssetsToProductAction(
@@ -520,12 +536,28 @@ export async function attachMediaAssetsToProductAction(
         );
       }
 
-      // 3. Perform every product_media attachment sequentially using the same transaction client
-      for (const id of mediaAssetIds) {
+      // 3. Determine existing managed media count for the product
+      const managedRes = await client.query<{ count: string }>(
+        `SELECT COUNT(*)::int AS count
+         FROM public.product_media pm
+         JOIN public.media_assets ma ON ma.id = pm.media_asset_id
+         WHERE pm.product_id = $1 AND ma.storage_provider != 'legacy_public';`,
+        [productId],
+      );
+      const existingManagedCount = Number(managedRes.rows[0]?.count || 0);
+
+      // 4. Perform every product_media attachment sequentially using the same transaction client
+      // If existing managed count == 0: first submitted asset -> hero, remaining -> gallery
+      // If managed media already exists: all newly attached assets -> gallery
+      for (let i = 0; i < mediaAssetIds.length; i++) {
+        const id = mediaAssetIds[i];
+        const isHero = existingManagedCount === 0 && i === 0;
+
         await attachMediaToProduct(
           {
             productId,
             mediaAssetId: id,
+            isHero,
           },
           client,
         );

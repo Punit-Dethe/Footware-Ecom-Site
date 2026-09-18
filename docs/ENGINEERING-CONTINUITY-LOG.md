@@ -1819,10 +1819,11 @@ Recorded:
   2. **Strictly Managed-Only Reorder**: Removed compatibility fallback in `reorderProductMediaActionV1`. Enforces that the submitted asset IDs must match the product's non-legacy managed set exactly (no missing IDs, no extra IDs, no duplicates). Rejects caller injection of legacy rollback assets. Persists `[...submittedManagedIds, ...legacyIds]` keeping legacy assets after managed media in their existing relative order.
   3. **Rollback Assets Read-Only Server Invariant**: Hardened `detachMediaAssetFromProductAction` and `updateProductMediaAltTextActionV1` to reject attempts to detach or alter alt text on `legacy_public` assets with `"Legacy rollback assets are read-only during the rollback window."`.
   4. **Publish Invariant Strengthened**: Updated `validatePublishInvariants()` to query `product_media` join `media_assets` with `storage_provider != 'legacy_public'` and enforce `managedCount >= 1` and `managedHeroCount == 1`. Excludes legacy rollback hero from managed hero count.
+  5. **Managed Hero Promotion Invariants (Final Hero Fix)**: Made single and batch attachments managed-aware. If product has zero managed placements (even if a legacy rollback hero exists), the first attached managed asset automatically becomes the authoritative hero (`isHero = true`), atomically demoting the legacy hero while keeping its row attached. If managed placements already exist, new attachments default to gallery (`isHero = false`).
 - **Verification**:
   - `tsc --noEmit`: 0 errors.
   - `lint`: 360 files checked, 0 errors.
-  - `vitest`: 73 test files, 838 tests passed (+15 tests covering atomic rollback, duplicate rejection, managed reorder invariants, legacy read-only guards, and publish hero invariant).
+  - `vitest`: 73 test files, 844 tests passed (covering Cases A through E, legacy preservation, single hero guarantee, and batch atomicity).
   - Next.js build: 103 routes compiled successfully.
   - Canonical 31 products (`shoe-2026-09-001` through `031`): Unmodified.
 

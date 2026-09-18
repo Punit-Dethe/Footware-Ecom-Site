@@ -335,6 +335,39 @@ describe("Media Contract v1 Tests", () => {
       );
     });
 
+    it("clears legacy rollback hero atomically without deleting the legacy row when attaching first managed hero", async () => {
+      const mockClient = { query: vi.fn() };
+      mockDb.transaction.mockImplementation(async (cb: any) => cb(mockClient));
+
+      // Product has 1 legacy rollback placement (is_hero = true)
+      mockClient.query
+        .mockResolvedValueOnce({ rows: [{ id: TEST_PRODUCT_1 }] }) // verify product exists
+        .mockResolvedValueOnce({ rows: [{ id: TEST_ASSET_1 }] }) // verify media asset exists
+        .mockResolvedValueOnce({ rows: [{ max_pos: 0, count: 1, hero_count: 1 }] }) // existing stats (legacy)
+        .mockResolvedValueOnce({}) // UPDATE public.product_media SET is_hero = false (clears legacy hero)
+        .mockResolvedValueOnce({
+          rows: [{ id: "pm-managed", is_hero: true, position: 1 }],
+        }); // INSERT managed hero
+
+      const res = await attachMediaToProduct({
+        productId: TEST_PRODUCT_1,
+        mediaAssetId: TEST_ASSET_1,
+        isHero: true,
+      });
+
+      expect(res.is_hero).toBe(true);
+      // Verify previous legacy hero cleared
+      expect(mockClient.query).toHaveBeenCalledWith(
+        expect.stringContaining("UPDATE public.product_media SET is_hero = false"),
+        [TEST_PRODUCT_1],
+      );
+      // Verify no DELETE query occurred (legacy row remains attached)
+      const deleteCalls = mockClient.query.mock.calls.filter((call: any[]) =>
+        call[0].includes("DELETE FROM public.product_media"),
+      );
+      expect(deleteCalls).toHaveLength(0);
+    });
+
     it("atomically changes product hero and clears previous hero", async () => {
       const mockClient = { query: vi.fn() };
       mockDb.transaction.mockImplementation(async (cb: any) => cb(mockClient));
