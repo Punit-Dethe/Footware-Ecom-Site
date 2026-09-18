@@ -118,7 +118,6 @@ body:has(.cart-page:not([style*="display: none"])) .editorial-header button:hove
 .checkout-summary__image img,
 .order-confirmation__item-image img {
   padding: 8%;
-  mix-blend-mode: multiply;
 }
 
 .cart-line__content {

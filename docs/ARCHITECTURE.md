@@ -166,12 +166,14 @@ sizes      = 7 per product  (UK/India 6–12)
 media      = /catalog-shoes/shoe-NN.webp
 ```
 
-**Media is in a transitional state.** B7 established Supabase Storage
-`product-media` as the byte authority for admin-uploaded media, but the current
-31-shoe catalog is served from static files in `storefront/public/catalog-shoes/`.
-`lib/media/delivery.ts#getStoragePublicUrl` passes root-relative paths through
-unchanged, so both forms resolve today. Reconciling them is the **Media Contract
-v1** item in the continuity log.
+**Media Contract v1 Customer Cutover Complete (Phase 4).**
+The customer-facing storefront reads directly from `public.product_media` and `public.media_assets`.
+The 31 canonical shoes are served from their authoritative Supabase Storage stone masters
+(`media/{assetId}/original.webp`) through `getStoragePublicUrl()`.
+The legacy table `public.product_images` and static directory `storefront/public/catalog-shoes/`
+are strictly preserved as rollback/transitional data. Legacy admin media mutation controls
+in `ProductMediaManager` have been guarded with a migration warning while the global Media Library
+and admin redesign are pending.
 
 The retired 38-product demo catalog (`office-footwear-01`,
 `traditional-footwear-NN`, categories `formal-office` / `traditional-indian`) is

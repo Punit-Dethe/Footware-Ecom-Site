@@ -3,6 +3,7 @@ import { query } from "./index";
 
 export interface DbCatalogProductImageJson {
   id: string;
+  storage_provider?: string;
   storage_path: string;
   alt_text: string | null;
   position: number;
@@ -12,6 +13,9 @@ export interface DbCatalogProductImageJson {
   dominant_color: string | null;
   lqip: string | null;
   processed_variants: Record<string, { avif?: string; webp?: string }> | null;
+  original_filename?: string | null;
+  mime_type?: string | null;
+  file_size_bytes?: number | null;
 }
 
 export interface DbCatalogProductRow {
@@ -109,20 +113,35 @@ export async function loadPublicCatalogRows(
                 (
                   SELECT json_agg(
                     json_build_object(
-                      'id', pi.id,
-                      'storage_path', pi.storage_path,
-                      'alt_text', pi.alt_text,
-                      'position', pi.position,
-                      'is_hero', pi.is_hero,
-                      'width', pi.width,
-                      'height', pi.height,
-                      'dominant_color', pi.dominant_color,
-                      'lqip', pi.lqip,
-                      'processed_variants', pi.processed_variants
-                    ) ORDER BY pi.position ASC, pi.created_at ASC
+                      'id', pm.id,
+                      'storage_provider', ma.storage_provider,
+                      'storage_path', ma.storage_path,
+                      'alt_text', pm.alt_text,
+                      'position', pm.position,
+                      'is_hero', pm.is_hero,
+                      'width', ma.width,
+                      'height', ma.height,
+                      'dominant_color', ma.dominant_color,
+                      'lqip', ma.lqip,
+                      'processed_variants', ma.processed_variants,
+                      'original_filename', ma.original_filename,
+                      'mime_type', ma.mime_type,
+                      'file_size_bytes', ma.file_size_bytes
+                    ) ORDER BY pm.position ASC, pm.created_at ASC
                   )
-                  FROM public.product_images pi
-                  WHERE pi.product_id = p.id
+                  FROM public.product_media pm
+                  JOIN public.media_assets ma ON ma.id = pm.media_asset_id
+                  WHERE pm.product_id = p.id
+                    AND (
+                      ma.storage_provider != 'legacy_public'
+                      OR NOT EXISTS (
+                        SELECT 1
+                        FROM public.product_media pm_sub
+                        JOIN public.media_assets ma_sub ON ma_sub.id = pm_sub.media_asset_id
+                        WHERE pm_sub.product_id = p.id
+                          AND ma_sub.storage_provider != 'legacy_public'
+                      )
+                    )
                 ),
                 '[]'::json
               ) AS images

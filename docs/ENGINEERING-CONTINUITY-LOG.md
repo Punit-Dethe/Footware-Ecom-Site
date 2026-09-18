@@ -1246,11 +1246,61 @@ Do not assume older `ARCHITECTURE.md`, old specification docs, or old performanc
 
 ## 16. Rolling change log
 
-### 2026-09-18 — Media Modernization Phase 3: Supabase Stone-Asset Migration — IN REVIEW
+### 2026-09-18 — Media Modernization Phase 4: Storefront Cutover to Media Contract v1 — IN REVIEW
+
+- Branch: `feat/media-v1-storefront-cutover`
+- Starting main: `a91e9316b9ad2635f51febb12539261809542a99` (incorporating Phase 3 Supabase stone migration)
+- Status: Implemented, verified, pushed to origin; awaiting supervisor review (do NOT merge).
+- Scope: Customer-facing read cutover to Media Contract v1 (`public.product_media` + `public.media_assets`), serving Supabase stone heroes, removing runtime product-image multiply blending, standardizing PDP stage color, guarding legacy admin media UI, and preserving rollback assets.
+- Changes:
+  1. **Customer Public Catalog Media Cutover (`storefront/src/lib/db/catalog.ts`)**:
+     - Updated `loadPublicCatalogRows()` to aggregate media from `public.product_media pm JOIN public.media_assets ma ON ma.id = pm.media_asset_id`.
+     - Preserved exact 4-query bounded parallel architecture with zero N+1 queries.
+     - Implemented non-legacy preference filter: excludes `storage_provider = 'legacy_public'` assets whenever a product has non-legacy Media Contract assets, ensuring current canonical shoes render exactly one stone hero and no white duplicate image. Unmigrated products safely retain `legacy_public` fallback.
+     - Carries `lqip`, `dominant_color`, dimensions, original filename, and MIME metadata into `DbCatalogProductImageJson` and `product_media` compatibility DTO.
+  2. **Order Checkout Thumbnail Cutover (`storefront/src/lib/db/order.ts`)**:
+     - Updated `createOrderFromCart()` checkout item snapshot subqueries to select `hero_storage_path` and `hero_variants` from `public.product_media pm JOIN public.media_assets ma ON ma.id = pm.media_asset_id`.
+     - Ensures new orders snapshot the authoritative Supabase stone master URL into `order_items.thumbnail_url`.
+     - Strictly preserves the historical snapshot invariant: 0 existing `order_items` rows were modified or rewritten.
+  3. **Runtime `mix-blend-mode: multiply` Removal**:
+     - Eliminated all 6 runtime multiply blend mode rules across 4 stylesheets (`storefront/src/app/cart-page.css`, `catalog-page.css`, `home-experiment.css`, `product-page.css`).
+     - Product imagery now displays clean, baked `#ece7de` pixels directly without double-multiply darkening, edge halo, or browser compositing overhead.
+  4. **Product Stage Color Standardization**:
+     - Standardized `--pdp-stage` in `storefront/src/app/product-page.css` from `#ebe5dc` to canonical `#ece7de`, harmonizing PDP media stages with homepage (`--mirza-stage`), catalog (`--catalog-stage`), and cart/checkout (`--cart-stage`, `--checkout-stage`).
+  5. **Legacy Admin Media UI Guard (`storefront/src/components/admin/ProductMediaManager.tsx`)**:
+     - Disabled file upload input and mutation controls (Make Hero, Reorder, Delete, Alt Text Save).
+     - Rendered prominent admin-only notice: *"Media management is being migrated to Media Library. Image modifications are temporarily disabled while storefront media reads are cut over to Media Contract v1."*
+     - Protects live storefront from silent desynchronization while preserving product metadata/variant/category admin editing.
+  6. **Zero Destructive Cleanup / Complete Rollback Preservation**:
+     - `public.product_images` is 100% preserved (69 rows intact).
+     - Static directory `storefront/public/catalog-shoes/` is 100% preserved on disk.
+     - `legacy_public` rows in `media_assets` and `product_media` remain intact at position 1.
+  7. **Comprehensive Test Suite (`storefront/src/lib/media/__tests__/storefront-media-cutover.test.ts`)**:
+     - 9 automated unit and regression tests verifying:
+       * Exactly 4 bounded queries during catalog load (0 N+1).
+       * Canonical product heroes resolve to Supabase `media/{assetId}/original.webp`.
+       * Non-legacy assets preferred; rollback duplicates excluded from gallery.
+       * Legacy fallback preserved for unmigrated products.
+       * Order thumbnail snapshots query Media Contract v1 hero without modifying historical orders.
+       * 0 customer read paths depend on `product_images`.
+       * 0 product imagery styles contain `mix-blend-mode: multiply`.
+       * `--pdp-stage` equals `#ece7de`.
+       * Admin media UI disables mutations with migration banner.
+     - Updated `catalog-parity.test.ts` to assert Supabase stone hero resolution while verifying disk rollback file existence.
+- Validation:
+  * TypeScript `tsc --noEmit`: 0 errors
+  * Biome lint: 0 errors, 0 warnings (347 files checked)
+  * Vitest full test suite: 68 test files / 745 tests passing (100% pass)
+  * Next.js production build: 101 routes compiled successfully (0 errors)
+  * Storefront client JS impact: 0 bytes
+  * Warm cache query count: 0 database queries (`catalog-public` cache tag preserved)
+
+### 2026-09-18 — Media Modernization Phase 3: Supabase Stone-Asset Migration — MERGED
 
 - Branch: `feat/stone-media-supabase-migration`
+- Merged-main SHA: `a91e9316b9ad2635f51febb12539261809542a99`
 - Starting main: `d632ee50899e75a5a66f6a1b1d1491f75cc067a7` (incorporating Phase 2 stone master pipeline)
-- Status: Implemented, verified, pushed to origin; awaiting supervisor review (do NOT merge).
+- Status: Accepted by supervisor and merged into main.
 - Scope: Supabase Storage upload of the 31 stone-baked master WebPs, creation of deterministic `media_assets` rows, canonical `product_media` hero associations, preservation of legacy rollback assets, and zero modification to `public.product_images`.
 - Changes:
   1. **Operational Migration Script (`storefront/scripts/migrate-stone-media-to-supabase.ts`)**:

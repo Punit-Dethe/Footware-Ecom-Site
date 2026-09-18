@@ -353,7 +353,6 @@ body:has(.catalog-page:not([style*="display: none"])) :is(.editorial-header, .ed
 .catalog-page .catalog-products-grid__cell .product-card__image img {
   padding: 7%;
   object-fit: contain;
-  mix-blend-mode: multiply;
   transition: transform 220ms ease;
 }
 

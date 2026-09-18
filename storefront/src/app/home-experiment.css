@@ -393,7 +393,6 @@ body:has(.home-page.mirza-home:not([style*="display: none"])) .editorial-footer 
 .mirza-home .product-card__image img {
   padding: 8%;
   object-fit: contain;
-  mix-blend-mode: multiply;
   transition: transform 220ms ease;
 }
 

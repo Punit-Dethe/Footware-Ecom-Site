@@ -198,20 +198,42 @@ export async function placeOrderFromCart(params: {
          p.name AS product_name,
          p.slug AS product_slug,
          p.status AS product_status,
-         (
-           SELECT pi.storage_path
-           FROM public.product_images pi
-           WHERE pi.product_id = p.id
-           ORDER BY pi.is_hero DESC, pi.position ASC
-           LIMIT 1
-         ) AS hero_storage_path,
-         (
-           SELECT pi.processed_variants
-           FROM public.product_images pi
-           WHERE pi.product_id = p.id
-           ORDER BY pi.is_hero DESC, pi.position ASC
-           LIMIT 1
-         ) AS hero_variants
+          (
+            SELECT ma.storage_path
+            FROM public.product_media pm
+            JOIN public.media_assets ma ON ma.id = pm.media_asset_id
+            WHERE pm.product_id = p.id
+              AND (
+                ma.storage_provider != 'legacy_public'
+                OR NOT EXISTS (
+                  SELECT 1
+                  FROM public.product_media pm_sub
+                  JOIN public.media_assets ma_sub ON ma_sub.id = pm_sub.media_asset_id
+                  WHERE pm_sub.product_id = p.id
+                    AND ma_sub.storage_provider != 'legacy_public'
+                )
+              )
+            ORDER BY pm.is_hero DESC, pm.position ASC, pm.created_at ASC
+            LIMIT 1
+          ) AS hero_storage_path,
+          (
+            SELECT ma.processed_variants
+            FROM public.product_media pm
+            JOIN public.media_assets ma ON ma.id = pm.media_asset_id
+            WHERE pm.product_id = p.id
+              AND (
+                ma.storage_provider != 'legacy_public'
+                OR NOT EXISTS (
+                  SELECT 1
+                  FROM public.product_media pm_sub
+                  JOIN public.media_assets ma_sub ON ma_sub.id = pm_sub.media_asset_id
+                  WHERE pm_sub.product_id = p.id
+                    AND ma_sub.storage_provider != 'legacy_public'
+                )
+              )
+            ORDER BY pm.is_hero DESC, pm.position ASC, pm.created_at ASC
+            LIMIT 1
+          ) AS hero_variants
        FROM public.cart_items ci
        JOIN public.variants v ON v.id = ci.variant_id
        JOIN public.products p ON p.id = v.product_id

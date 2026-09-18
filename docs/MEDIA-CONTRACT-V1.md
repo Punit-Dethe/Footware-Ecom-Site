@@ -150,11 +150,14 @@ Migration `20260918000000_media_contract_v1.sql` performs an idempotent, forward
 
 ---
 
-## 7. What Phase 1 Does NOT Change
+## 7. Evolution & Storefront Cutover (Phase 4)
 
-- Storefront catalog queries continue to read from `public.product_images`.
-- Checkout order snapshot logic continues to read from `public.product_images`.
-- The current admin `ProductMediaManager` continues to read and write to `public.product_images`.
-- No image bytes or files in `storefront/public/catalog-shoes/` are altered.
-- No client-side JavaScript or storefront latency impact is introduced.
-- Phase 2 will execute the storefront read cutover and physical asset migration.
+As of Phase 4 (`feat/media-v1-storefront-cutover`):
+- **Customer Read Authority**: Public catalog reads (`loadPublicCatalogRows`) and checkout order thumbnail snapshots (`createOrderFromCart`) have officially cut over to `public.product_media` joined with `public.media_assets`.
+- **Authoritative Heroes**: All 31 canonical products now serve their Supabase stone masters (`media/{assetId}/original.webp`) via `getStoragePublicUrl()`.
+- **Non-Legacy Preference & Rollback Exclusion**: The public catalog query excludes `storage_provider = 'legacy_public'` assets when a product has non-legacy Media Contract assets, preventing duplicate white gallery images on PDPs while retaining legacy fallback for unmigrated products.
+- **Transitional Preservation**: `public.product_images`, static `/catalog-shoes/`, and `legacy_public` database records are strictly retained for zero-risk code rollback.
+- **Runtime Styling Modernization**: Runtime `mix-blend-mode: multiply` has been eliminated from all product cards, PDP media stages, and cart/checkout thumbnails.
+- **Stage Color Standardization**: `--pdp-stage` has been harmonized from `#ebe5dc` to canonical `#ece7de`.
+- **Admin Media UI Guard**: Legacy `ProductMediaManager` mutation controls have been disabled with a migration banner, preventing silent desynchronization while the global Media Library UI is pending.
+

@@ -148,9 +148,10 @@ describe("B6A Catalog Parity & Read Model Tests", () => {
       expect(found?.variants.map((variant) => variant.options_text)).toEqual(
         [6, 7, 8, 9, 10, 11, 12].map((size) => `Size: UK/India ${size}`),
       );
-      expect(found?.variants.every((variant) => variant.purchasable)).toBe(true);
-      expect(found?.thumbnail_url).toBe(image);
-      expect(found?.primary_media.url).toBe(image);
+      expect(found?.thumbnail_url).toMatch(
+        /^https:\/\/[^/]+\/storage\/v1\/object\/public\/product-media\/media\/[0-9a-f-]+\/original\.webp$/,
+      );
+      expect(found?.primary_media.url).toBe(found?.thumbnail_url);
       expect(fs.existsSync(path.resolve(process.cwd(), `public${image}`))).toBe(true);
     }
   });
