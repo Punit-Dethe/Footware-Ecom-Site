@@ -128,7 +128,7 @@ Browser (User drops file)
 
 ---
 
-## 7. Scope Boundaries & Phase 6B Interface
+## 7. Scope Boundaries & Progression
 
 ### Phase 6A Implemented:
 - Shared Mirza Studio top shell and navigation tabs (`Products`, `Categories`, `Media`).
@@ -138,8 +138,39 @@ Browser (User drops file)
 - Slide-over asset inspector drawer with live placement reports.
 - Protected safe deletion UX.
 
-### Explicitly Excluded (Phase 6B Targets):
-- Product Media Picker within product editor.
-- Drag-and-drop product media reordering.
-- Full Products, Categories, Orders, or Customers console redesigns.
-- Storefront client bundle JS changes (storefront JS impact remains strictly 0).
+---
+
+## 8. Phase 6B: Product ↔ Media Library Integration
+
+Phase 6B completes the product media management workflow within the Mirza admin console (`/admin/products/[id]`).
+
+### Key Highlights:
+1. **Admin Product Detail Authority**:
+   - `AdminProductDetail.media` replaces legacy `images: DbProductImageRow[]`.
+   - `getAdminProduct` and `getAdminProductWithClient` load placements via `listProductMediaV1(productId)`.
+   - Complete elimination of active admin read dependencies on `public.product_images`.
+2. **Rollback Media Isolation**:
+   - `storage_provider = 'legacy_public'` assets are excluded from the editable hero and gallery.
+   - Retained quietly as a read-only technical footnote: `1 legacy asset retained internally for safe rollback (not visible to customers). Read-only • Phase 9 cleanup`.
+   - Zero action buttons (`Make Hero`, `Remove`, `Reorder`) exposed on rollback copies.
+3. **Select from Library Picker (`ProductMediaLibraryPicker`)**:
+   - Accessible Radix UI dialog with focus trap, Escape dismissal, and focus restoration.
+   - Consumes `listMediaLibraryAssetsAction` with pagination (12 assets/page), search (`q`), and sorting (`newest/oldest`).
+   - Multi-select capability (`Attach N Media`).
+   - Already-attached assets display an `ATTACHED` badge and are disabled from re-selection.
+4. **Direct Upload from Product Edit**:
+   - Integrated with `MediaUploadModal`. Global asset is uploaded and finalized first, then immediately attached to the current product.
+5. **Hero & Gallery Management**:
+   - Prominent, clear Hero Image stage with dimensions, file size, and inline alt text editor.
+   - Reorderable gallery with keyboard fallback controls (`Move Left`, `Move Right`).
+   - Promotion of any gallery item to hero via `setProductMediaHeroAction`.
+6. **Active Product Last-Media & Hero Safety**:
+   - Enforced server-side: active products cannot detach their final managed media asset (`Active products must retain at least one managed image. Attach a replacement before removing this asset.`).
+   - Detaching a hero automatically promotes the next lowest-position managed asset.
+   - `validatePublishInvariants` strictly requires at least one non-legacy managed media asset before activating a product.
+7. **Unsaved Form State Protection**:
+   - `ProductMediaManager` maintains independent mutation state and re-queries placements via `getProductMediaV1Action(productId)`.
+   - Never calls full-page `router.refresh()` which would wipe unsaved product text or variant edits.
+8. **Live Storefront Consistency**:
+   - All media actions invalidate the `catalog-public` cache tag.
+

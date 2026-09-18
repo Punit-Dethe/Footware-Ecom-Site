@@ -433,6 +433,145 @@ describe("Admin Catalog DAL Unit Tests", () => {
         }),
       ).rejects.toThrow("Existing variant SKU \"ORIGINAL-SKU\" cannot be renamed");
     });
+
+    it("rejects publishing when product has 0 managed media assets", async () => {
+      const mockClient = {
+        query: vi.fn((sql: string) => {
+          if (sql.includes("SELECT id, status FROM public.products")) {
+            return Promise.resolve({ rows: [{ id: TEST_PRODUCT_ID, status: "draft" }] });
+          }
+          if (sql.includes("SELECT COUNT(*)::int AS count FROM public.product_categories")) {
+            return Promise.resolve({ rows: [{ count: 1 }] });
+          }
+          if (sql.includes("FROM public.variants") && sql.includes("WHERE product_id = $1")) {
+            return Promise.resolve({
+              rows: [
+                {
+                  id: TEST_VARIANT_ID_1,
+                  sku: "TEST-001-8",
+                  size_option: "8",
+                  price_in_cents: 10000,
+                  compare_at_price_in_cents: null,
+                  currency: "USD",
+                  quantity_on_hand: 5,
+                  is_default: true,
+                  active: true,
+                },
+              ],
+            });
+          }
+          if (sql.includes("FROM public.product_media pm") && sql.includes("storage_provider != 'legacy_public'")) {
+            return Promise.resolve({ rows: [{ count: 0 }] }); // 0 managed media
+          }
+          return Promise.resolve({ rows: [] });
+        }),
+      };
+      mockDb.transaction.mockImplementation(async (cb: any) => cb(mockClient));
+
+      await expect(
+        saveAdminProduct(TEST_PRODUCT_ID, {
+          name: "Test Shoe",
+          slug: "test-shoe",
+          sku: "TEST-001",
+          status: "active",
+          categoryIds: [TEST_CATEGORY_ID],
+          variants: [
+            {
+              sku: "TEST-001-8",
+              sizeOption: "8",
+              priceInCents: 10000,
+              quantityOnHand: 5,
+              backorderable: false,
+              isDefault: true,
+              active: true,
+            },
+          ],
+        }),
+      ).rejects.toThrow("Cannot publish product: At least one managed media asset is required");
+    });
+
+    it("allows publishing active product when at least one non-legacy managed media exists", async () => {
+      const mockClient = {
+        query: vi.fn((sql: string) => {
+          if (sql.includes("SELECT id, status FROM public.products")) {
+            return Promise.resolve({ rows: [{ id: TEST_PRODUCT_ID, status: "draft" }] });
+          }
+          if (sql.includes("SELECT COUNT(*)::int AS count FROM public.product_categories")) {
+            return Promise.resolve({ rows: [{ count: 1 }] });
+          }
+          if (sql.includes("FROM public.variants") && sql.includes("WHERE product_id = $1")) {
+            return Promise.resolve({
+              rows: [
+                {
+                  id: TEST_VARIANT_ID_1,
+                  sku: "TEST-001-8",
+                  size_option: "8",
+                  price_in_cents: 10000,
+                  compare_at_price_in_cents: null,
+                  currency: "USD",
+                  quantity_on_hand: 5,
+                  is_default: true,
+                  active: true,
+                },
+              ],
+            });
+          }
+          if (sql.includes("FROM public.product_media pm") && sql.includes("storage_provider != 'legacy_public'")) {
+            return Promise.resolve({ rows: [{ count: 1 }] }); // 1 managed media
+          }
+          if (sql.includes("FROM public.products") && sql.includes("WHERE id = $1")) {
+            return Promise.resolve({
+              rows: [
+                {
+                  id: TEST_PRODUCT_ID,
+                  name: "Test Shoe",
+                  slug: "test-shoe",
+                  sku: "TEST-001",
+                  description: null,
+                  description_html: null,
+                  status: "active",
+                  meta_title: null,
+                  meta_description: null,
+                  meta_keywords: null,
+                  created_at: new Date(),
+                  updated_at: new Date(),
+                },
+              ],
+            });
+          }
+          if (sql.includes("FROM public.categories c")) {
+            return Promise.resolve({ rows: [] });
+          }
+          if (sql.includes("listProductMediaV1") || (sql.includes("FROM public.product_media pm") && sql.includes("SELECT pm.id"))) {
+            return Promise.resolve({ rows: [] });
+          }
+          return Promise.resolve({ rows: [] });
+        }),
+      };
+      mockDb.transaction.mockImplementation(async (cb: any) => cb(mockClient));
+
+      const result = await saveAdminProduct(TEST_PRODUCT_ID, {
+        name: "Test Shoe",
+        slug: "test-shoe",
+        sku: "TEST-001",
+        status: "active",
+        categoryIds: [TEST_CATEGORY_ID],
+        variants: [
+          {
+            sku: "TEST-001-8",
+            sizeOption: "8",
+            priceInCents: 10000,
+            quantityOnHand: 5,
+            backorderable: false,
+            isDefault: true,
+            active: true,
+          },
+        ],
+      });
+
+      expect(result).toBeDefined();
+      expect(result.status).toBe("active");
+    });
   });
 
   describe("Default Variant Switching (Order-Independent)", () => {

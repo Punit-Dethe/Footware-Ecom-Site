@@ -102,8 +102,13 @@ describe("Admin Media Library Server Actions (Phase 5)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockRequireAdmin.mockResolvedValue({ id: "admin-1", email: "admin@mirza.com", role: "admin" });
-    mockQuery.mockResolvedValue({ rows: [] });
+    mockQuery.mockResolvedValue({ rows: [{ status: "draft" }] });
     mockDeleteStorageObjects.mockResolvedValue({ success: true });
+    mockGetMediaAsset.mockResolvedValue({
+      id: VALID_ASSET_ID,
+      storage_provider: "supabase",
+      storage_path: `media/${VALID_ASSET_ID}/original.webp`,
+    });
   });
 
   /* --------------------------------------------------------------------------

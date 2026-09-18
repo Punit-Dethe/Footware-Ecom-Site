@@ -22,33 +22,39 @@
 * **Phase 1 (Media Contract v1 Foundation)**: MERGED (`feat/media-contract-v1`).
 * **Phase 2 (Stone Master Image Pipeline)**: MERGED (`feat/stone-media-pipeline`).
 * **Phase 3 (Supabase Stone-Asset Migration)**: MERGED (`feat/stone-media-supabase-migration`).
-* **Phase 4 (Storefront Cutover to Media Contract v1)**: MERGED (`feat/media-v1-storefront-cutover` into `main` at `e2d5689f1607ad474a757ec7ea643d6cc2ffcdf2`).
-* **Phase 5 (Global Media Library Backend + Upload Pipeline)**: **COMPLETE / VERIFIED** on branch `feat/media-library-backend`.
-  - Added migration `20260918150000_media_library_content_hash.sql` (`content_sha256 VARCHAR(64)`).
-  - Storage path: `media/{assetId}/original.{ext}`.
-  - Direct browser upload to Supabase Storage signed URLs via `requestMediaLibraryUploadAction`.
-  - Finalization via `finalizeMediaLibraryUploadAction` with Sharp format/dimension/dominant-color/LQIP extraction and SHA-256 hash.
-  - Placement actions (`attachMediaAssetToProductAction`, `detachMediaAssetFromProductAction`, `setProductMediaHeroAction`, `reorderProductMediaActionV1`, `updateProductMediaAltTextActionV1`) with zero mutations against `public.product_images`.
-  - Safe deletion via `deleteMediaLibraryAssetAction`: FK-guarded, legacy rollback protected, DB delete executed prior to storage cleanup.
-  - Read DAL (`listMediaLibraryAssets`, `getMediaLibraryAsset`) with single-query total count and usage count aggregation (0 N+1 queries).
-  - Test suite: 70 test files, 785 tests passing.
-  - Real integration smoke test executed on live Supabase storage and PostgreSQL: verified end-to-end upload, HTTP 200 GET, DB insertion, usage isolation, safe deletion, and zero residual drift on canonical counts (100 assets, 100 placements).
-  - Next.js build: 101/101 routes compiled cleanly.
+* **Phase 4 (Storefront Cutover to Media Contract v1)**: MERGED (`feat/media-v1-storefront-cutover`).
+* **Phase 5 (Global Media Library Backend + Upload Pipeline)**: MERGED (`feat/media-library-backend`).
+* **Phase 6A (Editorial Admin Foundation & Global Media Library UI)**: MERGED into `main` at `5c0edbf6ce94bd09d563a5b93fcc45cbe2c90fbe`.
+* **Phase 6B (Product ↔ Media Library Integration)**: **COMPLETE / VERIFIED** on branch `feat/product-media-library-integration`.
+  - Cut Admin Product Detail read model from `product_images` over to Media Contract v1 (`listProductMediaV1`).
+  - Completely replaced legacy `ProductMediaManager.tsx` with Mirza editorial product media experience.
+  - Added `ProductMediaLibraryPicker.tsx` with Radix accessible dialog, deep-search, sort, pagination, and multi-selection.
+  - Enforced server-side active product last-media safety guard and automatic hero promotion on detachment.
+  - Enforced Media Contract v1 publish invariant: active products require >= 1 managed media asset before activation.
+  - Protected unsaved form metadata/variant state during all media operations using `getProductMediaV1Action`.
+  - Automated cache tag invalidation (`catalog-public`) on all mutations.
+  - Zero active admin reads from legacy `public.product_images`.
+  - Full test suite: 73 test files, 823 tests passing.
+  - Live integration smoke verified against temporary draft product; canonical 31 products untouched; zero DB count drift.
+  - Visual QA verified at 1920, 1440, 768, 390.
+  - Production build: 103/103 static pages generated cleanly.
   - Ready for supervisor review. Do NOT merge to main yet.
 
 ### Current working head
 
-Current `main` starting SHA for Phase 5:
+Starting `main` SHA for Phase 6B:
 
 ```text
-e2d5689f1607ad474a757ec7ea643d6cc2ffcdf2  Merge branch 'feat/media-v1-storefront-cutover' into main
+5c0edbf6ce94bd09d563a5b93fcc45cbe2c90fbe  Merge branch 'feat/editorial-media-library-ui' into main
 ```
+
+Branch: `feat/product-media-library-integration`
 
 Current phase:
 
 ```text
-MIRZA MEDIA MODERNIZATION — PHASE 5: GLOBAL MEDIA LIBRARY BACKEND — COMPLETE (Awaiting Review)
-Next: PHASE 6 — MEDIA LIBRARY ADMIN UI
+MIRZA MEDIA MODERNIZATION — PHASE 6B: PRODUCT ↔ MEDIA LIBRARY INTEGRATION — COMPLETE (Awaiting Supervisor Review)
+Next: PHASE 7 — STOREFRONT REFINEMENT & CATEGORIES (or subsequent milestone)
 ```
 
 Canonical B10 references:

@@ -341,8 +341,8 @@ describe("Media Contract v1 Storefront Cutover (Phase 4)", () => {
     });
   });
 
-  describe("8. Legacy Admin Media Mutation Guard", () => {
-    it("disables mutations and displays migration notice in ProductMediaManager", () => {
+  describe("8. Product Media Manager Media Contract v1 Authority", () => {
+    it("uses Media Contract v1 actions and components in ProductMediaManager", () => {
       const content = fs.readFileSync(
         path.resolve(
           __dirname,
@@ -351,18 +351,15 @@ describe("Media Contract v1 Storefront Cutover (Phase 4)", () => {
         "utf8",
       );
 
-      // Warning banner present
-      expect(content).toContain("Media Management Notice");
-      expect(content).toContain("Media management is being migrated to Media Library.");
-      expect(content).toContain("Upload Disabled");
+      // Media Contract v1 actions wired
+      expect(content).toContain("setProductMediaHeroAction");
+      expect(content).toContain("detachMediaAssetFromProductAction");
+      expect(content).toContain("reorderProductMediaActionV1");
+      expect(content).toContain("ProductMediaLibraryPicker");
 
-      // No active file upload input
-      expect(content).not.toContain('type="file"');
-
-      // No mutation action buttons (Make Hero, Delete, Reorder)
-      expect(content).not.toContain("handleSetHero");
-      expect(content).not.toContain("handleDelete");
-      expect(content).not.toContain("handleMove");
+      // No legacy product_images dependencies
+      expect(content).not.toContain("DbProductImageRow");
+      expect(content).not.toContain("insertProductMedia");
     });
   });
 });

@@ -221,14 +221,22 @@ Strict database TLS is a hard invariant. Do not regress to
 
 ## 8. Validation Baseline
 
-Measured on `main` at `6c504be`, 2026-09-14:
+Measured on `feat/product-media-library-integration` (Phase 6B), 2026-09-18:
 
 ```text
-Vitest        62 suites / 662 tests passing
+Vitest        73 suites / 823 tests passing
 TypeScript    tsc --noEmit clean
-Biome         lint clean
+Biome         lint clean (0 errors, 0 warnings across 360 files)
+Next.js       Production build clean (103/103 static pages generated)
 ```
 
-Architectural invariants are enforced by guard suites:
-`b8-architecture-audit.test.ts` (18), `b9-architecture-audit.test.ts` (21),
-`b10-architecture-audit.test.ts` (22).
+---
+
+## 9. Media Contract Authority Status
+
+Following Phase 6B:
+- **Customer Storefront Media Authority**: Media Contract v1 (`public.product_media` + `public.media_assets`).
+- **Admin Product Media Authority**: Media Contract v1 (`public.product_media` + `public.media_assets`).
+- **Global Media Library Authority**: Media Contract v1 (`public.media_assets` direct signed uploads + Sharp processing).
+- **Legacy `public.product_images` Status**: Retained exclusively for emergency rollback and historical migration reference. Active admin read/write dependency count: 0.
+

@@ -3,7 +3,8 @@ import crypto from "node:crypto";
 import type { PoolClient } from "pg";
 import { query, transaction } from "./index";
 import { formatSafeDescription } from "@/lib/catalog/description";
-import { listProductMedia, type DbProductImageRow } from "./media";
+import { listProductMediaV1, type StorageProvider } from "./media-v1";
+import { getStoragePublicUrl } from "@/lib/media/delivery";
 
 export interface AdminProductSummary {
   id: string;
@@ -37,6 +38,27 @@ export interface AdminVariantRecord {
   updatedAt?: Date;
 }
 
+export interface AdminProductMediaPlacement {
+  id: string;
+  productId: string;
+  mediaAssetId: string;
+  position: number;
+  isHero: boolean;
+  altText: string | null;
+  asset: {
+    id: string;
+    provider: StorageProvider;
+    storagePath: string;
+    publicUrl: string;
+    filename: string | null;
+    width: number | null;
+    height: number | null;
+    fileSize: number | null;
+    dominantColor: string | null;
+    lqip: string | null;
+  };
+}
+
 export interface AdminProductDetail {
   id: string;
   name: string;
@@ -52,7 +74,7 @@ export interface AdminProductDetail {
   updatedAt: Date;
   categories: Array<{ id: string; name: string; slug: string }>;
   variants: AdminVariantRecord[];
-  images: DbProductImageRow[];
+  media: AdminProductMediaPlacement[];
 }
 
 export interface AdminCategoryRecord {
@@ -319,7 +341,7 @@ export async function getAdminProduct(
   }
   const p = prodRes.rows[0];
 
-  const [catRes, varRes, images] = await Promise.all([
+  const [catRes, varRes, mediaRows] = await Promise.all([
     query<{ id: string; name: string; slug: string }>(
       `SELECT c.id, c.name, c.slug
        FROM public.categories c
@@ -352,8 +374,29 @@ export async function getAdminProduct(
        ORDER BY position ASC, created_at ASC;`,
       [id],
     ),
-    listProductMedia(id),
+    listProductMediaV1(id),
   ]);
+
+  const media: AdminProductMediaPlacement[] = mediaRows.map((m) => ({
+    id: m.id,
+    productId: m.product_id,
+    mediaAssetId: m.media_asset_id,
+    position: m.position,
+    isHero: m.is_hero,
+    altText: m.alt_text,
+    asset: {
+      id: m.asset.id,
+      provider: m.asset.storage_provider,
+      storagePath: m.asset.storage_path,
+      publicUrl: getStoragePublicUrl(m.asset.storage_path),
+      filename: m.asset.original_filename,
+      width: m.asset.width,
+      height: m.asset.height,
+      fileSize: m.asset.file_size_bytes,
+      dominantColor: m.asset.dominant_color,
+      lqip: m.asset.lqip,
+    },
+  }));
 
   return {
     id: p.id,
@@ -385,7 +428,7 @@ export async function getAdminProduct(
       createdAt: v.created_at,
       updatedAt: v.updated_at,
     })),
-    images,
+    media,
   };
 }
 
@@ -823,6 +866,21 @@ async function validatePublishInvariants(
       );
     }
   }
+
+  // 5. Media Contract v1 publish invariant: must have at least one non-legacy managed media asset
+  const mediaCountRes = await client.query<{ count: string }>(
+    `SELECT COUNT(*)::int AS count
+     FROM public.product_media pm
+     JOIN public.media_assets ma ON ma.id = pm.media_asset_id
+     WHERE pm.product_id = $1 AND ma.storage_provider != 'legacy_public';`,
+    [productId],
+  );
+  if (Number(mediaCountRes.rows[0]?.count || 0) < 1) {
+    throw new CatalogValidationError(
+      "Cannot publish product: At least one managed media asset is required",
+      "media",
+    );
+  }
 }
 
 /**
@@ -1176,8 +1234,7 @@ async function getAdminProductWithClient(
 
   if (prodRes.rows.length === 0) return null;
   const p = prodRes.rows[0];
-
-  const [catRes, varRes, images] = await Promise.all([
+  const [catRes, varRes, mediaRows] = await Promise.all([
     client.query<{ id: string; name: string; slug: string }>(
       `SELECT c.id, c.name, c.slug
        FROM public.categories c
@@ -1210,8 +1267,29 @@ async function getAdminProductWithClient(
        ORDER BY position ASC, created_at ASC;`,
       [id],
     ),
-    listProductMedia(id, client),
+    listProductMediaV1(id, client),
   ]);
+
+  const media: AdminProductMediaPlacement[] = mediaRows.map((m) => ({
+    id: m.id,
+    productId: m.product_id,
+    mediaAssetId: m.media_asset_id,
+    position: m.position,
+    isHero: m.is_hero,
+    altText: m.alt_text,
+    asset: {
+      id: m.asset.id,
+      provider: m.asset.storage_provider,
+      storagePath: m.asset.storage_path,
+      publicUrl: getStoragePublicUrl(m.asset.storage_path),
+      filename: m.asset.original_filename,
+      width: m.asset.width,
+      height: m.asset.height,
+      fileSize: m.asset.file_size_bytes,
+      dominantColor: m.asset.dominant_color,
+      lqip: m.asset.lqip,
+    },
+  }));
 
   return {
     id: p.id,
@@ -1243,6 +1321,6 @@ async function getAdminProductWithClient(
       createdAt: v.created_at,
       updatedAt: v.updated_at,
     })),
-    images,
+    media,
   };
 }

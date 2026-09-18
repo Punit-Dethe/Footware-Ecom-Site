@@ -1,138 +1,649 @@
 "use client";
 
+import { useState, useRef } from "react";
 import Image from "next/image";
-import { getStoragePublicUrl } from "@/lib/media/delivery";
-import type { DbProductImageRow } from "@/lib/db/media";
+import { Dialog as DialogPrimitive } from "radix-ui";
+import {
+  setProductMediaHeroAction,
+  detachMediaAssetFromProductAction,
+  reorderProductMediaActionV1,
+  updateProductMediaAltTextActionV1,
+  attachMediaAssetToProductAction,
+  getProductMediaV1Action,
+} from "@/lib/actions/admin-media-library";
+import type { AdminProductMediaPlacement } from "@/lib/db/admin-catalog";
+import { ProductMediaLibraryPicker } from "./ProductMediaLibraryPicker";
+import { MediaUploadModal } from "./media/MediaUploadModal";
 
 interface ProductMediaManagerProps {
   productId: string;
-  initialMedia: DbProductImageRow[];
+  productStatus: "draft" | "active" | "archived";
+  initialMedia: AdminProductMediaPlacement[];
 }
 
 export function ProductMediaManager({
-  productId: _productId,
+  productId,
+  productStatus,
   initialMedia,
 }: ProductMediaManagerProps) {
-  const mediaList = initialMedia;
+  const [mediaList, setMediaList] =
+    useState<AdminProductMediaPlacement[]>(initialMedia);
+  const [isPickerOpen, setIsPickerOpen] = useState(false);
+  const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [isPending, setIsPending] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
+
+  // Detach confirmation state for hero
+  const [detachConfirmAsset, setDetachConfirmAsset] =
+    useState<AdminProductMediaPlacement | null>(null);
+
+  // Trigger refs for focus restoration
+  const pickerTriggerRef = useRef<HTMLButtonElement>(null);
+  const uploadTriggerRef = useRef<HTMLButtonElement>(null);
+  const detachTriggerRef = useRef<HTMLButtonElement>(null);
+
+  // Separate managed vs legacy rollback media
+  const managedMedia = mediaList.filter(
+    (m) => m.asset.provider !== "legacy_public",
+  );
+  const rollbackMedia = mediaList.filter(
+    (m) => m.asset.provider === "legacy_public",
+  );
+
+  // Identify primary hero
+  const heroMedia =
+    managedMedia.find((m) => m.isHero) || managedMedia[0] || null;
+  const galleryMedia = managedMedia.filter((m) => m.id !== heroMedia?.id);
+
+  // Helper to refresh only media state without re-rendering parent form
+  const refreshMedia = async () => {
+    try {
+      const res = await getProductMediaV1Action(productId);
+      if (res.success && res.media) {
+        setMediaList(res.media);
+      }
+    } catch {
+      // Quiet failover
+    }
+  };
+
+  // Actions
+  const handleSetHero = async (assetId: string) => {
+    setIsPending(true);
+    setStatusMessage(null);
+    try {
+      const res = await setProductMediaHeroAction(productId, assetId);
+      if (res.success) {
+        await refreshMedia();
+        setStatusMessage({ type: "success", text: "Hero image updated." });
+      } else {
+        setStatusMessage({
+          type: "error",
+          text: res.error || "Failed to set hero image.",
+        });
+      }
+    } catch {
+      setStatusMessage({
+        type: "error",
+        text: "Network error while setting hero.",
+      });
+    } finally {
+      setIsPending(false);
+    }
+  };
+
+  const handleDetachClick = (item: AdminProductMediaPlacement) => {
+    // Active product last-media check
+    if (productStatus === "active" && managedMedia.length <= 1) {
+      setStatusMessage({
+        type: "error",
+        text: "Active products must retain at least one managed image. Attach a replacement before removing this asset.",
+      });
+      return;
+    }
+
+    // If it's the hero, ask for confirmation
+    if (item.isHero) {
+      setDetachConfirmAsset(item);
+    } else {
+      executeDetach(item.mediaAssetId);
+    }
+  };
+
+  const executeDetach = async (assetId: string) => {
+    setIsPending(true);
+    setStatusMessage(null);
+    setDetachConfirmAsset(null);
+    try {
+      const res = await detachMediaAssetFromProductAction(productId, assetId);
+      if (res.success) {
+        await refreshMedia();
+        setStatusMessage({
+          type: "success",
+          text: "Media removed from product.",
+        });
+      } else {
+        setStatusMessage({
+          type: "error",
+          text: res.error || "Failed to remove media.",
+        });
+      }
+    } catch {
+      setStatusMessage({
+        type: "error",
+        text: "Network error while removing media.",
+      });
+    } finally {
+      setIsPending(false);
+    }
+  };
+
+  const handleMove = async (index: number, direction: "left" | "right") => {
+    const targetIndex = direction === "left" ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= galleryMedia.length) return;
+
+    // Create new gallery order
+    const newGallery = [...galleryMedia];
+    const [moved] = newGallery.splice(index, 1);
+    newGallery.splice(targetIndex, 0, moved);
+
+    // Reconstruct full managed order: hero stays at position 0, gallery follows
+    const newManaged = heroMedia ? [heroMedia, ...newGallery] : newGallery;
+    const mediaAssetIds = newManaged.map((m) => m.mediaAssetId);
+
+    setIsPending(true);
+    setStatusMessage(null);
+    try {
+      const res = await reorderProductMediaActionV1(productId, mediaAssetIds);
+      if (res.success) {
+        await refreshMedia();
+      } else {
+        setStatusMessage({
+          type: "error",
+          text: res.error || "Failed to reorder gallery.",
+        });
+      }
+    } catch {
+      setStatusMessage({
+        type: "error",
+        text: "Network error while reordering.",
+      });
+    } finally {
+      setIsPending(false);
+    }
+  };
+
+  const handleUploadSuccess = async (newAssetId: string) => {
+    setIsPending(true);
+    setStatusMessage(null);
+    try {
+      // Step 2 of Product Edit intake: explicitly attach finalized asset
+      const res = await attachMediaAssetToProductAction(productId, newAssetId);
+      if (res.success) {
+        await refreshMedia();
+        setStatusMessage({
+          type: "success",
+          text: "New asset uploaded and attached.",
+        });
+      } else {
+        setStatusMessage({
+          type: "error",
+          text: res.error || "Asset created but failed to attach to product.",
+        });
+      }
+    } catch {
+      setStatusMessage({
+        type: "error",
+        text: "Failed to attach newly uploaded asset.",
+      });
+    } finally {
+      setIsPending(false);
+    }
+  };
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-6">
-      {/* Migration Notice Banner */}
-      <div className="p-4 bg-amber-50 border border-amber-200 rounded-md">
-        <div className="flex items-start gap-3">
-          <svg
-            className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            aria-hidden="true"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-            />
-          </svg>
-          <div>
-            <h4 className="text-xs font-semibold text-amber-800 uppercase tracking-wider">
-              Media Management Notice
-            </h4>
-            <p className="text-xs text-amber-700 mt-0.5">
-              Media management is being migrated to Media Library. Image modifications are temporarily disabled while storefront media reads are cut over to Media Contract v1.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <div className="flex items-center justify-between border-b border-gray-100 pb-4">
+    <div id="product-media-section" className="bg-[#fffefc] border border-[#cfc4b6] rounded-[2px] p-6 sm:p-8 space-y-8">
+      {/* Section Header */}
+      <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-4 border-b border-[#cfc4b6] pb-5">
         <div>
-          <h3 className="text-base font-semibold text-gray-900">Product Media</h3>
-          <p className="text-xs text-gray-500 mt-0.5">
-            Manage product photography, hero banner, display order, and alt text.
+          <span className="admin-eyebrow">Visual Representation</span>
+          <h3 className="admin-title text-2xl mt-0.5">Product Media</h3>
+          <p className="admin-subtitle text-xs sm:text-sm mt-1 max-w-xl">
+            The imagery currently presented across the storefront catalog, gallery, and checkout.
           </p>
         </div>
-        <span className="inline-flex items-center px-3 py-1.5 border border-gray-200 text-xs font-medium rounded-md text-gray-400 bg-gray-50 cursor-not-allowed">
-          Upload Disabled
-        </span>
+
+        <div className="flex items-center gap-3 flex-wrap">
+          <button
+            ref={pickerTriggerRef}
+            type="button"
+            disabled={isPending}
+            onClick={() => setIsPickerOpen(true)}
+            className="admin-btn admin-btn-secondary text-xs"
+          >
+            Select from Library
+          </button>
+          <button
+            ref={uploadTriggerRef}
+            type="button"
+            disabled={isPending}
+            onClick={() => setIsUploadOpen(true)}
+            className="admin-btn admin-btn-primary text-xs"
+          >
+            + Upload New
+          </button>
+        </div>
       </div>
 
-      {mediaList.length === 0 ? (
-        <div className="text-center py-10 border-2 border-dashed border-gray-200 rounded-md">
-          <p className="text-xs text-gray-500">No media uploaded yet for this product.</p>
-          <p className="text-[11px] text-gray-400 mt-1">
-            Accepts JPEG, PNG, WebP, and AVIF up to 10 MB.
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {mediaList.map((media, idx) => {
-            const url = getStoragePublicUrl(media.storage_path);
-            const currentAlt = media.alt_text || "";
-
-            return (
-              <div
-                key={media.id}
-                className="flex items-center gap-4 p-4 border border-gray-200 rounded-lg hover:border-gray-300 transition-colors"
-              >
-                {/* Image Preview */}
-                <div className="relative w-20 h-20 bg-gray-100 rounded-md overflow-hidden flex-shrink-0 border border-gray-100">
-                  <Image
-                    src={url}
-                    alt={media.alt_text || "Product image"}
-                    fill
-                    className="object-cover"
-                    sizes="80px"
-                  />
-                  {media.is_hero && (
-                    <span className="absolute top-1 left-1 px-1.5 py-0.5 bg-black text-white text-[9px] font-semibold rounded uppercase tracking-wider">
-                      Hero
-                    </span>
-                  )}
-                </div>
-
-                {/* Details & Alt View */}
-                <div className="flex-1 min-w-0 space-y-2">
-                  <div className="flex items-center gap-2 text-xs text-gray-500">
-                    <span className="font-mono text-gray-400">#{idx + 1}</span>
-                    {media.width && media.height && (
-                      <span>
-                        {media.width} &times; {media.height} px
-                      </span>
-                    )}
-                    {media.dominant_color && (
-                      <span className="flex items-center gap-1">
-                        <span
-                          className="w-3 h-3 rounded-full border border-gray-300 inline-block"
-                          style={{ backgroundColor: media.dominant_color }}
-                        />
-                        <span className="font-mono">{media.dominant_color}</span>
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      readOnly
-                      className="text-xs px-2.5 py-1.5 border border-gray-200 rounded w-full max-w-sm bg-gray-50 text-gray-500 cursor-not-allowed focus:outline-none"
-                      placeholder="Image alt description"
-                      value={currentAlt}
-                    />
-                  </div>
-                </div>
-
-                {/* Actions Guard: Read-only status indicator */}
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <span className="text-[11px] text-gray-400 font-mono px-2 py-1 bg-gray-50 border border-gray-100 rounded">
-                    {media.is_hero ? "Hero Image" : "Gallery Image"}
-                  </span>
-                </div>
-              </div>
-            );
-          })}
+      {/* Notification Banner */}
+      {statusMessage && (
+        <div
+          className={`p-3 text-xs rounded-[2px] border ${
+            statusMessage.type === "success"
+              ? "bg-[#edf6ee] border-[#b8dfbc] text-[#24632b]"
+              : "bg-[#faefef] border-[#deb8b8] text-[#8f2d2d]"
+          }`}
+        >
+          {statusMessage.text}
         </div>
       )}
+
+      {/* Empty State */}
+      {managedMedia.length === 0 ? (
+        <div className="py-16 px-4 text-center bg-[#fbf9f5] border border-dashed border-[#cfc4b6] rounded-[2px]">
+          <span className="admin-eyebrow">No Imagery</span>
+          <h4 className="admin-title text-xl mt-1 mb-2">No product imagery yet</h4>
+          <p className="admin-subtitle text-xs max-w-md mx-auto mb-6">
+            Select an existing stone master from the library or upload a new asset to serve as the hero.
+          </p>
+          <div className="flex items-center justify-center gap-3">
+            <button
+              type="button"
+              onClick={() => setIsPickerOpen(true)}
+              className="admin-btn admin-btn-secondary text-xs"
+            >
+              Select from Library
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsUploadOpen(true)}
+              className="admin-btn admin-btn-primary text-xs"
+            >
+              Upload New Asset
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-8">
+          {/* HERO SECTION */}
+          {heroMedia && (
+            <div className="space-y-3">
+              <div className="flex items-baseline justify-between">
+                <div className="flex items-center gap-2">
+                  <h4 className="text-xs font-semibold tracking-wider uppercase text-[#30261f]">
+                    Hero Image
+                  </h4>
+                  <span className="text-[10px] text-[#706257]">
+                    (Authoritative catalog hero)
+                  </span>
+                </div>
+                <span className="admin-badge admin-badge--hero text-[8px] py-0.5 px-2">
+                  Active Hero
+                </span>
+              </div>
+
+              <div className="bg-[#fbf9f5] border border-[#cfc4b6] p-4 sm:p-6 rounded-[2px] flex flex-col md:flex-row items-start gap-6">
+                {/* Large Canvas */}
+                <div className="w-full md:w-56 flex-shrink-0">
+                  <div className="admin-stone-frame border border-[#cfc4b6] rounded-[2px] shadow-sm">
+                    {heroMedia.asset.publicUrl ? (
+                      <Image
+                        src={heroMedia.asset.publicUrl}
+                        alt={heroMedia.altText || heroMedia.asset.filename || "Hero image"}
+                        fill
+                        sizes="240px"
+                        className="object-contain p-4"
+                        placeholder={heroMedia.asset.lqip ? "blur" : "empty"}
+                        blurDataURL={heroMedia.asset.lqip || undefined}
+                      />
+                    ) : (
+                      <div className="text-xs text-[#706257]">No preview</div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Hero Details & Placement Alt Text */}
+                <div className="flex-1 min-w-0 space-y-4 w-full">
+                  <div>
+                    <h5
+                      className="text-sm font-semibold text-[#30261f] truncate"
+                      title={heroMedia.asset.filename || "Untitled"}
+                    >
+                      {heroMedia.asset.filename || "Untitled"}
+                    </h5>
+                    <div className="flex items-center gap-3 text-xs text-[#706257] mt-1">
+                      <span className="admin-mono">
+                        {heroMedia.asset.width && heroMedia.asset.height
+                          ? `${heroMedia.asset.width} × ${heroMedia.asset.height} px`
+                          : "Dimensions unknown"}
+                      </span>
+                      {heroMedia.asset.fileSize && (
+                        <span>
+                          &bull; {(heroMedia.asset.fileSize / 1024).toFixed(1)} KB
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Alt Text Placement Input */}
+                  <AltTextEditor
+                    productId={productId}
+                    mediaAssetId={heroMedia.mediaAssetId}
+                    initialAlt={heroMedia.altText || ""}
+                  />
+
+                  <div className="pt-2 flex items-center justify-between border-t border-[#e9e2d6]">
+                    <span className="text-[11px] text-[#8c7e73]">
+                      Primary store display and search thumbnail
+                    </span>
+                    <button
+                      ref={detachTriggerRef}
+                      type="button"
+                      disabled={isPending}
+                      onClick={() => handleDetachClick(heroMedia)}
+                      className="text-xs text-[#8f2d2d] hover:text-[#5f1d1d] underline py-1 transition-colors"
+                    >
+                      Remove from Product
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* GALLERY SECTION */}
+          {galleryMedia.length > 0 && (
+            <div className="space-y-4 pt-4 border-t border-[#cfc4b6]">
+              <div className="flex items-baseline justify-between">
+                <h4 className="text-xs font-semibold tracking-wider uppercase text-[#30261f]">
+                  Gallery Images ({galleryMedia.length})
+                </h4>
+                <span className="text-[11px] text-[#706257]">
+                  Presented sequentially in the product detail view
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {galleryMedia.map((item, index) => (
+                  <div
+                    key={item.id}
+                    className="bg-[#fbf9f5] border border-[#cfc4b6] p-3 rounded-[2px] flex flex-col justify-between space-y-3"
+                  >
+                    <div>
+                      {/* Thumbnail Frame */}
+                      <div className="admin-stone-frame border border-[#cfc4b6] rounded-[2px] mb-2">
+                        {item.asset.publicUrl ? (
+                          <Image
+                            src={item.asset.publicUrl}
+                            alt={item.altText || item.asset.filename || "Gallery thumbnail"}
+                            fill
+                            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                            className="object-contain p-2"
+                            placeholder={item.asset.lqip ? "blur" : "empty"}
+                            blurDataURL={item.asset.lqip || undefined}
+                          />
+                        ) : (
+                          <div className="text-xs text-[#706257]">No preview</div>
+                        )}
+                      </div>
+
+                      {/* Info */}
+                      <p
+                        className="text-xs font-medium text-[#30261f] truncate"
+                        title={item.asset.filename || "Untitled"}
+                      >
+                        {item.asset.filename || "Untitled"}
+                      </p>
+                      <p className="admin-mono text-[10px] text-[#706257] mt-0.5">
+                        {item.asset.width && item.asset.height
+                          ? `${item.asset.width} × ${item.asset.height}`
+                          : "—"}
+                      </p>
+                    </div>
+
+                    {/* Alt Text Editor */}
+                    <AltTextEditor
+                      productId={productId}
+                      mediaAssetId={item.mediaAssetId}
+                      initialAlt={item.altText || ""}
+                      compact
+                    />
+
+                    {/* Gallery Card Controls */}
+                    <div className="pt-2 border-t border-[#e9e2d6] flex items-center justify-between text-xs">
+                      {/* Reorder Buttons */}
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          disabled={index === 0 || isPending}
+                          onClick={() => handleMove(index, "left")}
+                          aria-label={`Move ${item.asset.filename || "image"} left`}
+                          className="admin-btn admin-btn-secondary text-[10px] py-1 px-2 disabled:opacity-30"
+                          title="Move earlier"
+                        >
+                          &larr;
+                        </button>
+                        <button
+                          type="button"
+                          disabled={index === galleryMedia.length - 1 || isPending}
+                          onClick={() => handleMove(index, "right")}
+                          aria-label={`Move ${item.asset.filename || "image"} right`}
+                          className="admin-btn admin-btn-secondary text-[10px] py-1 px-2 disabled:opacity-30"
+                          title="Move later"
+                        >
+                          &rarr;
+                        </button>
+                      </div>
+
+                      {/* Make Hero & Detach */}
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          disabled={isPending}
+                          onClick={() => handleSetHero(item.mediaAssetId)}
+                          className="text-[11px] text-[#30261f] hover:underline py-1"
+                        >
+                          Make Hero
+                        </button>
+                        <span className="text-[#cfc4b6]">&bull;</span>
+                        <button
+                          type="button"
+                          disabled={isPending}
+                          onClick={() => handleDetachClick(item)}
+                          className="text-[11px] text-[#8f2d2d] hover:text-[#5f1d1d] underline py-1"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ROLLBACK RETENTION FOOTNOTE */}
+          {rollbackMedia.length > 0 && (
+            <div className="pt-4 border-t border-[#e9e2d6] text-[11px] text-[#8c7e73] flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="admin-badge admin-badge--legacy text-[8px] py-0 px-1.5">
+                  Rollback Copy
+                </span>
+                <span>
+                  {rollbackMedia.length} legacy asset{rollbackMedia.length > 1 ? "s" : ""}{" "}
+                  retained internally for safe rollback (not visible to customers).
+                </span>
+              </div>
+              <span className="text-[10px] italic text-[#a3978d]">
+                Read-only &bull; Phase 9 cleanup
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Select from Library Picker Dialog */}
+      <ProductMediaLibraryPicker
+        productId={productId}
+        isOpen={isPickerOpen}
+        onClose={() => setIsPickerOpen(false)}
+        attachedAssetIds={mediaList.map((m) => m.mediaAssetId)}
+        onAttachSuccess={refreshMedia}
+        triggerRef={pickerTriggerRef}
+      />
+
+      {/* Upload New Asset Modal */}
+      <MediaUploadModal
+        isOpen={isUploadOpen}
+        onClose={() => setIsUploadOpen(false)}
+        onUploadSuccess={handleUploadSuccess}
+        triggerRef={uploadTriggerRef}
+      />
+
+      {/* Hero Detach Confirmation Dialog */}
+      {detachConfirmAsset && (
+        <DialogPrimitive.Root
+          open={Boolean(detachConfirmAsset)}
+          onOpenChange={(open) => {
+            if (!open) setDetachConfirmAsset(null);
+          }}
+        >
+          <DialogPrimitive.Portal>
+            <DialogPrimitive.Overlay className="admin-drawer-backdrop" />
+            <DialogPrimitive.Content className="admin-modal-panel p-6 outline-none max-w-md">
+              <DialogPrimitive.Title asChild>
+                <h3 className="admin-title text-xl text-[#30261f]">
+                  Remove Hero Image?
+                </h3>
+              </DialogPrimitive.Title>
+              <DialogPrimitive.Description className="text-xs text-[#706257] mt-2">
+                This image is currently the primary hero for this product. If removed,
+                the next available gallery image will automatically become the new hero.
+              </DialogPrimitive.Description>
+
+              <div className="mt-6 flex items-center justify-end gap-3 pt-4 border-t border-[#cfc4b6]">
+                <button
+                  type="button"
+                  onClick={() => setDetachConfirmAsset(null)}
+                  className="admin-btn admin-btn-quiet text-xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => executeDetach(detachConfirmAsset.mediaAssetId)}
+                  className="admin-btn admin-btn-danger text-xs"
+                >
+                  Remove Hero
+                </button>
+              </div>
+            </DialogPrimitive.Content>
+          </DialogPrimitive.Portal>
+        </DialogPrimitive.Root>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Inline Alt Text Editor with quiet Save / Saved indicator
+ */
+function AltTextEditor({
+  productId,
+  mediaAssetId,
+  initialAlt,
+  compact = false,
+}: {
+  productId: string;
+  mediaAssetId: string;
+  initialAlt: string;
+  compact?: boolean;
+}) {
+  const [altText, setAltText] = useState(initialAlt);
+  const [lastSaved, setLastSaved] = useState(initialAlt);
+  const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">(
+    "idle",
+  );
+
+  const handleSave = async () => {
+    if (altText === lastSaved) return;
+    setStatus("saving");
+    try {
+      const res = await updateProductMediaAltTextActionV1(
+        productId,
+        mediaAssetId,
+        altText.trim() || null,
+      );
+      if (res.success) {
+        setLastSaved(altText);
+        setStatus("saved");
+        setTimeout(() => setStatus("idle"), 2500);
+      } else {
+        setStatus("error");
+      }
+    } catch {
+      setStatus("error");
+    }
+  };
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between text-[11px]">
+        <label
+          htmlFor={`alt-${mediaAssetId}`}
+          className="text-[#706257] font-medium"
+        >
+          Alt Text
+        </label>
+        {status === "saving" && (
+          <span className="text-[#706257] italic">Saving...</span>
+        )}
+        {status === "saved" && (
+          <span className="text-[#24632b] font-medium">Saved</span>
+        )}
+        {status === "error" && (
+          <span className="text-[#8f2d2d]">Failed to save</span>
+        )}
+      </div>
+      <div className="flex items-center gap-2">
+        <input
+          id={`alt-${mediaAssetId}`}
+          type="text"
+          value={altText}
+          onChange={(e) => setAltText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              handleSave();
+            }
+          }}
+          placeholder="Descriptive placement alt text..."
+          className={`admin-input w-full ${compact ? "text-[11px] py-1 px-2" : "text-xs"}`}
+        />
+        {altText !== lastSaved && (
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={status === "saving"}
+            className="admin-btn admin-btn-secondary text-[10px] py-1 px-2 whitespace-nowrap"
+          >
+            Save
+          </button>
+        )}
+      </div>
     </div>
   );
 }

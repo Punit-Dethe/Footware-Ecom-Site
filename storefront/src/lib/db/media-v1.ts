@@ -517,12 +517,13 @@ export async function detachMediaFromProduct(
       [productId, mediaAssetId],
     );
 
-    // 3. If it was hero, promote next available image
+    // 3. If it was hero, promote next available non-legacy managed image
     if (wasHero) {
       const remaining = await c.query<{ id: string }>(
-        `SELECT id FROM public.product_media
-         WHERE product_id = $1
-         ORDER BY position ASC, created_at ASC
+        `SELECT pm.id FROM public.product_media pm
+         JOIN public.media_assets ma ON ma.id = pm.media_asset_id
+         WHERE pm.product_id = $1 AND ma.storage_provider != 'legacy_public'
+         ORDER BY pm.position ASC, pm.created_at ASC
          LIMIT 1;`,
         [productId],
       );

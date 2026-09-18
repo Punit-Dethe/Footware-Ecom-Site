@@ -14,12 +14,17 @@ import {
   getMediaAsset,
   getMediaAssetUsage,
   getMediaLibraryAsset,
+  listMediaLibraryAssets,
+  listProductMediaV1,
   reorderProductMediaV1,
   setProductHeroMedia,
   updateProductMediaAltTextV1,
   type DbMediaAsset,
+  type ListMediaLibraryAssetsResult,
   type MediaLibraryAssetDetail,
 } from "@/lib/db/media-v1";
+import type { AdminProductMediaPlacement } from "@/lib/db/admin-catalog";
+import { getStoragePublicUrl } from "@/lib/media/delivery";
 import { MediaDomainError, MediaValidationError } from "@/lib/media/errors";
 import {
   createSignedMediaUploadUrl,
@@ -404,6 +409,7 @@ export interface SimpleActionResult {
 
 /**
  * Attaches a global media asset to a product placement.
+ * Guards against attaching legacy_public rollback assets.
  * Invalidates public catalog cache on success.
  */
 export async function attachMediaAssetToProductAction(
@@ -423,6 +429,16 @@ export async function attachMediaAssetToProductAction(
       );
     }
 
+    const asset = await getMediaAsset(mediaAssetId);
+    if (!asset) {
+      throw new MediaValidationError("Media asset not found.");
+    }
+    if (asset.storage_provider === "legacy_public") {
+      throw new MediaDomainError(
+        "Legacy rollback assets cannot be newly attached to products.",
+      );
+    }
+
     await attachMediaToProduct({
       productId,
       mediaAssetId,
@@ -438,8 +454,54 @@ export async function attachMediaAssetToProductAction(
 }
 
 /**
+ * Attaches multiple global media assets to a product in sequence.
+ * Rejects legacy_public assets.
+ * Invalidates public catalog cache on success.
+ */
+export async function attachMediaAssetsToProductAction(
+  productId: string,
+  mediaAssetIds: string[],
+): Promise<SimpleActionResult> {
+  try {
+    await requireAdmin();
+
+    if (!productId || !UUID_REGEX.test(productId)) {
+      throw new MediaValidationError("Valid product ID (UUID) is required.");
+    }
+    if (!Array.isArray(mediaAssetIds) || mediaAssetIds.length === 0) {
+      throw new MediaValidationError("At least one media asset ID is required.");
+    }
+
+    for (const id of mediaAssetIds) {
+      if (!id || !UUID_REGEX.test(id)) {
+        throw new MediaValidationError(`Invalid media asset UUID '${id}'.`);
+      }
+      const asset = await getMediaAsset(id);
+      if (!asset) {
+        throw new MediaValidationError(`Media asset '${id}' not found.`);
+      }
+      if (asset.storage_provider === "legacy_public") {
+        throw new MediaDomainError(
+          "Legacy rollback assets cannot be newly attached to products.",
+        );
+      }
+      await attachMediaToProduct({
+        productId,
+        mediaAssetId: id,
+      });
+    }
+
+    updateTag("catalog-public");
+    return { success: true };
+  } catch (err) {
+    return handleMediaActionError(err);
+  }
+}
+
+/**
  * Detaches a media asset from a product placement.
- * Promotes next available image if detached item was hero.
+ * Server-side guard: active products cannot detach their final managed non-legacy media asset.
+ * Promotes next available managed image if detached item was hero.
  * Underlying global media_assets record remains intact.
  * Invalidates public catalog cache on success.
  */
@@ -459,6 +521,39 @@ export async function detachMediaAssetFromProductAction(
       );
     }
 
+    // Check product status
+    const prodRes = await query<{ status: string }>(
+      `SELECT status FROM public.products WHERE id = $1;`,
+      [productId],
+    );
+    if (prodRes.rows.length === 0) {
+      throw new MediaValidationError(`Product '${productId}' not found.`);
+    }
+    const productStatus = prodRes.rows[0].status;
+
+    // Check asset metadata
+    const asset = await getMediaAsset(mediaAssetId);
+    if (!asset) {
+      throw new MediaValidationError("Media asset not found.");
+    }
+
+    // Active product last-media safety invariant
+    if (productStatus === "active" && asset.storage_provider !== "legacy_public") {
+      const managedCountRes = await query<{ count: string }>(
+        `SELECT COUNT(*)::int AS count
+         FROM public.product_media pm
+         JOIN public.media_assets ma ON ma.id = pm.media_asset_id
+         WHERE pm.product_id = $1 AND ma.storage_provider != 'legacy_public';`,
+        [productId],
+      );
+      const managedCount = Number(managedCountRes.rows[0]?.count || 0);
+      if (managedCount <= 1) {
+        throw new MediaDomainError(
+          "Active products must retain at least one managed image. Attach a replacement before removing this asset.",
+        );
+      }
+    }
+
     await detachMediaFromProduct(productId, mediaAssetId);
 
     updateTag("catalog-public");
@@ -470,6 +565,7 @@ export async function detachMediaAssetFromProductAction(
 
 /**
  * Atomically promotes a product's attached media asset to hero.
+ * Rejects legacy_public rollback assets.
  * Invalidates public catalog cache on success.
  */
 export async function setProductMediaHeroAction(
@@ -488,6 +584,14 @@ export async function setProductMediaHeroAction(
       );
     }
 
+    const asset = await getMediaAsset(mediaAssetId);
+    if (!asset) {
+      throw new MediaValidationError("Media asset not found.");
+    }
+    if (asset.storage_provider === "legacy_public") {
+      throw new MediaDomainError("Legacy rollback assets cannot be set as hero.");
+    }
+
     await setProductHeroMedia(productId, mediaAssetId);
 
     updateTag("catalog-public");
@@ -499,7 +603,8 @@ export async function setProductMediaHeroAction(
 
 /**
  * Reorders product media associations deterministically.
- * Enforces exact set equality and no duplicates.
+ * Server wrapper: validates the non-legacy managed set, assigns them positions 0..N-1,
+ * and preserves any hidden legacy rollback assets positioned after them.
  * Invalidates public catalog cache on success.
  */
 export async function reorderProductMediaActionV1(
@@ -521,7 +626,37 @@ export async function reorderProductMediaActionV1(
       }
     }
 
-    await reorderProductMediaV1(productId, mediaAssetIds);
+    // Fetch existing product_media associations with storage providers
+    const existingRes = await query<{ media_asset_id: string; storage_provider: string }>(
+      `SELECT pm.media_asset_id, ma.storage_provider
+       FROM public.product_media pm
+       JOIN public.media_assets ma ON ma.id = pm.media_asset_id
+       WHERE pm.product_id = $1
+       ORDER BY pm.position ASC, pm.created_at ASC;`,
+      [productId],
+    );
+
+    const managedIds = existingRes.rows
+      .filter((r) => r.storage_provider !== "legacy_public")
+      .map((r) => r.media_asset_id);
+    const legacyIds = existingRes.rows
+      .filter((r) => r.storage_provider === "legacy_public")
+      .map((r) => r.media_asset_id);
+
+    let fullOrder: string[];
+
+    // If client submitted managed-only IDs, append legacy assets after them
+    if (
+      mediaAssetIds.length === managedIds.length &&
+      new Set(mediaAssetIds).size === mediaAssetIds.length &&
+      mediaAssetIds.every((id) => managedIds.includes(id))
+    ) {
+      fullOrder = [...mediaAssetIds, ...legacyIds];
+    } else {
+      fullOrder = mediaAssetIds;
+    }
+
+    await reorderProductMediaV1(productId, fullOrder);
 
     updateTag("catalog-public");
     return { success: true };
@@ -555,6 +690,91 @@ export async function updateProductMediaAltTextActionV1(
 
     updateTag("catalog-public");
     return { success: true };
+  } catch (err) {
+    return handleMediaActionError(err);
+  }
+}
+
+export interface ListMediaLibraryAssetsActionParams {
+  q?: string;
+  sort?: "created_desc" | "created_asc" | "size_desc" | "size_asc";
+  page?: number;
+  limit?: number;
+}
+
+export interface ListMediaLibraryAssetsActionResult {
+  success: boolean;
+  data?: ListMediaLibraryAssetsResult;
+  error?: string;
+}
+
+/**
+ * Authenticated Server Action for the Product Media Library Picker.
+ * Exclusively queries active 'supabase' assets (never legacy_public).
+ */
+export async function listMediaLibraryAssetsAction(
+  params?: ListMediaLibraryAssetsActionParams,
+): Promise<ListMediaLibraryAssetsActionResult> {
+  try {
+    await requireAdmin();
+    const page = Math.max(1, params?.page ?? 1);
+    const limit = Math.min(Math.max(1, params?.limit ?? 12), 48);
+    const offset = (page - 1) * limit;
+
+    const result = await listMediaLibraryAssets({
+      query: params?.q,
+      provider: "supabase", // Enforce Supabase only (no legacy_public)
+      sort: params?.sort || "created_desc",
+      limit,
+      offset,
+    });
+
+    return { success: true, data: result };
+  } catch (err) {
+    return handleMediaActionError(err);
+  }
+}
+
+export interface GetProductMediaV1ActionResult {
+  success: boolean;
+  media?: AdminProductMediaPlacement[];
+  error?: string;
+}
+
+/**
+ * Retrieves current product media placements with resolved CDN URLs.
+ * Enables in-place media updates without triggering full page reloads.
+ */
+export async function getProductMediaV1Action(
+  productId: string,
+): Promise<GetProductMediaV1ActionResult> {
+  try {
+    await requireAdmin();
+    if (!productId || !UUID_REGEX.test(productId)) {
+      throw new MediaValidationError("Valid product ID (UUID) is required.");
+    }
+    const rows = await listProductMediaV1(productId);
+    const media: AdminProductMediaPlacement[] = rows.map((m) => ({
+      id: m.id,
+      productId: m.product_id,
+      mediaAssetId: m.media_asset_id,
+      position: m.position,
+      isHero: m.is_hero,
+      altText: m.alt_text,
+      asset: {
+        id: m.asset.id,
+        provider: m.asset.storage_provider,
+        storagePath: m.asset.storage_path,
+        publicUrl: getStoragePublicUrl(m.asset.storage_path),
+        filename: m.asset.original_filename,
+        width: m.asset.width,
+        height: m.asset.height,
+        fileSize: m.asset.file_size_bytes,
+        dominantColor: m.asset.dominant_color,
+        lqip: m.asset.lqip,
+      },
+    }));
+    return { success: true, media };
   } catch (err) {
     return handleMediaActionError(err);
   }

@@ -163,3 +163,16 @@ As of Phase 4 (`feat/media-v1-storefront-cutover`):
 - **Stage Color Standardization**: `--pdp-stage` has been harmonized from `#ebe5dc` to canonical `#ece7de`.
 - **Admin Media UI Guard**: Legacy `ProductMediaManager` mutation controls have been disabled with a migration banner, preventing silent desynchronization while the global Media Library UI is pending.
 
+---
+
+## 8. Admin Product Management Cutover (Phase 6B)
+
+As of Phase 6B (`feat/product-media-library-integration`):
+- **Admin Read Authority**: `AdminProductDetail.media` completely supersedes `images: DbProductImageRow[]`. Both `getAdminProduct` and `getAdminProductWithClient` read exclusively from `listProductMediaV1(productId)`. Zero active admin reads or writes touch `public.product_images`.
+- **Rollback Asset Isolation**: `storage_provider = 'legacy_public'` assets are partitioned out of normal editable gallery state and presented only as a read-only footnote.
+- **Publish Invariant**: `validatePublishInvariants` enforces that transitioning or saving a product as `active` requires at least one managed (`storage_provider != 'legacy_public'`) media placement.
+- **Detachment Safety**: Detaching the final managed media asset from an active product is strictly rejected at the server action level.
+- **Atomic Hero & Reorder**: Reordering managed media assigns positions `0..N-1` while transparently preserving any retained legacy rollback copies at subsequent positions without exposing them to browser state.
+- **Storefront Cache Sync**: All product media mutations (`attach`, `setHero`, `reorder`, `updateAltText`, `detach`) call `updateTag("catalog-public")` for immediate consistency across public storefront routes.
+
+

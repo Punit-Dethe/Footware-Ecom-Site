@@ -299,8 +299,9 @@ export function ProductEditForm({
         <h3 className="text-base font-semibold text-gray-900 border-b pb-2">Product Information</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">Product Name *</label>
+            <label htmlFor="product-name" className="block text-xs font-semibold text-gray-700 mb-1">Product Name *</label>
             <input
+              id="product-name"
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -310,8 +311,9 @@ export function ProductEditForm({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">Slug *</label>
+            <label htmlFor="product-slug" className="block text-xs font-semibold text-gray-700 mb-1">Slug *</label>
             <input
+              id="product-slug"
               type="text"
               value={slug}
               onChange={(e) => setSlug(e.target.value.toLowerCase())}
@@ -321,8 +323,9 @@ export function ProductEditForm({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">Base Product SKU *</label>
+            <label htmlFor="product-sku" className="block text-xs font-semibold text-gray-700 mb-1">Base Product SKU *</label>
             <input
+              id="product-sku"
               type="text"
               value={sku}
               onChange={(e) => setSku(e.target.value.toUpperCase())}
@@ -373,7 +376,8 @@ export function ProductEditForm({
       {/* Product Media Manager */}
       <ProductMediaManager
         productId={initialProduct.id}
-        initialMedia={initialProduct.images || []}
+        productStatus={status}
+        initialMedia={initialProduct.media || []}
       />
 
       {/* Variants Editor */}
