@@ -868,16 +868,40 @@ async function validatePublishInvariants(
   }
 
   // 5. Media Contract v1 publish invariant: must have at least one non-legacy managed media asset
-  const mediaCountRes = await client.query<{ count: string }>(
-    `SELECT COUNT(*)::int AS count
+  // and exactly one non-legacy managed hero asset
+  const mediaRes = await client.query<{
+    count: string | number;
+    hero_count: string | number;
+  }>(
+    `SELECT
+       COUNT(*)::int AS count,
+       COUNT(*) FILTER (WHERE pm.is_hero = true)::int AS hero_count
      FROM public.product_media pm
      JOIN public.media_assets ma ON ma.id = pm.media_asset_id
      WHERE pm.product_id = $1 AND ma.storage_provider != 'legacy_public';`,
     [productId],
   );
-  if (Number(mediaCountRes.rows[0]?.count || 0) < 1) {
+
+  const managedCount = Number(mediaRes.rows[0]?.count || 0);
+  const managedHeroCount = Number(mediaRes.rows[0]?.hero_count || 0);
+
+  if (managedCount < 1) {
     throw new CatalogValidationError(
       "Cannot publish product: At least one managed media asset is required",
+      "media",
+    );
+  }
+
+  if (managedHeroCount === 0) {
+    throw new CatalogValidationError(
+      "Cannot publish product: Exactly one managed media asset must be designated as hero",
+      "media",
+    );
+  }
+
+  if (managedHeroCount > 1) {
+    throw new CatalogValidationError(
+      "Cannot publish product: Multiple managed hero assets found. Only one hero allowed.",
       "media",
     );
   }

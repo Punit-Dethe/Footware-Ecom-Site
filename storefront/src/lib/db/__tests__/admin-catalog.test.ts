@@ -517,7 +517,7 @@ describe("Admin Catalog DAL Unit Tests", () => {
             });
           }
           if (sql.includes("FROM public.product_media pm") && sql.includes("storage_provider != 'legacy_public'")) {
-            return Promise.resolve({ rows: [{ count: 1 }] }); // 1 managed media
+            return Promise.resolve({ rows: [{ count: 1, hero_count: 1 }] }); // 1 managed media, 1 managed hero
           }
           if (sql.includes("FROM public.products") && sql.includes("WHERE id = $1")) {
             return Promise.resolve({
@@ -571,6 +571,175 @@ describe("Admin Catalog DAL Unit Tests", () => {
 
       expect(result).toBeDefined();
       expect(result.status).toBe("active");
+    });
+
+    it("rejects publishing when managed asset exists but zero managed heroes exist", async () => {
+      const mockClient = {
+        query: vi.fn((sql: string) => {
+          if (sql.includes("SELECT id, status FROM public.products")) {
+            return Promise.resolve({ rows: [{ id: TEST_PRODUCT_ID, status: "draft" }] });
+          }
+          if (sql.includes("SELECT COUNT(*)::int AS count FROM public.product_categories")) {
+            return Promise.resolve({ rows: [{ count: 1 }] });
+          }
+          if (sql.includes("FROM public.variants") && sql.includes("WHERE product_id = $1")) {
+            return Promise.resolve({
+              rows: [
+                {
+                  id: TEST_VARIANT_ID_1,
+                  sku: "TEST-001-8",
+                  size_option: "8",
+                  price_in_cents: 10000,
+                  compare_at_price_in_cents: null,
+                  currency: "USD",
+                  quantity_on_hand: 5,
+                  is_default: true,
+                  active: true,
+                },
+              ],
+            });
+          }
+          if (sql.includes("FROM public.product_media pm") && sql.includes("storage_provider != 'legacy_public'")) {
+            return Promise.resolve({ rows: [{ count: 1, hero_count: 0 }] }); // 1 managed media, 0 managed heroes
+          }
+          return Promise.resolve({ rows: [] });
+        }),
+      };
+      mockDb.transaction.mockImplementation(async (cb: any) => cb(mockClient));
+
+      await expect(
+        saveAdminProduct(TEST_PRODUCT_ID, {
+          name: "Test Shoe",
+          slug: "test-shoe",
+          sku: "TEST-001",
+          status: "active",
+          categoryIds: [TEST_CATEGORY_ID],
+          variants: [
+            {
+              sku: "TEST-001-8",
+              sizeOption: "8",
+              priceInCents: 10000,
+              quantityOnHand: 5,
+              backorderable: false,
+              isDefault: true,
+              active: true,
+            },
+          ],
+        }),
+      ).rejects.toThrow("Cannot publish product: Exactly one managed media asset must be designated as hero");
+    });
+
+    it("rejects publishing when managed asset exists but only legacy hero exists", async () => {
+      const mockClient = {
+        query: vi.fn((sql: string) => {
+          if (sql.includes("SELECT id, status FROM public.products")) {
+            return Promise.resolve({ rows: [{ id: TEST_PRODUCT_ID, status: "draft" }] });
+          }
+          if (sql.includes("SELECT COUNT(*)::int AS count FROM public.product_categories")) {
+            return Promise.resolve({ rows: [{ count: 1 }] });
+          }
+          if (sql.includes("FROM public.variants") && sql.includes("WHERE product_id = $1")) {
+            return Promise.resolve({
+              rows: [
+                {
+                  id: TEST_VARIANT_ID_1,
+                  sku: "TEST-001-8",
+                  size_option: "8",
+                  price_in_cents: 10000,
+                  compare_at_price_in_cents: null,
+                  currency: "USD",
+                  quantity_on_hand: 5,
+                  is_default: true,
+                  active: true,
+                },
+              ],
+            });
+          }
+          // The query filters out legacy_public so legacy hero is not counted as managed hero
+          if (sql.includes("FROM public.product_media pm") && sql.includes("storage_provider != 'legacy_public'")) {
+            return Promise.resolve({ rows: [{ count: 1, hero_count: 0 }] });
+          }
+          return Promise.resolve({ rows: [] });
+        }),
+      };
+      mockDb.transaction.mockImplementation(async (cb: any) => cb(mockClient));
+
+      await expect(
+        saveAdminProduct(TEST_PRODUCT_ID, {
+          name: "Test Shoe",
+          slug: "test-shoe",
+          sku: "TEST-001",
+          status: "active",
+          categoryIds: [TEST_CATEGORY_ID],
+          variants: [
+            {
+              sku: "TEST-001-8",
+              sizeOption: "8",
+              priceInCents: 10000,
+              quantityOnHand: 5,
+              backorderable: false,
+              isDefault: true,
+              active: true,
+            },
+          ],
+        }),
+      ).rejects.toThrow("Cannot publish product: Exactly one managed media asset must be designated as hero");
+    });
+
+    it("rejects publishing when multiple managed heroes exist", async () => {
+      const mockClient = {
+        query: vi.fn((sql: string) => {
+          if (sql.includes("SELECT id, status FROM public.products")) {
+            return Promise.resolve({ rows: [{ id: TEST_PRODUCT_ID, status: "draft" }] });
+          }
+          if (sql.includes("SELECT COUNT(*)::int AS count FROM public.product_categories")) {
+            return Promise.resolve({ rows: [{ count: 1 }] });
+          }
+          if (sql.includes("FROM public.variants") && sql.includes("WHERE product_id = $1")) {
+            return Promise.resolve({
+              rows: [
+                {
+                  id: TEST_VARIANT_ID_1,
+                  sku: "TEST-001-8",
+                  size_option: "8",
+                  price_in_cents: 10000,
+                  compare_at_price_in_cents: null,
+                  currency: "USD",
+                  quantity_on_hand: 5,
+                  is_default: true,
+                  active: true,
+                },
+              ],
+            });
+          }
+          if (sql.includes("FROM public.product_media pm") && sql.includes("storage_provider != 'legacy_public'")) {
+            return Promise.resolve({ rows: [{ count: 2, hero_count: 2 }] });
+          }
+          return Promise.resolve({ rows: [] });
+        }),
+      };
+      mockDb.transaction.mockImplementation(async (cb: any) => cb(mockClient));
+
+      await expect(
+        saveAdminProduct(TEST_PRODUCT_ID, {
+          name: "Test Shoe",
+          slug: "test-shoe",
+          sku: "TEST-001",
+          status: "active",
+          categoryIds: [TEST_CATEGORY_ID],
+          variants: [
+            {
+              sku: "TEST-001-8",
+              sizeOption: "8",
+              priceInCents: 10000,
+              quantityOnHand: 5,
+              backorderable: false,
+              isDefault: true,
+              active: true,
+            },
+          ],
+        }),
+      ).rejects.toThrow("Cannot publish product: Multiple managed hero assets found. Only one hero allowed.");
     });
   });
 

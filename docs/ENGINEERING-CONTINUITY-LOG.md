@@ -1810,3 +1810,20 @@ Recorded:
   - Headless Playwright visual QA and full E2E lifecycle (upload -> search -> inspect -> delete) executed and verified.
 - **Phase 6B Boundary**: Product media picker in product editor and drag-and-drop reordering explicitly deferred to Phase 6B. Storefront client JS impact strictly 0.
 
+### 2026-09-18 — Mirza Media Modernization Phase 6B & Supervisor Fix Pass Complete
+
+Recorded:
+- **Phase 6B Integration**: Product media management workflow transitioned to Media Contract v1 in Product Edit screen (`/admin/products/[id]`). Added visual media grid, modal library picker with multi-select, inline upload to Supabase, hero promotion, managed reorder, and alt text editing.
+- **Supervisor Fix Pass**:
+  1. **Atomic Multi-Asset Attach**: Rewrote `attachMediaAssetsToProductAction` to run inside a single database transaction. Validates UUIDs, rejects duplicate IDs upfront before mutation, verifies product and all media assets exist, rejects legacy rollback assets, and commits all or nothing. Invalidation via `updateTag("catalog-public")` occurs strictly once after commit.
+  2. **Strictly Managed-Only Reorder**: Removed compatibility fallback in `reorderProductMediaActionV1`. Enforces that the submitted asset IDs must match the product's non-legacy managed set exactly (no missing IDs, no extra IDs, no duplicates). Rejects caller injection of legacy rollback assets. Persists `[...submittedManagedIds, ...legacyIds]` keeping legacy assets after managed media in their existing relative order.
+  3. **Rollback Assets Read-Only Server Invariant**: Hardened `detachMediaAssetFromProductAction` and `updateProductMediaAltTextActionV1` to reject attempts to detach or alter alt text on `legacy_public` assets with `"Legacy rollback assets are read-only during the rollback window."`.
+  4. **Publish Invariant Strengthened**: Updated `validatePublishInvariants()` to query `product_media` join `media_assets` with `storage_provider != 'legacy_public'` and enforce `managedCount >= 1` and `managedHeroCount == 1`. Excludes legacy rollback hero from managed hero count.
+- **Verification**:
+  - `tsc --noEmit`: 0 errors.
+  - `lint`: 360 files checked, 0 errors.
+  - `vitest`: 73 test files, 838 tests passed (+15 tests covering atomic rollback, duplicate rejection, managed reorder invariants, legacy read-only guards, and publish hero invariant).
+  - Next.js build: 103 routes compiled successfully.
+  - Canonical 31 products (`shoe-2026-09-001` through `031`): Unmodified.
+
+

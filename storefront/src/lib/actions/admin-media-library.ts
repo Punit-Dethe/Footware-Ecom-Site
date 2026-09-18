@@ -5,7 +5,7 @@ import path from "node:path";
 import { updateTag } from "next/cache";
 import sharp, { type Metadata as SharpMetadata } from "sharp";
 import { AdminAuthError, requireAdmin } from "@/lib/auth/admin";
-import { query } from "@/lib/db";
+import { query, transaction } from "@/lib/db";
 import {
   attachMediaToProduct,
   createMediaAsset,
@@ -454,9 +454,10 @@ export async function attachMediaAssetToProductAction(
 }
 
 /**
- * Attaches multiple global media assets to a product in sequence.
- * Rejects legacy_public assets.
- * Invalidates public catalog cache on success.
+ * Attaches multiple global media assets to a product in a single atomic database transaction.
+ * All-or-nothing: any failure rolls back all attachments in the batch.
+ * Rejects duplicates, missing assets, and legacy_public assets before mutation.
+ * Invalidates public catalog cache once, strictly after successful transaction commit.
  */
 export async function attachMediaAssetsToProductAction(
   productId: string,
@@ -472,24 +473,64 @@ export async function attachMediaAssetsToProductAction(
       throw new MediaValidationError("At least one media asset ID is required.");
     }
 
+    // Validate UUIDs and reject duplicate asset IDs before mutation
     for (const id of mediaAssetIds) {
       if (!id || !UUID_REGEX.test(id)) {
         throw new MediaValidationError(`Invalid media asset UUID '${id}'.`);
       }
-      const asset = await getMediaAsset(id);
-      if (!asset) {
-        throw new MediaValidationError(`Media asset '${id}' not found.`);
+    }
+    const uniqueIds = new Set(mediaAssetIds);
+    if (uniqueIds.size !== mediaAssetIds.length) {
+      throw new MediaValidationError(
+        "Duplicate media asset IDs in batch attachment are not allowed.",
+      );
+    }
+
+    // Execute all attachments atomically in one database transaction
+    await transaction(async (client) => {
+      // 1. Verify target product exists
+      const prodCheck = await client.query<{ id: string }>(
+        `SELECT id FROM public.products WHERE id = $1;`,
+        [productId],
+      );
+      if (prodCheck.rows.length === 0) {
+        throw new MediaValidationError(`Product '${productId}' not found.`);
       }
-      if (asset.storage_provider === "legacy_public") {
+
+      // 2. Fetch and validate all requested media assets
+      const assetRes = await client.query<{ id: string; storage_provider: string }>(
+        `SELECT id, storage_provider FROM public.media_assets WHERE id = ANY($1);`,
+        [mediaAssetIds],
+      );
+
+      if (assetRes.rows.length !== mediaAssetIds.length) {
+        const found = new Set(assetRes.rows.map((r) => r.id));
+        const missing = mediaAssetIds.filter((id) => !found.has(id));
+        throw new MediaValidationError(
+          `Media asset(s) not found: ${missing.join(", ")}`,
+        );
+      }
+
+      const legacyAssets = assetRes.rows.filter(
+        (r) => r.storage_provider === "legacy_public",
+      );
+      if (legacyAssets.length > 0) {
         throw new MediaDomainError(
           "Legacy rollback assets cannot be newly attached to products.",
         );
       }
-      await attachMediaToProduct({
-        productId,
-        mediaAssetId: id,
-      });
-    }
+
+      // 3. Perform every product_media attachment sequentially using the same transaction client
+      for (const id of mediaAssetIds) {
+        await attachMediaToProduct(
+          {
+            productId,
+            mediaAssetId: id,
+          },
+          client,
+        );
+      }
+    });
 
     updateTag("catalog-public");
     return { success: true };
@@ -536,9 +577,14 @@ export async function detachMediaAssetFromProductAction(
     if (!asset) {
       throw new MediaValidationError("Media asset not found.");
     }
+    if (asset.storage_provider === "legacy_public") {
+      throw new MediaDomainError(
+        "Legacy rollback assets are read-only during the rollback window.",
+      );
+    }
 
     // Active product last-media safety invariant
-    if (productStatus === "active" && asset.storage_provider !== "legacy_public") {
+    if (productStatus === "active") {
       const managedCountRes = await query<{ count: string }>(
         `SELECT COUNT(*)::int AS count
          FROM public.product_media pm
@@ -604,7 +650,8 @@ export async function setProductMediaHeroAction(
 /**
  * Reorders product media associations deterministically.
  * Server wrapper: validates the non-legacy managed set, assigns them positions 0..N-1,
- * and preserves any hidden legacy rollback assets positioned after them.
+ * and preserves any hidden legacy rollback assets positioned after them in their existing relative order.
+ * Strictly managed-only: rejects missing IDs, extra IDs, duplicates, or any legacy ID.
  * Invalidates public catalog cache on success.
  */
 export async function reorderProductMediaActionV1(
@@ -626,6 +673,14 @@ export async function reorderProductMediaActionV1(
       }
     }
 
+    // Reject duplicates before mutation
+    const uniqueSubmitted = new Set(mediaAssetIds);
+    if (uniqueSubmitted.size !== mediaAssetIds.length) {
+      throw new MediaValidationError(
+        "Duplicate media asset IDs in reorder are not allowed.",
+      );
+    }
+
     // Fetch existing product_media associations with storage providers
     const existingRes = await query<{ media_asset_id: string; storage_provider: string }>(
       `SELECT pm.media_asset_id, ma.storage_provider
@@ -643,18 +698,37 @@ export async function reorderProductMediaActionV1(
       .filter((r) => r.storage_provider === "legacy_public")
       .map((r) => r.media_asset_id);
 
-    let fullOrder: string[];
-
-    // If client submitted managed-only IDs, append legacy assets after them
-    if (
-      mediaAssetIds.length === managedIds.length &&
-      new Set(mediaAssetIds).size === mediaAssetIds.length &&
-      mediaAssetIds.every((id) => managedIds.includes(id))
-    ) {
-      fullOrder = [...mediaAssetIds, ...legacyIds];
-    } else {
-      fullOrder = mediaAssetIds;
+    // Reject any legacy_public ID supplied by caller
+    const legacyIdSet = new Set(legacyIds);
+    for (const id of mediaAssetIds) {
+      if (legacyIdSet.has(id)) {
+        throw new MediaDomainError(
+          "Legacy rollback assets cannot be reordered.",
+        );
+      }
     }
+
+    const managedIdSet = new Set(managedIds);
+
+    // Verify submitted set == managed set exactly
+    // Reject unknown extra IDs
+    for (const id of mediaAssetIds) {
+      if (!managedIdSet.has(id)) {
+        throw new MediaValidationError(
+          `Extra media asset ID '${id}' is not a managed asset of this product.`,
+        );
+      }
+    }
+
+    // Reject missing / omitted managed IDs
+    if (mediaAssetIds.length !== managedIds.length) {
+      throw new MediaValidationError(
+        "Submitted media IDs must contain all current managed media assets.",
+      );
+    }
+
+    // Full persisted order = submitted managed IDs + existing legacy IDs in their existing relative order
+    const fullOrder = [...mediaAssetIds, ...legacyIds];
 
     await reorderProductMediaV1(productId, fullOrder);
 
@@ -667,6 +741,7 @@ export async function reorderProductMediaActionV1(
 
 /**
  * Updates placement-level alt text on product_media.
+ * Legacy rollback assets are read-only and cannot be mutated.
  * Invalidates public catalog cache on success.
  */
 export async function updateProductMediaAltTextActionV1(
@@ -683,6 +758,16 @@ export async function updateProductMediaAltTextActionV1(
     if (!mediaAssetId || !UUID_REGEX.test(mediaAssetId)) {
       throw new MediaValidationError(
         "Valid media asset ID (UUID) is required.",
+      );
+    }
+
+    const asset = await getMediaAsset(mediaAssetId);
+    if (!asset) {
+      throw new MediaValidationError("Media asset not found.");
+    }
+    if (asset.storage_provider === "legacy_public") {
+      throw new MediaDomainError(
+        "Legacy rollback assets are read-only during the rollback window.",
       );
     }
 
