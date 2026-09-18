@@ -15,6 +15,64 @@ import {
 } from "react-email";
 import { getStoreName, getStoreUrl } from "@/lib/store";
 
+export const CANONICAL_STORE_URL = "https://mirzafootwear.vercel.app";
+
+export const FONT_STACK_DISPLAY =
+  '"Cormorant Garamond", Georgia, "Times New Roman", serif';
+
+export const FONT_STACK_EDITORIAL =
+  '"EB Garamond", Georgia, "Times New Roman", serif';
+
+export const FONT_STACK_SANS =
+  "Geist, Arial, Helvetica, sans-serif";
+
+/**
+ * Resolves an email image asset URL into a fully qualified, publicly accessible HTTPS URL.
+ *
+ * Rules:
+ * - null / undefined / empty string -> null
+ * - absolute http(s) URL -> preserved as-is, UNLESS it targets localhost / 127.0.0.1,
+ *   which is rewritten to the canonical storefront domain so no local dev host leaks to email clients.
+ * - root-relative path (e.g. /catalog-shoes/shoe-01.webp) -> prepended with canonical base URL.
+ *   Uses getStoreUrl() if available and non-local; otherwise falls back to CANONICAL_STORE_URL.
+ */
+export function resolveEmailAssetUrl(assetPath?: string | null): string | null {
+  if (!assetPath || typeof assetPath !== "string") {
+    return null;
+  }
+
+  const trimmed = assetPath.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  // Already an absolute URL
+  if (/^https?:\/\//i.test(trimmed)) {
+    try {
+      const parsed = new URL(trimmed);
+      if (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1") {
+        return `${CANONICAL_STORE_URL}${parsed.pathname}${parsed.search}`;
+      }
+      return trimmed;
+    } catch {
+      return trimmed;
+    }
+  }
+
+  // Root-relative or relative path
+  let baseUrl = getStoreUrl()?.replace(/\/+$/, "") || "";
+  if (
+    !baseUrl ||
+    baseUrl.includes("localhost") ||
+    baseUrl.includes("127.0.0.1")
+  ) {
+    baseUrl = CANONICAL_STORE_URL;
+  }
+
+  const cleanPath = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+  return `${baseUrl}${cleanPath}`;
+}
+
 export interface OrderConfirmationLineItem {
   name: string;
   slug?: string;
@@ -87,7 +145,11 @@ export function OrderConfirmationEmail({
 
   return (
     <Html lang="en">
-      <Head />
+      <Head>
+        <style>{`
+          @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600&family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Geist:wght@400;500;600&display=swap');
+        `}</style>
+      </Head>
       <Preview>{previewText}</Preview>
       <Body style={bodyStyle}>
         <Container style={containerStyle}>
@@ -130,24 +192,26 @@ export function OrderConfirmationEmail({
           <Section style={sectionWrapper}>
             <Text style={utilitySectionHeader}>ORDER SUMMARY</Text>
 
-            {items.map((item, index) => (
-              <Row
-                key={`${item.name}-${item.options_text ?? index}`}
-                style={itemRowStyle}
-              >
-                <Column style={imageColStyle}>
-                  {item.thumbnail_url ? (
-                    <Img
-                      src={item.thumbnail_url}
-                      alt={item.name}
-                      width={64}
-                      height={64}
-                      style={thumbnailStyle}
-                    />
-                  ) : (
-                    <div style={thumbnailPlaceholder} />
-                  )}
-                </Column>
+            {items.map((item, index) => {
+              const resolvedThumbnail = resolveEmailAssetUrl(item.thumbnail_url);
+              return (
+                <Row
+                  key={`${item.name}-${item.options_text ?? index}`}
+                  style={itemRowStyle}
+                >
+                  <Column style={imageColStyle}>
+                    {resolvedThumbnail ? (
+                      <Img
+                        src={resolvedThumbnail}
+                        alt={item.name}
+                        width={64}
+                        height={64}
+                        style={thumbnailStyle}
+                      />
+                    ) : (
+                      <div style={thumbnailPlaceholder} />
+                    )}
+                  </Column>
 
                 <Column style={itemDetailsColStyle}>
                   <Text style={itemNameStyle}>
@@ -172,7 +236,8 @@ export function OrderConfirmationEmail({
                   <Text style={itemPriceStyle}>{item.display_total}</Text>
                 </Column>
               </Row>
-            ))}
+            );
+            })}
           </Section>
 
           <Hr style={hairlineRule} />
@@ -305,8 +370,7 @@ function AddressBlock({ address }: { address: OrderConfirmationAddress }) {
 
 const bodyStyle: React.CSSProperties = {
   backgroundColor: "#f3efe8",
-  fontFamily:
-    '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+  fontFamily: FONT_STACK_SANS,
   margin: 0,
   padding: "32px 12px",
 };
@@ -325,7 +389,7 @@ const brandSection: React.CSSProperties = {
 };
 
 const brandHeading: React.CSSProperties = {
-  fontFamily: 'Georgia, "Times New Roman", serif',
+  fontFamily: FONT_STACK_DISPLAY,
   fontSize: "26px",
   fontWeight: 600,
   letterSpacing: "0.26em",
@@ -336,6 +400,7 @@ const brandHeading: React.CSSProperties = {
 };
 
 const brandDescriptor: React.CSSProperties = {
+  fontFamily: FONT_STACK_SANS,
   fontSize: "8px",
   fontWeight: 600,
   letterSpacing: "0.36em",
@@ -356,6 +421,7 @@ const heroSection: React.CSSProperties = {
 };
 
 const utilityEyebrow: React.CSSProperties = {
+  fontFamily: FONT_STACK_SANS,
   fontSize: "9px",
   fontWeight: 600,
   letterSpacing: "0.22em",
@@ -365,7 +431,7 @@ const utilityEyebrow: React.CSSProperties = {
 };
 
 const editorialTitle: React.CSSProperties = {
-  fontFamily: 'Georgia, "Times New Roman", serif',
+  fontFamily: FONT_STACK_DISPLAY,
   fontSize: "26px",
   fontWeight: 400,
   lineHeight: "1.2",
@@ -374,7 +440,8 @@ const editorialTitle: React.CSSProperties = {
 };
 
 const bodyText: React.CSSProperties = {
-  fontSize: "13px",
+  fontFamily: FONT_STACK_EDITORIAL,
+  fontSize: "14px",
   lineHeight: "22px",
   color: "#544941",
   margin: "0 0 18px 0",
@@ -399,6 +466,7 @@ const metaColumnRight: React.CSSProperties = {
 };
 
 const metaLabel: React.CSSProperties = {
+  fontFamily: FONT_STACK_SANS,
   fontSize: "9px",
   fontWeight: 600,
   letterSpacing: "0.18em",
@@ -408,11 +476,12 @@ const metaLabel: React.CSSProperties = {
 };
 
 const metaValue: React.CSSProperties = {
-  fontSize: "13px",
-  fontWeight: 600,
+  fontFamily: FONT_STACK_SANS,
+  fontSize: "12px",
+  fontWeight: 500,
+  letterSpacing: "0.05em",
   color: "#211b17",
   margin: 0,
-  fontFamily: 'Georgia, "Times New Roman", serif',
 };
 
 const sectionWrapper: React.CSSProperties = {
@@ -420,6 +489,7 @@ const sectionWrapper: React.CSSProperties = {
 };
 
 const utilitySectionHeader: React.CSSProperties = {
+  fontFamily: FONT_STACK_SANS,
   fontSize: "9px",
   fontWeight: 600,
   letterSpacing: "0.22em",
@@ -458,6 +528,7 @@ const itemDetailsColStyle: React.CSSProperties = {
 };
 
 const itemNameStyle: React.CSSProperties = {
+  fontFamily: FONT_STACK_SANS,
   fontSize: "13px",
   fontWeight: 600,
   lineHeight: "18px",
@@ -471,12 +542,14 @@ const itemLinkStyle: React.CSSProperties = {
 };
 
 const itemOptionStyle: React.CSSProperties = {
+  fontFamily: FONT_STACK_SANS,
   fontSize: "11px",
   color: "#7d7268",
   margin: "0 0 2px 0",
 };
 
 const itemQtyStyle: React.CSSProperties = {
+  fontFamily: FONT_STACK_SANS,
   fontSize: "11px",
   color: "#7d7268",
   margin: 0,
@@ -489,6 +562,7 @@ const itemPriceColStyle: React.CSSProperties = {
 };
 
 const itemPriceStyle: React.CSSProperties = {
+  fontFamily: FONT_STACK_SANS,
   fontSize: "13px",
   fontWeight: 500,
   color: "#211b17",
@@ -504,12 +578,14 @@ const totalRowStyle: React.CSSProperties = {
 };
 
 const totalLabelStyle: React.CSSProperties = {
+  fontFamily: FONT_STACK_SANS,
   fontSize: "12px",
   color: "#7d7268",
   paddingBottom: "6px",
 };
 
 const totalValueStyle: React.CSSProperties = {
+  fontFamily: FONT_STACK_SANS,
   fontSize: "12px",
   color: "#211b17",
   textAlign: "right" as const,
@@ -517,6 +593,7 @@ const totalValueStyle: React.CSSProperties = {
 };
 
 const discountValueStyle: React.CSSProperties = {
+  fontFamily: FONT_STACK_SANS,
   fontSize: "12px",
   color: "#2d6a4f",
   textAlign: "right" as const,
@@ -530,7 +607,7 @@ const grandTotalRowStyle: React.CSSProperties = {
 };
 
 const grandTotalLabelStyle: React.CSSProperties = {
-  fontFamily: 'Georgia, "Times New Roman", serif',
+  fontFamily: FONT_STACK_DISPLAY,
   fontSize: "15px",
   fontWeight: 600,
   color: "#211b17",
@@ -538,6 +615,7 @@ const grandTotalLabelStyle: React.CSSProperties = {
 };
 
 const grandTotalValueStyle: React.CSSProperties = {
+  fontFamily: FONT_STACK_DISPLAY,
   fontSize: "15px",
   fontWeight: 600,
   color: "#211b17",
@@ -552,6 +630,7 @@ const addressColumnStyle: React.CSSProperties = {
 };
 
 const addressSubHeader: React.CSSProperties = {
+  fontFamily: FONT_STACK_SANS,
   fontSize: "10px",
   fontWeight: 600,
   letterSpacing: "0.14em",
@@ -561,6 +640,7 @@ const addressSubHeader: React.CSSProperties = {
 };
 
 const addressLineStyle: React.CSSProperties = {
+  fontFamily: FONT_STACK_SANS,
   fontSize: "12px",
   lineHeight: "18px",
   color: "#544941",
@@ -573,7 +653,8 @@ const footerSection: React.CSSProperties = {
 };
 
 const closingNote: React.CSSProperties = {
-  fontSize: "11px",
+  fontFamily: FONT_STACK_EDITORIAL,
+  fontSize: "12px",
   lineHeight: "18px",
   color: "#7d7268",
   fontStyle: "italic",
@@ -581,6 +662,7 @@ const closingNote: React.CSSProperties = {
 };
 
 const footerBrandSignature: React.CSSProperties = {
+  fontFamily: FONT_STACK_SANS,
   fontSize: "9px",
   fontWeight: 600,
   letterSpacing: "0.22em",

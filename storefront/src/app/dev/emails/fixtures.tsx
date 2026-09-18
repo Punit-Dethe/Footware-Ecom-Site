@@ -1,6 +1,9 @@
 import { createElement, type ReactElement } from "react";
 import { OrderCanceledEmail } from "@/lib/emails/order-canceled";
-import { OrderConfirmationEmail } from "@/lib/emails/order-confirmation";
+import {
+  OrderConfirmationEmail,
+  resolveEmailAssetUrl,
+} from "@/lib/emails/order-confirmation";
 import { PasswordResetEmail } from "@/lib/emails/password-reset";
 import { ShipmentShippedEmail } from "@/lib/emails/shipment-shipped";
 
@@ -21,12 +24,12 @@ export const emailFixtures: EmailFixture[] = [
         items: [
           {
             name: "The Sovereign Oxford in Patina Calfskin",
-            slug: "shoe-2026-09-001",
+            slug: "office-footwear-01",
             quantity: 1,
             options_text: "Size: 42 EU / 9 US",
             display_price: "$385.00",
             display_total: "$385.00",
-            thumbnail_url: "https://hkncfdsvgjopkujmmxem.supabase.co/storage/v1/object/public/product-media/products/shoe-2026-09-001/variants/640.webp",
+            thumbnail_url: resolveEmailAssetUrl("/catalog-shoes/shoe-01.webp"),
           },
           {
             name: "Artisanal Horsehair Polishing Brush",
@@ -65,12 +68,12 @@ export const emailFixtures: EmailFixture[] = [
         items: [
           {
             name: "The Viceroy Wholecut in Espresso Box Calf",
-            slug: "shoe-2026-09-003",
+            slug: "office-footwear-03",
             quantity: 1,
             options_text: "Size: 43 EU / 10 US",
             display_price: "$420.00",
             display_total: "$420.00",
-            thumbnail_url: "https://hkncfdsvgjopkujmmxem.supabase.co/storage/v1/object/public/product-media/products/shoe-2026-09-003/variants/640.webp",
+            thumbnail_url: resolveEmailAssetUrl("/catalog-shoes/shoe-03.webp"),
           },
         ],
         displayItemTotal: "$420.00",

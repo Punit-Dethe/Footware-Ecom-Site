@@ -6,9 +6,12 @@ import type { DbOrder, DbOrderItem } from "@/lib/db/order";
 import { sendEmail, type SendEmailResult } from "@/lib/emails/send";
 import {
   OrderConfirmationEmail,
+  resolveEmailAssetUrl,
   type OrderConfirmationLineItem,
   type OrderConfirmationAddress,
 } from "@/lib/emails/order-confirmation";
+
+export { resolveEmailAssetUrl };
 
 export interface OrderConfirmationData {
   order: DbOrder;
@@ -95,7 +98,7 @@ export function buildOrderConfirmationEmailProps(data: OrderConfirmationData) {
       options_text: item.size_option ? `Size: ${item.size_option}` : undefined,
       display_price: formatCents(item.price_in_cents),
       display_total: formatCents(item.total_in_cents),
-      thumbnail_url: item.thumbnail_url,
+      thumbnail_url: resolveEmailAssetUrl(item.thumbnail_url),
     };
   });
 

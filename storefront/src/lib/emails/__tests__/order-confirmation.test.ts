@@ -4,6 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DbOrder, DbOrderItem } from "@/lib/db/order";
 import {
   OrderConfirmationEmail,
+  resolveEmailAssetUrl,
+  FONT_STACK_DISPLAY,
+  FONT_STACK_EDITORIAL,
+  FONT_STACK_SANS,
 } from "../order-confirmation";
 import {
   buildOrderConfirmationEmailProps,
@@ -357,6 +361,182 @@ describe("Order Confirmation Email Suite", () => {
         "utf8",
       );
       expect(flowContent.startsWith('import "server-only";')).toBe(true);
+    });
+  });
+
+  describe("7. Email Asset URL Resolution", () => {
+    it("converts root-relative catalog image path to absolute canonical URL", () => {
+      const resolved = resolveEmailAssetUrl("/catalog-shoes/shoe-01.webp");
+      expect(resolved).toBe("https://mirzafootwear.vercel.app/catalog-shoes/shoe-01.webp");
+    });
+
+    it("converts relative catalog image path without leading slash", () => {
+      const resolved = resolveEmailAssetUrl("catalog-shoes/shoe-02.webp");
+      expect(resolved).toBe("https://mirzafootwear.vercel.app/catalog-shoes/shoe-02.webp");
+    });
+
+    it("preserves valid public absolute HTTPS URLs unchanged", () => {
+      const externalUrl = "https://cdn.example.com/products/oxford.webp";
+      const resolved = resolveEmailAssetUrl(externalUrl);
+      expect(resolved).toBe(externalUrl);
+    });
+
+    it("returns null safely for null, undefined, or empty string", () => {
+      expect(resolveEmailAssetUrl(null)).toBeNull();
+      expect(resolveEmailAssetUrl(undefined)).toBeNull();
+      expect(resolveEmailAssetUrl("")).toBeNull();
+      expect(resolveEmailAssetUrl("   ")).toBeNull();
+    });
+
+    it("prevents localhost URLs from reaching outbound production emails", () => {
+      // Localhost passed directly as URL
+      const resolvedLocalhost = resolveEmailAssetUrl("http://localhost:3000/catalog-shoes/shoe-01.webp");
+      expect(resolvedLocalhost).toBe("https://mirzafootwear.vercel.app/catalog-shoes/shoe-01.webp");
+
+      const resolvedIp = resolveEmailAssetUrl("http://127.0.0.1:3001/catalog-shoes/shoe-01.webp");
+      expect(resolvedIp).toBe("https://mirzafootwear.vercel.app/catalog-shoes/shoe-01.webp");
+
+      // Localhost configured in store URL env
+      process.env.NEXT_PUBLIC_SITE_URL = "http://localhost:3000";
+      const resolvedWithEnv = resolveEmailAssetUrl("/catalog-shoes/shoe-01.webp");
+      expect(resolvedWithEnv).toBe("https://mirzafootwear.vercel.app/catalog-shoes/shoe-01.webp");
+    });
+
+    it("uses NEXT_PUBLIC_SITE_URL when configured to a public domain", () => {
+      process.env.NEXT_PUBLIC_SITE_URL = "https://custom.mirzafootwear.com";
+      const resolved = resolveEmailAssetUrl("/catalog-shoes/shoe-01.webp");
+      expect(resolved).toBe("https://custom.mirzafootwear.com/catalog-shoes/shoe-01.webp");
+    });
+  });
+
+  describe("8. Rendered Order Email Image URLs", () => {
+    it("renders fully qualified absolute image URLs in the email HTML", async () => {
+      const orderWithRelativeImage: DbOrderItem[] = [
+        {
+          ...sampleItems[0],
+          thumbnail_url: "/catalog-shoes/shoe-01.webp",
+        },
+      ];
+
+      const props = buildOrderConfirmationEmailProps({
+        order: sampleOrder,
+        items: orderWithRelativeImage,
+      });
+
+      // Mapping should resolve relative path
+      expect(props.items[0].thumbnail_url).toBe(
+        "https://mirzafootwear.vercel.app/catalog-shoes/shoe-01.webp",
+      );
+
+      const element = createElement(OrderConfirmationEmail, props);
+      const html = await render(element);
+
+      expect(html).toContain('src="https://mirzafootwear.vercel.app/catalog-shoes/shoe-01.webp"');
+      expect(html).not.toContain('src="/catalog-shoes/shoe-01.webp"');
+    });
+
+    it("renders defensive absolute URL even if unmapped relative path is passed directly to component", async () => {
+      const element = createElement(OrderConfirmationEmail, {
+        orderNumber: "MRZ-TEST-001",
+        customerName: "Test Customer",
+        items: [
+          {
+            name: "Direct Oxford",
+            quantity: 1,
+            display_price: "$385.00",
+            display_total: "$385.00",
+            thumbnail_url: "/catalog-shoes/shoe-01.webp",
+          },
+        ],
+        displayItemTotal: "$385.00",
+        displayDeliveryTotal: "Complimentary",
+        displayTaxTotal: "$0.00",
+        displayTotal: "$385.00",
+      });
+
+      const html = await render(element);
+      expect(html).toContain('src="https://mirzafootwear.vercel.app/catalog-shoes/shoe-01.webp"');
+      expect(html).not.toContain('src="/catalog-shoes/shoe-01.webp"');
+    });
+
+    it("renders intentional placeholder when thumbnail_url is null", async () => {
+      const itemsWithoutImage: DbOrderItem[] = [
+        {
+          ...sampleItems[0],
+          thumbnail_url: null,
+        },
+      ];
+
+      const props = buildOrderConfirmationEmailProps({
+        order: sampleOrder,
+        items: itemsWithoutImage,
+      });
+
+      const element = createElement(OrderConfirmationEmail, props);
+      const html = await render(element);
+
+      // Should render placeholder div, not broken img tag
+      expect(html).not.toContain("<img");
+      expect(html).toContain("background-color:#f3efe8");
+    });
+  });
+
+  describe("9. Typography Progressive Enhancement & Fallback Stacks", () => {
+    it("embeds Google Fonts webfont @import in Head style for progressive enhancement", async () => {
+      const props = buildOrderConfirmationEmailProps({
+        order: sampleOrder,
+        items: sampleItems,
+      });
+
+      const element = createElement(OrderConfirmationEmail, props);
+      const html = await render(element);
+
+      expect(html).toContain("fonts.googleapis.com/css2?family=Cormorant+Garamond");
+      expect(html).toContain("EB+Garamond");
+      expect(html).toContain("Geist");
+    });
+
+    it("defines robust cross-client fallback stacks for all typography roles", () => {
+      expect(FONT_STACK_DISPLAY).toBe('"Cormorant Garamond", Georgia, "Times New Roman", serif');
+      expect(FONT_STACK_EDITORIAL).toBe('"EB Garamond", Georgia, "Times New Roman", serif');
+      expect(FONT_STACK_SANS).toBe("Geist, Arial, Helvetica, sans-serif");
+    });
+
+    it("applies intended font family stacks into rendered HTML", async () => {
+      const props = buildOrderConfirmationEmailProps({
+        order: sampleOrder,
+        items: sampleItems,
+      });
+
+      const element = createElement(OrderConfirmationEmail, props);
+      const html = await render(element);
+
+      // Display font in brand / header
+      expect(html).toContain("Cormorant Garamond");
+      // Editorial body font
+      expect(html).toContain("EB Garamond");
+      // Utility font
+      expect(html).toContain("Geist");
+      // Safe fallbacks always present
+      expect(html).toContain("Georgia");
+      expect(html).toContain("Arial");
+    });
+  });
+
+  describe("10. Test CLI Script Contract", () => {
+    it("exercises real catalog shoes and does not contain stale Supabase media URLs", async () => {
+      const fs = await import("node:fs");
+      const path = await import("node:path");
+
+      const scriptContent = fs.readFileSync(
+        path.resolve(__dirname, "../../../../scripts/send-test-order-email.ts"),
+        "utf8",
+      );
+
+      expect(scriptContent).not.toContain("variants/640.webp");
+      expect(scriptContent).not.toContain("hkncfdsvgjopkujmmxem.supabase.co");
+      expect(scriptContent).toContain("/catalog-shoes/shoe-01.webp");
+      expect(scriptContent).toContain("resolveEmailAssetUrl");
     });
   });
 });

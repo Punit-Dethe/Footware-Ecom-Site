@@ -37,7 +37,7 @@ try {
 
 async function main() {
   // Dynamically import after environment and server-only bypass are established
-  const { OrderConfirmationEmail } = await import(
+  const { OrderConfirmationEmail, resolveEmailAssetUrl } = await import(
     "../src/lib/emails/order-confirmation"
   );
   const { sendEmail } = await import("../src/lib/emails/send");
@@ -72,13 +72,12 @@ async function main() {
     items: [
       {
         name: "The Sovereign Oxford in Patina Calfskin",
-        slug: "shoe-2026-09-001",
+        slug: "office-footwear-01",
         quantity: 1,
         options_text: "Size: 42 EU / 9 US",
         display_price: "$385.00",
         display_total: "$385.00",
-        thumbnail_url:
-          "https://hkncfdsvgjopkujmmxem.supabase.co/storage/v1/object/public/product-media/products/shoe-2026-09-001/variants/640.webp",
+        thumbnail_url: resolveEmailAssetUrl("/catalog-shoes/shoe-01.webp"),
       },
       {
         name: "Artisanal Cedar Shoe Trees",
