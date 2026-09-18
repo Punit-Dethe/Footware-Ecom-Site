@@ -35,10 +35,10 @@ B1 through B10 are **COMPLETE / MERGED / DEPLOYED / PRODUCTION VERIFIED**.
 Current `main` head (ahead of the B10 backend baseline):
 
 ```text
-ab2ce2bb2c6a8e6cf3cca8db1ca4451745a2b055  Merge branch 'audit/ui-regression-splash' into main
+a7878d798e9fe46ae97d10cf716070d1d1bc1a24  Merge branch 'diagnose/reduced-motion-policy' into main
 ```
 
-`main` incorporates the accepted P0 splash reload scroll-lock regression fix (`c2fd722d6b5446714527b770a4979c2b35ad8445`). All work belongs to the **FINAL UI IMPLEMENTATION** phase. No backend/phase work is outstanding.
+`main` incorporates the accepted cross-device reduced-motion policy fix (`28e215102d38d3f600b4da05877431a57451269c`). All work belongs to the **FINAL UI IMPLEMENTATION** phase. No backend/phase work is outstanding.
 
 Diff versus the B10 backend baseline:
 
@@ -1245,6 +1245,24 @@ Do not assume older `ARCHITECTURE.md`, old specification docs, or old performanc
 ---
 
 ## 16. Rolling change log
+
+### 2026-09-18 — Cross-device motion inconsistency — FIXED
+
+- Accepted branch: `diagnose/reduced-motion-policy`
+- Accepted SHA: `28e215102d38d3f600b4da05877431a57451269c`
+- Merged-main SHA: `a7878d798e9fe46ae97d10cf716070d1d1bc1a24`
+- Starting main: `20a9fd6859b6f1fcee9738cb7169cd1d0ef7a09b`
+- Root cause: prefers-reduced-motion policy was overly broad
+- Resolution summary:
+  1. **Overly broad CSS rule refactored**: Removed blanket `.mirza-home *, body:has(...) .editorial-header * { animation: none; transition: none; }` from `home-experiment.css`. Replaced with targeted suppression of large transforms (`.product-card:hover .product-card__image img { transform: none; }`), keeping restrained color/opacity/navigation transitions functional.
+  2. **Calm, intentional splash lifecycle**: Replaced immediate hydration disappearance in `BrandSplashOverlay.tsx` with intentional ~900ms static presentation (`exitDelay = 650ms`, `unmountDelay = 900ms`, `transition: opacity 0.25s ease`), eliminating the jarring flash-and-disappear bug while maintaining immediate scroll-lock release.
+  3. **Dedicated Playwright regression suite added**: Added `e2e/reduced-motion-policy.spec.ts` verifying both `no-preference` and `reduce` media emulation at 1440x900 desktop viewport (Lenis vs native scrolling, parallax dynamic vs static transforms, footer reveal vs static layout, ambient carousel auto-glide vs stationary).
+- Post-merge validation:
+  * TypeScript `tsc --noEmit`: 0 errors
+  * Playwright reduced motion suite (`reduced-motion-policy.spec.ts`): 2/2 passing
+  * Playwright full suite: 15/15 passing
+  * Vitest test suite: 63 test files / 664 tests passing
+  * Next.js production build: 99 pages compiled successfully
 
 ### 2026-09-17 — P0 splash reload scroll-lock regression — FIXED
 
