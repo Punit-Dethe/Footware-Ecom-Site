@@ -35,10 +35,10 @@ B1 through B10 are **COMPLETE / MERGED / DEPLOYED / PRODUCTION VERIFIED**.
 Current `main` head (ahead of the B10 backend baseline):
 
 ```text
-a7878d798e9fe46ae97d10cf716070d1d1bc1a24  Merge branch 'diagnose/reduced-motion-policy' into main
+d70cd44007873746d60cc041ffca4b67d023d7ae  Merge branch 'feat/order-confirmation-email' into main
 ```
 
-`main` incorporates the accepted cross-device reduced-motion policy fix (`28e215102d38d3f600b4da05877431a57451269c`). All work belongs to the **FINAL UI IMPLEMENTATION** phase. No backend/phase work is outstanding.
+`main` incorporates the accepted Mirza order-confirmation transactional email workflow (`67adec2df18e7552d5f53babf4058249de9f9367`) and media/typography fidelity fix (`c390101a13766655f88d11ebbaee3a98f2a0df0c`). All work belongs to the **FINAL UI IMPLEMENTATION** phase. No backend/phase work is outstanding.
 
 Diff versus the B10 backend baseline:
 
@@ -1245,6 +1245,24 @@ Do not assume older `ARCHITECTURE.md`, old specification docs, or old performanc
 ---
 
 ## 16. Rolling change log
+
+### 2026-09-18 — Mirza Order Confirmation Email & Media/Typography Fidelity — MERGED
+
+- Accepted branch: `feat/order-confirmation-email`
+- Implementation commit: `67adec2df18e7552d5f53babf4058249de9f9367`
+- Fidelity & Media fix commit: `c390101a13766655f88d11ebbaee3a98f2a0df0c`
+- Merged-main SHA: `d70cd44007873746d60cc041ffca4b67d023d7ae`
+- Starting main: `01b1c6975d26a62625a6bb62f1d72bc96e08ce48`
+- Resolution summary:
+  1. **Order Confirmation Email workflow**: Implemented Mirza transactional order confirmation email via React Email and Resend triggered on successful checkout placement in `storefront/src/lib/data/payment.ts`. Non-blocking background delivery scheduled via `next/server after()`, ensuring 0ms checkout latency impact. Error isolation ensures Resend transport/API failures never fail the checkout transition. Deterministic idempotency key (`order-confirmation/<order-id>`) prevents duplicate delivery.
+  2. **Email Media Asset Resolution**: Added `resolveEmailAssetUrl` server boundary resolver. Resolves transitional root-relative paths (`/catalog-shoes/shoe-NN.webp`) to fully qualified canonical URLs (`https://mirzafootwear.vercel.app/catalog-shoes/shoe-NN.webp`), prevents localhost URLs from escaping into outbound emails, and cleanly renders placeholders for null thumbnails. Fixed stale test CLI Supabase storage URL to exercise canonical catalog shoes.
+  3. **Typography Fidelity & Progressive Enhancement**: Enhanced email typography with Mirza storefront font stacks (`"Cormorant Garamond", Georgia, "Times New Roman", serif` for brand display and grand total; `"EB Garamond", Georgia, "Times New Roman", serif` for editorial body copy; `Geist, Arial, Helvetica, sans-serif` for labels, order metadata, line items, and pricing). Progressive enhancement via Google Fonts `@import` inside `<Head><style>` allows modern clients (Apple Mail) to render custom fonts while ensuring resilient, clean rendering in Gmail and Outlook without web fonts.
+- Post-merge validation:
+  * TypeScript `tsc --noEmit`: 0 errors
+  * Biome lint: clean (342 files checked, 0 errors)
+  * Vitest full test suite: 64 test files / 689 tests passing (100% pass)
+  * Next.js production build: 101 routes compiled successfully
+  * Real Resend delivery verified: `01a0b4c1-1733-7581-96cf-735937468d7c`
 
 ### 2026-09-18 — Cross-device motion inconsistency — FIXED
 
