@@ -17,6 +17,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "check:locales": "tsx scripts/check-locale-parity.ts",
+    "email:test-order": "tsx scripts/send-test-order-email.ts",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui"
   },

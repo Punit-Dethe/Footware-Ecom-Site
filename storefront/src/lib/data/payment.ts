@@ -12,6 +12,7 @@ import type { Order } from "@/types/commerce";
 import { verifyAuthSession } from "./cart";
 import { adaptDbOrderToCommerceOrder } from "./order-adapter";
 import { resolveSurfaceForCart } from "./checkout";
+import { scheduleOrderConfirmationEmail } from "@/lib/emails/order-confirmation-flow";
 
 function checkoutTag(surface: Surface): string {
   return `checkout${cacheTagSuffix(surface)}`;
@@ -60,6 +61,10 @@ export async function completeCheckoutOrder(
     const adaptedOrder = adaptDbOrderToCommerceOrder(order, items);
     updateTag(checkoutTag(surface));
     updateTag(cartTag(surface));
+
+    // Fast checkout: schedule order confirmation email in post-response background task
+    scheduleOrderConfirmationEmail({ order, items });
+
     return { success: true as const, order: adaptedOrder as unknown as Order };
   } catch (error: unknown) {
     return {
