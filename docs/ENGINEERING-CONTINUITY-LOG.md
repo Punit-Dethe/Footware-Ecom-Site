@@ -1158,7 +1158,7 @@ B7 final merge + production verification          DONE
 → B9 remove Render/Rails leftovers                DONE
 → B10 final migration cleanup                     DONE
 → BACKEND MIGRATION COMPLETE                      DONE
-→ define Media Contract v1                        NOT STARTED
+→ define Media Contract v1                        DONE (Phase 1 Foundation: media_assets + product_media)
 → ingest new ~31-shoe demo catalog                DONE (contract live; see 12.1)
 → deep image/data/navigation optimization         NOT STARTED
 → implement new editorial Mirza UI                IN PROGRESS
@@ -1245,6 +1245,33 @@ Do not assume older `ARCHITECTURE.md`, old specification docs, or old performanc
 ---
 
 ## 16. Rolling change log
+
+### 2026-09-18 — Media Contract v1 Phase 1: Foundation — IN REVIEW
+
+- Branch: `feat/media-contract-v1`
+- Starting main: `b1920b1dac6d75bae2c567f110c87aba56add304`
+- Status: Implemented, verified, pushed to origin; awaiting supervisor review (do NOT merge).
+- Scope: Foundation of Media Contract v1 establishing new media data & storage contract underneath existing application.
+- Changes:
+  1. **Additive PostgreSQL Migration (`20260918000000_media_contract_v1.sql`)**:
+     - Created `public.media_assets`: physical storage metadata decoupled from product assignments (`storage_provider`, `storage_path`, `width`, `height`, `dominant_color`, `lqip`, `processed_variants`, `byte_size`, `mime_type`, `original_filename`). Unique constraint on `(storage_provider, storage_path)`.
+     - Created `public.product_media`: join/relationship table mapping products to media assets with display order and hero designation. Partial unique index on `(product_id) WHERE is_hero = true` enforces exactly one hero per product. Foreign key to `media_assets` uses `ON DELETE RESTRICT` to prevent accidental orphaned references. Foreign key to `products` uses `ON DELETE CASCADE`. Deterministic ordering index on `(product_id, position ASC, created_at ASC)`.
+     - RLS enabled on both tables with `anon` and `authenticated` access strictly revoked; accessible solely via `service_role` (Server-authoritative).
+     - Idempotent historical backfill populates `media_assets` and `product_media` from existing `public.product_images` (69 rows: 31 `legacy_public`, 38 `supabase`). Preserved `public.product_images` untouched for zero-downtime rollback safety.
+  2. **Server-Only Data Access Layer (`storefront/src/lib/db/media-v1.ts`)**:
+     - Enforced `server-only` import boundary.
+     - Implemented complete lifecycle operations: `createMediaAsset`, `getMediaAsset`, `listMediaAssets`, `deleteMediaAsset` (with `ON DELETE RESTRICT` error handling), `getMediaAssetUsage` (single bounded query, no N+1), `listProductMediaV1`, `attachMediaToProduct`, `detachMediaFromProduct` (with automatic hero promotion when hero is detached), `setProductHeroMedia`, and `reorderProductMediaV1`.
+  3. **Documentation & Architecture Guide (`docs/MEDIA-CONTRACT-V1.md`)**:
+     - Defined physical asset metadata contract, join semantics, transactional hero guarantees, future canonical storage namespace (`media/{assetId}/original.{ext}` and `media/{assetId}/variants/{name}.webp`), transitional providers (`legacy_public` and `supabase`), and migration sequence through Phase 4.
+  4. **Automated Test Suite (`storefront/src/lib/db/__tests__/media-v1.test.ts`)**:
+     - 24 comprehensive unit tests verifying schema invariants, CRUD, single-hero enforcement, hero auto-promotion on detach, RESTRICT on delete in use, multi-product reuse, deterministic ordering, and server-only isolation.
+- Validation:
+  * TypeScript `tsc --noEmit`: 0 errors
+  * Biome lint: 0 errors, 0 warnings (344 files checked)
+  * Vitest full test suite: 65 test files / 713 tests passing (100% pass)
+  * Next.js production build: 101 routes compiled successfully
+  * Storefront client JS impact: 0 bytes
+  * Storefront query impact: 0 queries (all existing storefront flows continue reading `product_images`)
 
 ### 2026-09-18 — Mirza Order Confirmation Email & Media/Typography Fidelity — MERGED
 
