@@ -94,3 +94,12 @@ export function getStoreEmailFrom(): string {
 export function isStoreEmailFromFallback(): boolean {
   return !process.env.EMAIL_FROM;
 }
+
+/**
+ * Get the test recipient email address if configured.
+ * When set, all transactional emails are redirected to this address.
+ */
+export function getStoreTestRecipient(): string | undefined {
+  return process.env.EMAIL_TEST_RECIPIENT || undefined;
+}
+
