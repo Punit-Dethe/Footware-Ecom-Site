@@ -26,35 +26,42 @@
 * **Phase 5 (Global Media Library Backend + Upload Pipeline)**: MERGED (`feat/media-library-backend`).
 * **Phase 6A (Editorial Admin Foundation & Global Media Library UI)**: MERGED into `main` at `5c0edbf6ce94bd09d563a5b93fcc45cbe2c90fbe`.
 * **Phase 6B (Product ↔ Media Library Integration)**: MERGED into `main` at `22144864d96c5828619d1df626eef2311e6e571c`.
-* **Phase 7 (Complete Editorial Catalog Admin Redesign)**: **COMPLETE / VERIFIED** on branch `feat/editorial-admin-catalog`.
-  - Replaced `/admin` redirect with real Mirza Studio Overview (`getAdminCatalogOverview()` bounded to 2 SQL queries, 0 N+1, Media Contract v1 hero thumbnails, 0 `product_images`).
-  - Rebuilt `/admin/products` index with bounded pagination (`listAdminProductsPage()`, default 30/page, URL state `?q=&status=&category=&sort=&page=`, quiet uppercase status, aggregated variants and categories).
-  - Redesigned `/admin/products/[id]` (`ProductEditForm.tsx`): editorial typography, live storefront link (`View on storefront ↗`), Radix Archive confirmation dialog (replaces browser `confirm()`), unsaved dirty state tracking, clean accessible category checkboxes, compact variants editor, preserved Phase 6B `ProductMediaManager` without regression.
-  - Redesigned `/admin/products/new` (`ProductNewForm.tsx`) with draft registration helper notice.
-  - Redesigned `/admin/categories` (`CategoryManager.tsx`): Radix Create/Edit Dialog and Radix Safe Delete Dialog (blocks when `productCount > 0`, confirms when 0; no browser `alert()` or `confirm()`).
-  - Extended `storefront/src/app/admin.css` with shared editorial design tokens (`--admin-canvas`, `--admin-surface`, `--admin-secondary`, `--admin-stone`, `--admin-ink`, `--admin-muted`, `--admin-border`).
-  - Top navigation updated to: Overview, Products, Categories, Media.
-  - Full test suite: 76 test files, 855 passed, 0 failures.
-  - TypeScript `tsc --noEmit`: 0 errors. Biome lint: 0 errors, 0 warnings.
-  - Visual QA verified at 1920, 1440, 768, and 390 viewports with zero errors.
-  - Production build: 103/103 static pages generated cleanly. Zero storefront JS or catalog query impact. Zero database schema migrations.
+* **Phase 7 (Complete Editorial Catalog Admin Redesign)**: MERGED into `main` at `769a96382b14ca7fced02207070988c657299098`.
+* **Phase 8 (Orders + Customers Operations)**: **COMPLETE / VERIFIED** on branch `feat/editorial-admin-commerce`.
+  - Added read-only Commerce operations: Orders Index (`/admin/orders`), Order Detail (`/admin/orders/[id]`), Customers Directory (`/admin/customers`), Customer Detail (`/admin/customers/[id]`).
+  - Studio top navigation (`AdminTopNav.tsx`) grouped into Overview, Catalog (Products, Categories, Media), and Commerce (Orders, Customers) with responsive horizontal scrolling (`scrollbar-none`).
+  - Dedicated server-only DAL (`src/lib/db/admin-commerce.ts`) with bounded queries, 0 N+1 (list orders/customers: normal = 1 query, worst case out-of-range = 2 queries; order detail = 2 queries; customer detail = exactly 3 queries: profile/aggregates, bounded addresses LIMIT 100, bounded orders LIMIT 50).
+  - Snapshot authority for orders: immutable `order_items` schema columns (`product_name`, `sku`, `size_option`, `price_in_cents`, `quantity`, `total_in_cents`, `thumbnail_url`), `shipping_address_snapshot`, `billing_address_snapshot`, and stored cent totals (never recomputing or linking dynamically to mutated catalog).
+  - Identity authority for customers: direct server join of `public.profiles` (`role = 'customer'`) and `auth.users` (`u.email`), order aggregates (`orders.user_id = customer.id` strictly, never merging by email).
+  - Customer monetary & currency semantics: Placed Order Value calculated strictly from `orders.status = 'placed'` and grouped by currency (`placedOrderTotals`); cancelled orders excluded from value; currencies never summed across or converted; invalid `highest_order_total` cross-currency sort removed.
+  - Order sorting: `newest`, `oldest`; invalid cross-currency `total_desc` / `total_asc` sorts removed.
+  - Currency & Country fidelity: removed all fabricated `"USD"` fallbacks (authoritative stored currency passed through; malformed aggregate records skipped rather than defaulting to USD); removed fabricated `"US"` country fallback from address snapshots (rendered only when present).
+  - Customer address query bounded to `LIMIT 100`.
+  - Full-history customer aggregates computed in SQL independent of bounded 50-order history rows.
+  - Zero operational mutation buttons for payment capture, fulfillment, shipment creation, carrier tracking, refunds, or cancellations (strictly read-only).
+  - Studio Overview (`/admin`) extended with commerce metrics (`total_orders`, `orders_today`, `guest_orders`, `registered_customers`) inside `getAdminCatalogOverview()` within the strict 2-query budget.
+  - Full test suite: 77 test files passing (100% pass).
+  - TypeScript `tsc --noEmit`: 0 errors. Biome lint: 0 errors, 0 warnings across 372 files.
+  - Next.js production build: 111/111 static pages generated cleanly.
+  - Visual QA verified at 1920, 1440, 768, and 390 viewports for Overview, Orders Default, Orders Filtered, Order Detail, Customers Default, Customer Detail.
+  - Zero customer storefront JS impact (0 bytes). Zero database schema migrations.
   - Ready for supervisor review. Do NOT merge to main.
 
 ### Current working head
 
-Starting `main` SHA for Phase 7:
+Starting `main` SHA for Phase 8:
 
 ```text
-22144864d96c5828619d1df626eef2311e6e571c  fix(media): implement Phase 6B final hero promotion fix
+769a96382b14ca7fced02207070988c657299098  feat(admin): complete Phase 7 editorial catalog admin redesign (#phase7)
 ```
 
-Branch: `feat/editorial-admin-catalog`
+Branch: `feat/editorial-admin-commerce`
 
 Current phase:
 
 ```text
-MIRZA ADMIN — PHASE 7: COMPLETE EDITORIAL CATALOG ADMIN REDESIGN — COMPLETE (Awaiting Supervisor Review)
-Next: PHASE 8 — ORDERS & CUSTOMERS CONTROL PLANE
+MIRZA ADMIN — PHASE 8: ORDERS + CUSTOMERS OPERATIONS — COMPLETE (Awaiting Supervisor Review)
+Next: SUPERVISOR REVIEW / PHASE CLOSURE
 ```
 
 Canonical B10 references:

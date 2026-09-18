@@ -94,6 +94,37 @@ export async function AdminIndexPageContent({ params }: AdminIndexProps) {
         </div>
       </div>
 
+      {/* Commerce Activity Strip */}
+      <div className="space-y-3">
+        <h2 className="admin-eyebrow">Commerce Activity</h2>
+        <div className="admin-metric-strip grid grid-cols-2 sm:grid-cols-4">
+          <div className="admin-metric-item">
+            <span className="admin-metric-number">{metrics.totalOrders ?? 0}</span>
+            <span className="admin-metric-label">Total Orders</span>
+            <span className="text-[11px] text-[#706257]">
+              {metrics.ordersToday ?? 0} placed today
+            </span>
+          </div>
+          <div className="admin-metric-item">
+            <span className="admin-metric-number">{metrics.registeredCustomers ?? 0}</span>
+            <span className="admin-metric-label">Registered Customers</span>
+            <span className="text-[11px] text-[#706257]">Active member accounts</span>
+          </div>
+          <div className="admin-metric-item">
+            <span className="admin-metric-number">{metrics.guestOrders ?? 0}</span>
+            <span className="admin-metric-label">Guest Checkouts</span>
+            <span className="text-[11px] text-[#706257]">Anonymous orders</span>
+          </div>
+          <div className="admin-metric-item">
+            <span className="admin-metric-number">
+              {(metrics.totalOrders ?? 0) - (metrics.guestOrders ?? 0)}
+            </span>
+            <span className="admin-metric-label">Member Orders</span>
+            <span className="text-[11px] text-[#706257]">Account checkouts</span>
+          </div>
+        </div>
+      </div>
+
       {/* Recently Edited Table */}
       <div className="space-y-3">
         <div className="flex items-baseline justify-between">
@@ -200,7 +231,41 @@ export async function AdminIndexPageContent({ params }: AdminIndexProps) {
       {/* Quick Work Navigation */}
       <div className="border-t border-[#cfc4b6] pt-8">
         <h2 className="admin-eyebrow mb-4">Quick Work</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Link
+            href={`${basePath}/orders`}
+            className="p-5 border border-[#cfc4b6] bg-[#fffefc] hover:bg-[#e9e2d6]/40 transition-colors rounded-[2px] block group"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold uppercase tracking-wider text-[#30261f]">
+                Orders
+              </span>
+              <span className="text-xs text-[#706257] group-hover:translate-x-0.5 transition-transform">
+                &rarr;
+              </span>
+            </div>
+            <p className="text-xs text-[#706257] mt-1.5 leading-relaxed">
+              Review completed checkouts, items, address snapshots, and totals.
+            </p>
+          </Link>
+
+          <Link
+            href={`${basePath}/customers`}
+            className="p-5 border border-[#cfc4b6] bg-[#fffefc] hover:bg-[#e9e2d6]/40 transition-colors rounded-[2px] block group"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold uppercase tracking-wider text-[#30261f]">
+                Customers
+              </span>
+              <span className="text-xs text-[#706257] group-hover:translate-x-0.5 transition-transform">
+                &rarr;
+              </span>
+            </div>
+            <p className="text-xs text-[#706257] mt-1.5 leading-relaxed">
+              Inspect registered accounts, saved addresses, and order histories.
+            </p>
+          </Link>
+
           <Link
             href={`${basePath}/products/new`}
             className="p-5 border border-[#cfc4b6] bg-[#fffefc] hover:bg-[#e9e2d6]/40 transition-colors rounded-[2px] block group"
@@ -232,23 +297,6 @@ export async function AdminIndexPageContent({ params }: AdminIndexProps) {
             </div>
             <p className="text-xs text-[#706257] mt-1.5 leading-relaxed">
               Upload, preview, and curate high-resolution studio assets.
-            </p>
-          </Link>
-
-          <Link
-            href={`${basePath}/categories`}
-            className="p-5 border border-[#cfc4b6] bg-[#fffefc] hover:bg-[#e9e2d6]/40 transition-colors rounded-[2px] block group"
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase tracking-wider text-[#30261f]">
-                Categories
-              </span>
-              <span className="text-xs text-[#706257] group-hover:translate-x-0.5 transition-transform">
-                &rarr;
-              </span>
-            </div>
-            <p className="text-xs text-[#706257] mt-1.5 leading-relaxed">
-              Organize storefront collections, hierarchy, and taxonomy.
             </p>
           </Link>
         </div>
