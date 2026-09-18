@@ -102,7 +102,7 @@ export async function AdminIndexPageContent({ params }: AdminIndexProps) {
             <span className="admin-metric-number">{metrics.totalOrders ?? 0}</span>
             <span className="admin-metric-label">Total Orders</span>
             <span className="text-[11px] text-[#706257]">
-              {metrics.ordersToday ?? 0} completed today
+              {metrics.ordersToday ?? 0} placed today
             </span>
           </div>
           <div className="admin-metric-item">

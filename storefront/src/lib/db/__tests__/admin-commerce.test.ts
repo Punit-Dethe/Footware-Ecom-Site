@@ -185,7 +185,7 @@ describe("Admin Commerce Phase 8 DAL Tests", () => {
   });
 
   describe("listAdminCustomersPage", () => {
-    it("strictly filters for role='customer' and joins auth.users without N+1", async () => {
+    it("strictly filters for role='customer', separates currencies, excludes cancelled from value, and joins auth.users without N+1", async () => {
       mockDb.query.mockResolvedValueOnce({
         rows: [
           {
@@ -195,8 +195,12 @@ describe("Admin Commerce Phase 8 DAL Tests", () => {
             last_name: "Doe",
             phone: "+1234567890",
             created_at: new Date("2026-09-01T12:00:00Z"),
-            order_count: 3,
-            historical_order_total_in_cents: "75000",
+            order_count: 5, // 5 total orders (placed + cancelled)
+            placed_order_count: 4, // 4 placed orders
+            placed_order_totals: [
+              { currency: "EUR", totalInCents: 15000 },
+              { currency: "USD", totalInCents: 60000 },
+            ],
             latest_order_at: new Date("2026-09-18T10:00:00Z"),
             address_count: 2,
             total_count: 18,
@@ -216,14 +220,40 @@ describe("Admin Commerce Phase 8 DAL Tests", () => {
 
       expect(sql).toContain("p.role = 'customer'");
       expect(sql).toContain("JOIN auth.users u ON u.id = p.id");
+      expect(sql).toContain("customer_currency_totals");
+      expect(sql).toContain("sub_o.status = 'placed'");
       expect(params).toContain("%shoelover%");
 
       expect(result.totalCount).toBe(18);
       expect(result.customers).toHaveLength(1);
-      expect(result.customers[0].email).toBe("shoelover@example.com");
-      expect(result.customers[0].orderCount).toBe(3);
-      expect(result.customers[0].historicalOrderTotalInCents).toBe(75000);
-      expect(result.customers[0].addressCount).toBe(2);
+      const c = result.customers[0];
+      expect(c.email).toBe("shoelover@example.com");
+      // Total order count includes all records
+      expect(c.orderCount).toBe(5);
+      // Placed order count only counts placed
+      expect(c.placedOrderCount).toBe(4);
+      // Currencies are kept strictly separated (never summed together)
+      expect(c.placedOrderTotals).toHaveLength(2);
+      expect(c.placedOrderTotals[0]).toEqual({ currency: "EUR", totalInCents: 15000 });
+      expect(c.placedOrderTotals[1]).toEqual({ currency: "USD", totalInCents: 60000 });
+      expect(c.addressCount).toBe(2);
+    });
+
+    it("falls back to count query if offset exceeds row count on deep customer page", async () => {
+      mockDb.query
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [{ count: 12 }] });
+
+      const result = await listAdminCustomersPage({
+        page: 5,
+        pageSize: 30,
+      });
+
+      // Normal = 1, worst case on out-of-range deep page = 2
+      expect(mockDb.query).toHaveBeenCalledTimes(2);
+      expect(result.customers).toHaveLength(0);
+      expect(result.totalCount).toBe(12);
+      expect(result.page).toBe(5);
     });
   });
 
@@ -234,8 +264,8 @@ describe("Admin Commerce Phase 8 DAL Tests", () => {
       expect(mockDb.query).not.toHaveBeenCalled();
     });
 
-    it("executes exactly 3 bounded queries: profile, addresses, and order history", async () => {
-      // 1. Profile + Auth
+    it("executes exactly 3 bounded queries: computes full-history aggregates independent of bounded 50 rows", async () => {
+      // 1. Profile + Auth + Full History SQL Aggregates
       mockDb.query.mockResolvedValueOnce({
         rows: [
           {
@@ -247,6 +277,13 @@ describe("Admin Commerce Phase 8 DAL Tests", () => {
             created_at: new Date("2026-09-01T12:00:00Z"),
             updated_at: new Date("2026-09-10T12:00:00Z"),
             email: "shoelover@example.com",
+            total_order_count: 85, // 85 total orders in full history
+            placed_order_count: 80, // 80 placed orders in full history
+            latest_order_at: new Date("2026-09-18T10:00:00Z"),
+            placed_order_totals: [
+              { currency: "GBP", totalInCents: 120000 },
+              { currency: "USD", totalInCents: 1540000 },
+            ],
           },
         ],
       });
@@ -276,7 +313,8 @@ describe("Admin Commerce Phase 8 DAL Tests", () => {
         ],
       });
 
-      // 3. Orders history strictly by user_id
+      // 3. Orders history strictly by user_id bounded to LIMIT 50
+      // Array has only 2 rows here (or up to 50 in real DB)
       mockDb.query.mockResolvedValueOnce({
         rows: [
           {
@@ -289,24 +327,87 @@ describe("Admin Commerce Phase 8 DAL Tests", () => {
             completed_at: new Date("2026-09-18T10:00:00Z"),
             item_count: 2,
           },
+          {
+            id: "55555555-5555-5555-5555-555555555555",
+            order_number: "MRZ-TEST789012",
+            status: "cancelled",
+            currency: "USD",
+            total_in_cents: 15000,
+            surface: "dtc",
+            completed_at: new Date("2026-09-17T10:00:00Z"),
+            item_count: 1,
+          },
         ],
       });
 
       const customer = await getAdminCustomerDetail(TEST_USER_ID);
 
+      // Exactly 3 bounded queries (<= 3 queries)
       expect(mockDb.query).toHaveBeenCalledTimes(3);
       expect(customer).not.toBeNull();
       expect(customer?.email).toBe("shoelover@example.com");
       expect(customer?.role).toBe("customer");
-      expect(customer?.addresses).toHaveLength(1);
-      expect(customer?.addresses[0].isDefaultShipping).toBe(true);
-      expect(customer?.orders).toHaveLength(1);
-      expect(customer?.orders[0].orderNumber).toBe("MRZ-TEST123456");
 
-      // Verify third query strictly used orders.user_id = $1
+      // Verifies >50 order aggregates are from SQL, NOT derived from bounded orders array
+      expect(customer?.totalOrderCount).toBe(85);
+      expect(customer?.placedOrderCount).toBe(80);
+      expect(customer?.orders).toHaveLength(2); // bounded rows
+
+      // Verifies placedOrderTotals are grouped by currency
+      expect(customer?.placedOrderTotals).toEqual([
+        { currency: "GBP", totalInCents: 120000 },
+        { currency: "USD", totalInCents: 1540000 },
+      ]);
+
+      // Verify Query 1 SQL contains currency grouping and status='placed' filter
+      const profileSql = String(mockDb.query.mock.calls[0][0]);
+      expect(profileSql).toContain("placed_order_totals");
+      expect(profileSql).toContain("sub_o.status = 'placed'");
+
+      // Verify Query 3 strictly used orders.user_id = $1
       const orderHistorySql = String(mockDb.query.mock.calls[2][0]);
       expect(orderHistorySql).toContain("o.user_id = $1");
+      expect(orderHistorySql).toContain("LIMIT 50");
       expect(orderHistorySql).not.toContain("o.email");
+    });
+  });
+
+  describe("Customer Currency & Value Invariants", () => {
+    it("proves highest_order_total is not accepted and falls back to default newest sort in SQL", async () => {
+      mockDb.query.mockResolvedValueOnce({ rows: [] });
+
+      // @ts-expect-error - testing runtime rejection of removed invalid sort
+      await listAdminCustomersPage({ sort: "highest_order_total" });
+
+      expect(mockDb.query).toHaveBeenCalledTimes(1);
+      const [sql] = mockDb.query.mock.calls[0];
+      // Must NOT sort by historical order total
+      expect(sql).not.toContain("COALESCE(cos.historical_order_total_in_cents, 0) DESC");
+      // Falls back to safe newest sort (created_at DESC)
+      expect(sql).toContain("cp.created_at DESC, cp.id DESC");
+    });
+
+    it("verifies multi-currency placedOrderTotals format accurately without assuming USD", async () => {
+      const { formatMoney } = await import("@/lib/utils/format");
+
+      const totals = [
+        { currency: "EUR", totalInCents: 12550 },
+        { currency: "INR", totalInCents: 850000 },
+        { currency: "USD", totalInCents: 24000 },
+      ];
+
+      const formatted = totals.map((t) => formatMoney(t.totalInCents, t.currency));
+
+      // EUR formatting contains € or EUR (non-USD)
+      expect(formatted[0]).toMatch(/€|EUR/);
+      expect(formatted[0]).toContain("125.50");
+
+      // INR formatting contains ₹ or INR (non-USD)
+      expect(formatted[1]).toMatch(/₹|INR/);
+      expect(formatted[1]).toContain("8,500");
+
+      // USD formatting contains $
+      expect(formatted[2]).toContain("$240.00");
     });
   });
 });

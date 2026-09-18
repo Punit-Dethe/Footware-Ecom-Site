@@ -89,11 +89,16 @@ export interface AdminOrderDetail {
   items: AdminOrderItemDetail[];
 }
 
+export interface CustomerPlacedOrderTotal {
+  currency: string;
+  totalInCents: number;
+}
+
 export interface ListAdminCustomersInput {
   page?: number;
   pageSize?: number;
   query?: string;
-  sort?: "newest" | "oldest" | "latest_order" | "most_orders" | "highest_order_total";
+  sort?: "newest" | "oldest" | "latest_order" | "most_orders";
 }
 
 export interface AdminCustomerListItem {
@@ -104,7 +109,8 @@ export interface AdminCustomerListItem {
   phone: string | null;
   createdAt: Date;
   orderCount: number;
-  historicalOrderTotalInCents: number;
+  placedOrderCount: number;
+  placedOrderTotals: CustomerPlacedOrderTotal[];
   latestOrderAt: Date | null;
   addressCount: number;
 }
@@ -157,6 +163,10 @@ export interface AdminCustomerDetail {
   role: "customer";
   createdAt: Date;
   updatedAt: Date;
+  totalOrderCount: number;
+  placedOrderCount: number;
+  placedOrderTotals: CustomerPlacedOrderTotal[];
+  latestOrderAt: Date | null;
   addresses: AdminCustomerAddress[];
   orders: AdminCustomerOrderHistoryItem[];
 }
@@ -179,6 +189,9 @@ function resolveSnapshotThumbnail(rawUrl: string | null): string | null {
 
 /**
  * Lists paginated admin orders with bounded CTE query, 0 N+1, and URL filters.
+ * Query count:
+ * - normal = 1 bounded query (window total_count CTE)
+ * - worst case = 2 bounded queries (fallback COUNT(*) on empty out-of-range page)
  */
 export async function listAdminOrdersPage(
   input: ListAdminOrdersInput = {},
@@ -489,6 +502,9 @@ export async function getAdminOrderDetail(
 /**
  * Lists paginated customer profiles with order aggregates and address counts.
  * Strictly bounded to role='customer' (excludes administrator accounts).
+ * Query count:
+ * - normal = 1 bounded query (window total_count CTE)
+ * - worst case = 2 bounded queries (fallback COUNT(*) on empty out-of-range page)
  */
 export async function listAdminCustomersPage(
   input: ListAdminCustomersInput = {},
@@ -520,9 +536,6 @@ export async function listAdminCustomersPage(
   } else if (input.sort === "most_orders") {
     rankedOrderBy = "COALESCE(cos.order_count, 0) DESC, cp.created_at DESC";
     outerOrderBy = "rc.order_count DESC, rc.created_at DESC";
-  } else if (input.sort === "highest_order_total") {
-    rankedOrderBy = "COALESCE(cos.historical_order_total_in_cents, 0) DESC, cp.created_at DESC";
-    outerOrderBy = "rc.historical_order_total_in_cents DESC, rc.created_at DESC";
   }
 
   params.push(pageSize);
@@ -548,10 +561,29 @@ export async function listAdminCustomersPage(
       SELECT
         o.user_id,
         COUNT(o.id)::int AS order_count,
-        COALESCE(SUM(o.total_in_cents), 0)::bigint AS historical_order_total_in_cents,
+        COUNT(o.id) FILTER (WHERE o.status = 'placed')::int AS placed_order_count,
         MAX(o.completed_at) AS latest_order_at
       FROM public.orders o
       JOIN customer_profiles cp ON cp.id = o.user_id
+      GROUP BY o.user_id
+    ),
+    customer_currency_totals AS (
+      SELECT
+        o.user_id,
+        jsonb_agg(
+          jsonb_build_object('currency', o.currency, 'totalInCents', o.total_in_cents)
+          ORDER BY o.currency ASC
+        ) AS placed_order_totals
+      FROM (
+        SELECT
+          sub_o.user_id,
+          sub_o.currency,
+          SUM(sub_o.total_in_cents)::bigint AS total_in_cents
+        FROM public.orders sub_o
+        JOIN customer_profiles cp ON cp.id = sub_o.user_id
+        WHERE sub_o.status = 'placed'
+        GROUP BY sub_o.user_id, sub_o.currency
+      ) o
       GROUP BY o.user_id
     ),
     customer_address_stats AS (
@@ -571,12 +603,14 @@ export async function listAdminCustomersPage(
         cp.phone,
         cp.created_at,
         COALESCE(cos.order_count, 0)::int AS order_count,
-        COALESCE(cos.historical_order_total_in_cents, 0)::bigint AS historical_order_total_in_cents,
+        COALESCE(cos.placed_order_count, 0)::int AS placed_order_count,
         cos.latest_order_at,
+        COALESCE(cct.placed_order_totals, '[]'::jsonb) AS placed_order_totals,
         COALESCE(cas.address_count, 0)::int AS address_count,
         COUNT(*) OVER()::int AS total_count
       FROM customer_profiles cp
       LEFT JOIN customer_order_stats cos ON cos.user_id = cp.id
+      LEFT JOIN customer_currency_totals cct ON cct.user_id = cp.id
       LEFT JOIN customer_address_stats cas ON cas.user_id = cp.id
       ORDER BY ${rankedOrderBy}
       LIMIT $${limitIdx} OFFSET $${offsetIdx}
@@ -594,7 +628,8 @@ export async function listAdminCustomersPage(
     phone: string | null;
     created_at: Date;
     order_count: number;
-    historical_order_total_in_cents: string | number;
+    placed_order_count: number;
+    placed_order_totals: unknown;
     latest_order_at: Date | null;
     address_count: number;
     total_count: number;
@@ -615,18 +650,30 @@ export async function listAdminCustomersPage(
     totalCount = Number(countRes.rows[0]?.count) || 0;
   }
 
-  const customers: AdminCustomerListItem[] = res.rows.map((row) => ({
-    id: row.id,
-    email: row.email,
-    firstName: row.first_name,
-    lastName: row.last_name,
-    phone: row.phone,
-    createdAt: new Date(row.created_at),
-    orderCount: Number(row.order_count || 0),
-    historicalOrderTotalInCents: Number(row.historical_order_total_in_cents || 0),
-    latestOrderAt: row.latest_order_at ? new Date(row.latest_order_at) : null,
-    addressCount: Number(row.address_count || 0),
-  }));
+  const customers: AdminCustomerListItem[] = res.rows.map((row) => {
+    const rawTotals = row.placed_order_totals;
+    const parsedTotals = typeof rawTotals === "string" ? JSON.parse(rawTotals) : rawTotals;
+    const placedOrderTotals: CustomerPlacedOrderTotal[] = Array.isArray(parsedTotals)
+      ? parsedTotals.map((item: { currency?: unknown; totalInCents?: unknown }) => ({
+          currency: String(item.currency || "USD"),
+          totalInCents: Number(item.totalInCents || 0),
+        }))
+      : [];
+
+    return {
+      id: row.id,
+      email: row.email,
+      firstName: row.first_name,
+      lastName: row.last_name,
+      phone: row.phone,
+      createdAt: new Date(row.created_at),
+      orderCount: Number(row.order_count || 0),
+      placedOrderCount: Number(row.placed_order_count || 0),
+      placedOrderTotals,
+      latestOrderAt: row.latest_order_at ? new Date(row.latest_order_at) : null,
+      addressCount: Number(row.address_count || 0),
+    };
+  });
 
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
@@ -641,7 +688,8 @@ export async function listAdminCustomersPage(
 
 /**
  * Retrieves detailed customer information, saved addresses, and bounded order history.
- * Bound to user_id strictly. Zero N+1 queries.
+ * Aggregates are computed across the full historical record in SQL (independent of the LIMIT 50 order array).
+ * Bound to user_id strictly. Exactly 3 bounded DB queries.
  */
 export async function getAdminCustomerDetail(
   customerId: string,
@@ -650,6 +698,7 @@ export async function getAdminCustomerDetail(
     return null;
   }
 
+  // Query 1: Profile + Auth Email + Full-History Order Aggregates (grouped by currency, placed-only value)
   const profileSql = `
     SELECT
       p.id,
@@ -659,9 +708,41 @@ export async function getAdminCustomerDetail(
       p.role,
       p.created_at,
       p.updated_at,
-      u.email
+      u.email,
+      COALESCE(stats.order_count, 0)::int AS total_order_count,
+      COALESCE(stats.placed_order_count, 0)::int AS placed_order_count,
+      stats.latest_order_at,
+      COALESCE(curr.placed_order_totals, '[]'::jsonb) AS placed_order_totals
     FROM public.profiles p
     JOIN auth.users u ON u.id = p.id
+    LEFT JOIN (
+      SELECT
+        o.user_id,
+        COUNT(o.id)::int AS order_count,
+        COUNT(o.id) FILTER (WHERE o.status = 'placed')::int AS placed_order_count,
+        MAX(o.completed_at) AS latest_order_at
+      FROM public.orders o
+      WHERE o.user_id = $1
+      GROUP BY o.user_id
+    ) stats ON stats.user_id = p.id
+    LEFT JOIN (
+      SELECT
+        cur_sub.user_id,
+        jsonb_agg(
+          jsonb_build_object('currency', cur_sub.currency, 'totalInCents', cur_sub.total_in_cents)
+          ORDER BY cur_sub.currency ASC
+        ) AS placed_order_totals
+      FROM (
+        SELECT
+          sub_o.user_id,
+          sub_o.currency,
+          SUM(sub_o.total_in_cents)::bigint AS total_in_cents
+        FROM public.orders sub_o
+        WHERE sub_o.user_id = $1 AND sub_o.status = 'placed'
+        GROUP BY sub_o.user_id, sub_o.currency
+      ) cur_sub
+      GROUP BY cur_sub.user_id
+    ) curr ON curr.user_id = p.id
     WHERE p.id = $1 AND p.role = 'customer'
     LIMIT 1;
   `;
@@ -675,6 +756,10 @@ export async function getAdminCustomerDetail(
     created_at: Date;
     updated_at: Date;
     email: string;
+    total_order_count: number;
+    placed_order_count: number;
+    latest_order_at: Date | null;
+    placed_order_totals: unknown;
   }>(profileSql, [customerId]);
 
   const profile = profileRes.rows[0];
@@ -682,6 +767,7 @@ export async function getAdminCustomerDetail(
     return null;
   }
 
+  // Query 2: Saved Customer Addresses
   const addressesSql = `
     SELECT
       id,
@@ -746,6 +832,7 @@ export async function getAdminCustomerDetail(
     updatedAt: new Date(row.updated_at),
   }));
 
+  // Query 3: Bounded Order History (LIMIT 50)
   const ordersSql = `
     SELECT
       o.id,
@@ -786,6 +873,15 @@ export async function getAdminCustomerDetail(
     itemCount: Number(row.item_count),
   }));
 
+  const rawTotals = profile.placed_order_totals;
+  const parsedTotals = typeof rawTotals === "string" ? JSON.parse(rawTotals) : rawTotals;
+  const placedOrderTotals: CustomerPlacedOrderTotal[] = Array.isArray(parsedTotals)
+    ? parsedTotals.map((item: { currency?: unknown; totalInCents?: unknown }) => ({
+        currency: String(item.currency || "USD"),
+        totalInCents: Number(item.totalInCents || 0),
+      }))
+    : [];
+
   return {
     id: profile.id,
     email: profile.email,
@@ -795,6 +891,10 @@ export async function getAdminCustomerDetail(
     role: "customer",
     createdAt: new Date(profile.created_at),
     updatedAt: new Date(profile.updated_at),
+    totalOrderCount: Number(profile.total_order_count || 0),
+    placedOrderCount: Number(profile.placed_order_count || 0),
+    placedOrderTotals,
+    latestOrderAt: profile.latest_order_at ? new Date(profile.latest_order_at) : null,
     addresses,
     orders,
   };

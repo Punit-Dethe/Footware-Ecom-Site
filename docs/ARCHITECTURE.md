@@ -224,7 +224,7 @@ Strict database TLS is a hard invariant. Do not regress to
 Measured on `feat/editorial-admin-commerce` (Phase 8), 2026-09-18:
 
 ```text
-Vitest        77 suites / 870 tests passing (100% pass)
+Vitest        77 suites / 873 tests passing (100% pass)
 TypeScript    tsc --noEmit clean (0 errors)
 Biome         lint clean (0 errors, 0 warnings across 372 files)
 Next.js       Production build clean (111/111 static pages generated)
@@ -247,12 +247,12 @@ Following Phase 6B:
 The Mirza Admin Studio (`/(admin)/admin/*`) provides a unified, editorial control plane adhering to the brand's aesthetic language:
 
 1. **Design Tokens & Typography**:
-   - Shared CSS variables (`--admin-canvas`, `--admin-surface`, `--admin-secondary`, `--admin-stone`, `--admin-ink`, `--admin-muted`, `--admin-border`).
-   - Fonts: `Playfair Display` (`--font-editorial-display`), `Newsreader` (`--font-editorial-text`), and `Geist` (`--font-geist`).
+   - Shared CSS variables (`--admin-canvas: #f3efe8`, `--admin-surface: #fffefc`, `--admin-secondary: #e9e2d6`, `--admin-stone: #ece7de`, `--admin-ink: #30261f`, `--admin-muted: #706257`, `--admin-border: #cfc4b6`).
+   - Fonts: `Cormorant Garamond` (`--font-editorial-display`), `EB Garamond` (`--font-editorial-text`), and `Geist` (`--font-geist`).
    - Replaced generic SaaS gray tables, shadow-sm, and bright pill badges with quiet typography, thin warm dividers, and flat surfaces.
 2. **Data Access Models**:
    - **Overview (`/admin`)**: `getAdminCatalogOverview()` executes bounded metric queries and recent product delivery in exactly 2 SQL queries with Media Contract v1 hero resolution.
-   - **Products Index (`/admin/products`)**: `listAdminProductsPage()` executes single bounded CTE pagination (default 30/page), supporting URL state (`?q=&status=&category=&sort=&page=`), aggregating variants and categories, and delivering Media Contract v1 heroes with 0 N+1 lookups.
+   - **Products Index (`/admin/products`)**: `listAdminProductsPage()` executes bounded CTE pagination (default 30/page; normal = 1 query, worst case out-of-range = 2 queries), supporting URL state (`?q=&status=&category=&sort=&page=`), aggregating variants and categories, and delivering Media Contract v1 heroes with 0 N+1 lookups.
    - **Product Edit (`/admin/products/[id]`)**: Integrates Radix dialog confirmations for archiving (no browser `confirm()`), unsaved form dirty tracking, accessible category checkboxes, compact variants editor, and preserved Media Contract v1 Product Media Manager.
    - **Categories (`/admin/categories`)**: Replaced browser `alert()`/`confirm()` with Radix Create/Edit Dialog and Safe Delete Dialog with server-validated product-count guards.
 3. **Storefront Isolation**:
@@ -273,18 +273,22 @@ Phase 8 introduces read-only operational domains for **Orders** and **Customers*
    - Includes full keyboard focus rings, active path matching, and responsive horizontal overflow handling (`scrollbar-none`).
 
 2. **Orders Domain (`src/lib/db/admin-commerce.ts`)**:
-   - **Snapshot Authority**: Orders and line items are immutable records. Line items are read directly from `order_items` (`price_in_cents`, `quantity`, `product_name_snapshot`, `variant_title_snapshot`, `sku_snapshot`, `image_url_snapshot`), never dynamically re-priced or re-linked to mutated catalog records.
+   - **Snapshot Authority**: Orders and line items are immutable records. Line items are read directly from `order_items` schema columns (`product_name`, `sku`, `size_option`, `price_in_cents`, `quantity`, `total_in_cents`, `thumbnail_url`), never dynamically re-priced or re-linked to mutated catalog records.
    - **Address Snapshots**: Customer delivery and billing locations are read directly from `shipping_address_snapshot` and `billing_address_snapshot` on `orders`.
    - **Stored Totals**: Subtotal, shipping total, tax total, and grand total are read strictly from stored cent integers (`subtotal_in_cents`, `total_in_cents`, etc.), guaranteeing audit integrity.
-   - **Single-CTE Pagination**: `listAdminOrdersPage()` paginates orders with single-query CTE aggregation (default 30/page), supporting URL state (`?q=&status=&customer=&sort=&page=`), joining line item counts and unit totals with 0 N+1 queries.
+   - **Single-CTE Pagination**: `listAdminOrdersPage()` paginates orders with single-query CTE aggregation (default 30/page; normal = 1 query, worst case out-of-range = 2 queries), supporting URL state (`?q=&status=&customer=&sort=&page=`), joining line item counts and unit totals with 0 N+1 queries.
    - **Bounded Detail Query**: `getAdminOrderDetail()` executes in exactly 2 bounded queries (order snapshot + line items with Media Contract v1 public URLs).
-   - **Strict Read-Only Guarantee**: Zero operational mutation controls for payment capture, fulfillment, shipment creation, carrier tracking, refunds, or cancellations.
+   - **Strict Read-Only Guarantee**: Payment capture, fulfillment, shipment management, refunds, and admin cancellation workflows are not implemented in the current Mirza commerce backend. Zero operational mutation buttons are provided.
 
 3. **Customers Domain (`src/lib/db/admin-commerce.ts`)**:
    - **Identity Authority**: Direct server join between `public.profiles` (`role = 'customer'`) and `auth.users` (`u.email`).
    - **Order Association Authority**: Order counts and historical spend are linked strictly via `orders.user_id = customer.id`. Guest orders sharing an email address are never merged or counted toward customer spend.
-   - **Single-CTE Directory**: `listAdminCustomersPage()` delivers customer directory pagination (default 30/page) with URL search and sorting (`newest`, `oldest`, `orders_desc`, `spend_desc`), calculating order count and historical spend without N+1 queries.
-   - **Bounded Profile & History**: `getAdminCustomerDetail()` executes in exactly 3 bounded queries (profile + auth email, saved addresses from `public.addresses`, and bounded order history).
+   - **Monetary & Currency Semantics**:
+     - Terminology: `Orders` (total count), `Placed Orders` (placed count), `Placed Order Value` (calculated only from `orders.status = 'placed'`).
+     - Totals are grouped strictly by currency (`placedOrderTotals: Array<{ currency: string; totalInCents: number }>`). Currencies are never summed together or silently converted.
+     - Sort options: `newest`, `oldest`, `latest_order`, `most_orders`. (Invalid cross-currency `highest_order_total` sort removed).
+   - **Single-CTE Directory**: `listAdminCustomersPage()` delivers customer directory pagination (default 30/page; normal = 1 query, worst case out-of-range = 2 queries) with URL search and sorting, calculating order count and currency-grouped placed order totals without N+1 queries.
+   - **Bounded Profile & History**: `getAdminCustomerDetail()` executes in exactly 3 bounded queries (profile + auth email + full-history aggregates from SQL, saved addresses from `public.addresses`, and bounded order history LIMIT 50). Full-history aggregates are computed in SQL, strictly independent of the bounded 50 rows returned in order history.
    - **Security Guardrails**: Zero customer credentials, password hashes, auth tokens, or session tokens exposed to the client.
 
 4. **Catalog Overview Extension**:

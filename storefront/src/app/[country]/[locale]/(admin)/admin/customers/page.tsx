@@ -36,12 +36,8 @@ export default async function AdminCustomersPage({
   const page = Math.max(1, Number.parseInt(sParams.page || "1", 10) || 1);
   const query = sParams.q || "";
   const sort =
-    (sParams.sort as
-      | "newest"
-      | "oldest"
-      | "latest_order"
-      | "most_orders"
-      | "highest_order_total") || "newest";
+    (sParams.sort as "newest" | "oldest" | "latest_order" | "most_orders") ||
+    "newest";
 
   const { customers, totalCount, totalPages, pageSize } =
     await listAdminCustomersPage({
@@ -93,7 +89,7 @@ export default async function AdminCustomersPage({
               <th scope="col" className="admin-th">Email</th>
               <th scope="col" className="admin-th">Phone</th>
               <th scope="col" className="admin-th text-right">Orders</th>
-              <th scope="col" className="admin-th text-right">Order Value</th>
+              <th scope="col" className="admin-th text-right">Placed Order Value</th>
               <th scope="col" className="admin-th">Last Order</th>
               <th scope="col" className="admin-th">Joined</th>
               <th scope="col" className="admin-th text-right">Action</th>
@@ -146,11 +142,19 @@ export default async function AdminCustomersPage({
                       {customer.orderCount}
                     </td>
 
-                    {/* Historical Order Value */}
+                    {/* Placed Order Value */}
                     <td className="admin-td font-mono font-medium text-xs text-[#30261f] text-right">
-                      {customer.historicalOrderTotalInCents > 0
-                        ? formatMoney(customer.historicalOrderTotalInCents, "USD")
-                        : "—"}
+                      {customer.placedOrderTotals.length === 0 ? (
+                        <span className="text-[#706257] font-normal">—</span>
+                      ) : (
+                        <div className="flex flex-col items-end gap-0.5">
+                          {customer.placedOrderTotals.map((tot) => (
+                            <span key={tot.currency}>
+                              {formatMoney(tot.totalInCents, tot.currency)}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </td>
 
                     {/* Last Order Date */}

@@ -107,7 +107,6 @@ export function CustomerFilterBar({
               <option value="oldest">Oldest Members First</option>
               <option value="latest_order">Recent Order Activity</option>
               <option value="most_orders">Most Orders</option>
-              <option value="highest_order_total">Highest Order Value</option>
             </select>
           </div>
 

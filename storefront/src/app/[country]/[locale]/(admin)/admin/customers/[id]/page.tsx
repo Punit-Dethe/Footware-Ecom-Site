@@ -41,11 +41,6 @@ export default async function AdminCustomerDetailPage({
     [customer.firstName, customer.lastName].filter(Boolean).join(" ").trim() ||
     "Unnamed Member";
 
-  const totalSpentInCents = customer.orders.reduce(
-    (acc, o) => acc + (o.status === "placed" ? o.totalInCents : 0),
-    0,
-  );
-
   return (
     <div className="space-y-8 max-w-5xl">
       {/* Back Navigation */}
@@ -77,19 +72,35 @@ export default async function AdminCustomerDetailPage({
         <div className="flex items-center gap-6 text-left md:text-right">
           <div>
             <span className="text-[10px] uppercase font-mono text-[#a39e93] block">
-              Completed Orders
+              Orders
             </span>
             <span className="font-mono text-sm font-medium text-[#30261f]">
-              {customer.orders.length}
+              {customer.totalOrderCount}
             </span>
           </div>
           <div>
             <span className="text-[10px] uppercase font-mono text-[#a39e93] block">
-              Historical Value
+              Placed Orders
             </span>
             <span className="font-mono text-sm font-medium text-[#30261f]">
-              {totalSpentInCents > 0 ? formatMoney(totalSpentInCents, "USD") : "—"}
+              {customer.placedOrderCount}
             </span>
+          </div>
+          <div>
+            <span className="text-[10px] uppercase font-mono text-[#a39e93] block">
+              Placed Order Value
+            </span>
+            <div className="font-mono text-sm font-medium text-[#30261f] flex flex-col items-start md:items-end gap-0.5">
+              {(customer.placedOrderTotals || []).length === 0 ? (
+                <span>—</span>
+              ) : (
+                customer.placedOrderTotals.map((tot) => (
+                  <span key={tot.currency}>
+                    {formatMoney(tot.totalInCents, tot.currency)}
+                  </span>
+                ))
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -228,7 +239,7 @@ export default async function AdminCustomerDetailPage({
               {customer.orders.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="admin-td text-center text-[#706257] py-10">
-                    No completed orders found for this customer account.
+                    No orders found for this customer account.
                   </td>
                 </tr>
               ) : (

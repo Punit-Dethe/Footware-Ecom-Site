@@ -7,7 +7,7 @@ import { formatMoney } from "@/lib/utils/format";
 
 export const metadata: Metadata = {
   title: "Orders | Mirza Studio",
-  description: "Operational record of customer orders and completed checkouts.",
+  description: "Operational record of customer orders and checkout activity.",
   robots: { index: false, follow: false },
 };
 
@@ -74,7 +74,7 @@ export default async function AdminOrdersPage({
           <span className="admin-eyebrow">Commerce Operations</span>
           <h1 className="admin-title mt-1">Orders</h1>
           <p className="admin-body text-[#706257] mt-1 text-sm">
-            A quiet record of completed checkout activity and historical order data.
+            A quiet record of placed customer checkout activity and historical order data.
           </p>
         </div>
         <div className="text-right">

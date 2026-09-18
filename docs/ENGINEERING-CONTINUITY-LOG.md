@@ -30,12 +30,14 @@
 * **Phase 8 (Orders + Customers Operations)**: **COMPLETE / VERIFIED** on branch `feat/editorial-admin-commerce`.
   - Added read-only Commerce operations: Orders Index (`/admin/orders`), Order Detail (`/admin/orders/[id]`), Customers Directory (`/admin/customers`), Customer Detail (`/admin/customers/[id]`).
   - Studio top navigation (`AdminTopNav.tsx`) grouped into Overview, Catalog (Products, Categories, Media), and Commerce (Orders, Customers) with responsive horizontal scrolling (`scrollbar-none`).
-  - Dedicated server-only DAL (`src/lib/db/admin-commerce.ts`) with bounded queries, 0 N+1, single-CTE pagination for orders and customers.
-  - Snapshot authority for orders: immutable `order_items` (with unit price, snapshots of name, variant, sku, image), `shipping_address_snapshot`, `billing_address_snapshot`, and stored cent totals (never recomputing or linking dynamically to mutated catalog).
+  - Dedicated server-only DAL (`src/lib/db/admin-commerce.ts`) with bounded queries, 0 N+1 (list orders/customers: normal = 1 query, worst case out-of-range = 2 queries; order detail = 2 queries; customer detail = 3 queries).
+  - Snapshot authority for orders: immutable `order_items` schema columns (`product_name`, `sku`, `size_option`, `price_in_cents`, `quantity`, `total_in_cents`, `thumbnail_url`), `shipping_address_snapshot`, `billing_address_snapshot`, and stored cent totals (never recomputing or linking dynamically to mutated catalog).
   - Identity authority for customers: direct server join of `public.profiles` (`role = 'customer'`) and `auth.users` (`u.email`), order aggregates (`orders.user_id = customer.id` strictly, never merging by email).
+  - Customer monetary & currency semantics: Placed Order Value calculated strictly from `orders.status = 'placed'` and grouped by currency (`placedOrderTotals`); cancelled orders excluded from value; currencies never summed across or converted; invalid `highest_order_total` cross-currency sort removed.
+  - Full-history customer aggregates computed in SQL independent of bounded 50-order history rows.
   - Zero operational mutation buttons for payment capture, fulfillment, shipment creation, carrier tracking, refunds, or cancellations (strictly read-only).
   - Studio Overview (`/admin`) extended with commerce metrics (`total_orders`, `orders_today`, `guest_orders`, `registered_customers`) inside `getAdminCatalogOverview()` within the strict 2-query budget.
-  - Full test suite: 77 test files, 870 passed (100% pass).
+  - Full test suite: 77 test files, 873 passed (100% pass).
   - TypeScript `tsc --noEmit`: 0 errors. Biome lint: 0 errors, 0 warnings across 372 files.
   - Next.js production build: 111/111 static pages generated cleanly.
   - Visual QA verified at 1920, 1440, 768, and 390 viewports for Overview, Orders Default, Orders Filtered, Order Detail, Customers Default, Customer Detail.

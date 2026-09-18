@@ -360,6 +360,10 @@ describe("Admin Pages Direct Authorization Enforcement", () => {
         role: "customer",
         createdAt: new Date(),
         updatedAt: new Date(),
+        totalOrderCount: 0,
+        placedOrderCount: 0,
+        placedOrderTotals: [],
+        latestOrderAt: null,
         addresses: [],
         orders: [],
       });

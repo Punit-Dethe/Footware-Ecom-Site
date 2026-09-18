@@ -348,7 +348,7 @@ export default async function AdminOrderDetailPage({
         <p className="font-medium text-[#30261f]">Immutable Historical Record</p>
         <p className="text-[11px] leading-relaxed">
           Order items and address snapshots are permanently fixed at checkout time.
-          Payment capture, fulfillment, and shipment management are handled externally and are not editable from this control plane.
+          Payment capture, fulfillment, shipment management, refunds, and admin cancellation workflows are not implemented in the current Mirza commerce backend.
         </p>
         <div className="pt-2 font-mono text-[10px] text-[#a39e93] flex flex-wrap gap-x-6 gap-y-1">
           <span>Order ID: {order.id}</span>
