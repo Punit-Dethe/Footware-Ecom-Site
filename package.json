@@ -13,7 +13,8 @@
     "test": "pnpm --prefix storefront run test",
     "lint": "pnpm --prefix storefront run lint",
     "analyze": "pnpm --prefix storefront run analyze",
-    "image:ingest": "node scripts/images/ingest.mjs"
+    "image:ingest": "node scripts/images/ingest.mjs",
+    "image:prepare-stone": "node scripts/catalog/prepare-stone-shoe-images.mjs"
   },
   "keywords": [
     "ecommerce",

@@ -39,6 +39,7 @@ meilisearch_data/
 *.backup/
 *.bak
 scratch/
+artifacts/
 .impeccable/
 .workbuddy-ai/
 Shoes/

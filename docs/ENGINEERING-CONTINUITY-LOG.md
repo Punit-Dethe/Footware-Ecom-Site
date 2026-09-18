@@ -1246,11 +1246,48 @@ Do not assume older `ARCHITECTURE.md`, old specification docs, or old performanc
 
 ## 16. Rolling change log
 
-### 2026-09-18 — Media Contract v1 Phase 1: Foundation — IN REVIEW
+### 2026-09-18 — Media Modernization Phase 2: Final Stone Product Master Pipeline — IN REVIEW
+
+- Branch: `feat/stone-media-pipeline`
+- Starting main: `10a027df4154dee0a4ec715aa8e478a3f3964ce8` (incorporating Phase 1 Media Contract v1 foundation)
+- Status: Implemented, verified, pushed to origin; awaiting supervisor review (do NOT merge).
+- Scope: Deterministic offline pipeline producing final Mirza 31-product candidate images with canonical stone background (`#ece7de`) baked directly into the pixels.
+- Changes:
+  1. **Deterministic Preparation Pipeline (`scripts/catalog/prepare-stone-shoe-images.mjs`)**:
+     - Reads canonical 31-product manifest `scripts/catalog/shoes-2026-09.json` and matches 1:1 against original high-resolution studio PNGs in `Shoes/`.
+     - Strictly enforces count = 31, fails on missing or duplicate source file mappings.
+     - Normalizes EXIF orientation, applies 1200×1200 contain resize on `#ffffff`, and composites onto 1200×1200 `#ece7de` stone canvas via libvips `blend: "multiply"`.
+     - Encodes output as 3-channel RGB WebP (`hasAlpha: false`, quality 84, effort 5) to `artifacts/media-v1/stone-catalog/shoe-01.webp` through `shoe-31.webp`.
+     - Validates corner pixels of all 31 outputs against `#ece7de` [236, 231, 222] (max delta $\le 6$ due to lossy WebP quantization).
+     - Generates machine-readable manifest `artifacts/media-v1/stone-catalog/manifest.json` mapping all 31 products (`shoe-2026-09-001` to `031`) with SHA-256 digests.
+     - Determinism verified: repeated execution produces 100% identical SHA-256 digests across all 31 assets.
+  2. **Visual Equivalence Contact Sheet**:
+     - Generates `artifacts/media-v1/stone-catalog/visual-comparison-contact-sheet.webp` comparing representative samples (`shoe-01`, `shoe-08`, `shoe-16`, `shoe-24`, `shoe-31`).
+     - Column A: Old white image composited with CSS-like multiply on `#ece7de`.
+     - Column B: Newly baked stone image rendered normally.
+     - Measured average pixel delta across 1.44M pixels: 0.791 (`shoe-01`), 1.541 (`shoe-08`), 1.125 (`shoe-16`), 1.146 (`shoe-24`), 1.018 (`shoe-31`). Visual fidelity is identical; zero halo, intact shadows, preserved leather and croc textures.
+  3. **Runtime `mix-blend-mode: multiply` Audit Recorded**:
+     - Audited and documented all 6 runtime CSS multiply locations across 4 stylesheets (`home-experiment.css`, `catalog-page.css`, `cart-page.css`, `product-page.css`) for the Phase 3/4 cutover. No storefront CSS was modified in Phase 2.
+  4. **Byte Efficiency**:
+     - Old total: 2,956,078 bytes (~2.96 MB, median: 104,954 bytes).
+     - New total: 2,788,516 bytes (~2.79 MB, median: 98,584 bytes).
+     - Net change: **-5.67% (-167,562 bytes)** with baked stone background.
+  5. **Automated Vitest Regression Suite (`storefront/src/lib/media/__tests__/stone-media-pipeline.test.ts`)**:
+     - 13 comprehensive tests covering 31 manifest items, 1:1 source mapping, duplicate/missing error handling, output dimensions/format/alpha, corner background validation, determinism, contact sheet generation, and byte regression safety.
+- Validation:
+  * TypeScript `tsc --noEmit`: 0 errors
+  * Biome lint: 0 errors, 0 warnings (345 files checked)
+  * Vitest full test suite: 66 test files / 726 tests passing (100% pass)
+  * Next.js production build: 101 routes compiled successfully
+  * Storefront client JS impact: 0 bytes
+  * Database/Supabase impact: 0 changes (pure offline pipeline; no live data touched)
+
+### 2026-09-18 — Media Contract v1 Phase 1: Foundation — MERGED
 
 - Branch: `feat/media-contract-v1`
+- Merged-main SHA: `10a027df4154dee0a4ec715aa8e478a3f3964ce8`
 - Starting main: `b1920b1dac6d75bae2c567f110c87aba56add304`
-- Status: Implemented, verified, pushed to origin; awaiting supervisor review (do NOT merge).
+- Status: Accepted by supervisor and merged into main.
 - Scope: Foundation of Media Contract v1 establishing new media data & storage contract underneath existing application.
 - Changes:
   1. **Additive PostgreSQL Migration (`20260918000000_media_contract_v1.sql`)**:
