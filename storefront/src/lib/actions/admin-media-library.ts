@@ -13,10 +13,12 @@ import {
   detachMediaFromProduct,
   getMediaAsset,
   getMediaAssetUsage,
+  getMediaLibraryAsset,
   reorderProductMediaV1,
   setProductHeroMedia,
   updateProductMediaAltTextV1,
   type DbMediaAsset,
+  type MediaLibraryAssetDetail,
 } from "@/lib/db/media-v1";
 import { MediaDomainError, MediaValidationError } from "@/lib/media/errors";
 import {
@@ -629,3 +631,34 @@ export async function deleteMediaLibraryAssetAction(
     return handleMediaActionError(err);
   }
 }
+
+export interface GetMediaLibraryAssetDetailResult {
+  success: boolean;
+  asset?: MediaLibraryAssetDetail | null;
+  error?: string;
+}
+
+/**
+ * Retrieves full details and live product usage breakdown for an asset.
+ */
+export async function getMediaLibraryAssetDetailAction(
+  assetId: string,
+): Promise<GetMediaLibraryAssetDetailResult> {
+  try {
+    await requireAdmin();
+
+    if (!assetId || !UUID_REGEX.test(assetId)) {
+      throw new MediaValidationError("Valid asset ID (UUID) is required.");
+    }
+
+    const asset = await getMediaLibraryAsset(assetId);
+    if (!asset) {
+      throw new MediaValidationError("Media asset not found.");
+    }
+
+    return { success: true, asset };
+  } catch (err) {
+    return handleMediaActionError(err);
+  }
+}
+

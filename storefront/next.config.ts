@@ -1,9 +1,34 @@
+import dns from "node:dns";
 import bundleAnalyzer from "@next/bundle-analyzer";
 import { withSentryConfig } from "@sentry/nextjs";
 import type { NextConfig } from "next";
 import type { RemotePattern } from "next/dist/shared/lib/image-config";
 import createNextIntlPlugin from "next-intl/plugin";
 import { generateNextConfigCacheHeaders } from "./src/lib/cache/cache-policy";
+
+// Local development DNS fallback if local router cannot resolve supabase project host
+if (process.env.NODE_ENV !== "production") {
+  const origLookup = dns.lookup;
+  dns.lookup = ((hostname: string, options: unknown, callback: unknown) => {
+    let cb = callback as (err: Error | null, address?: any, family?: number) => void;
+    let opts = options as { all?: boolean } | undefined;
+    if (typeof options === "function") {
+      cb = options as typeof cb;
+      opts = undefined;
+    }
+    if (hostname === "hkncfdsvgjopkujmmxem.supabase.co") {
+      if (opts?.all) {
+        return cb(null, [
+          { address: "104.18.38.10", family: 4 },
+          { address: "172.64.149.246", family: 4 },
+        ]);
+      }
+      return cb(null, "104.18.38.10", 4);
+    }
+    return (origLookup as any).call(dns, hostname, options, callback);
+  }) as typeof dns.lookup;
+}
+
 
 const withBundleAnalyzer = bundleAnalyzer({
   enabled: process.env.ANALYZE === "true",

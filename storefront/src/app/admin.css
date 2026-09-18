@@ -1,0 +1,347 @@
+/* ==========================================================================
+   MIRZA ADMIN DESIGN FOUNDATION (Phase 6A)
+   Scoped styling tokens and components for the Mirza Studio / Admin console.
+   Maintains strict aesthetic parity with the Mirza editorial storefront:
+   - Primary Canvas: #f3efe8 (warm cream)
+   - Secondary Field: #e9e2d6
+   - Stone Backdrop: #ece7de (product stone)
+   - Warm Dark Ink: #30261f
+   - Muted Warm Text: #625447 / #706257
+   - Thin Warm Rules: #cfc4b6 / #d8d0c5
+   ========================================================================== */
+
+:root {
+  --admin-canvas: #f3efe8;
+  --admin-surface: #fffefc;
+  --admin-secondary: #e9e2d6;
+  --admin-stone: #ece7de;
+  --admin-ink: #30261f;
+  --admin-ink-hover: #1f1813;
+  --admin-muted: #706257;
+  --admin-muted-subtle: #8c7e73;
+  --admin-border: #cfc4b6;
+  --admin-border-subtle: #d8d0c5;
+  --admin-danger: #8f2d2d;
+  --admin-danger-bg: #faefef;
+  --admin-danger-border: #deb8b8;
+}
+
+/* Base Shell */
+.admin-shell {
+  min-height: 100vh;
+  background-color: var(--admin-canvas);
+  color: var(--admin-ink);
+  font-family: var(--font-geist), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header & Navigation */
+.admin-header {
+  background: rgba(243, 239, 232, 0.94);
+  border-bottom: 1px solid var(--admin-border);
+  backdrop-filter: blur(12px);
+  position: sticky;
+  top: 0;
+  z-index: 40;
+}
+
+.admin-brand {
+  font-family: var(--font-editorial-display), Georgia, serif;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  color: var(--admin-ink);
+  text-decoration: none;
+}
+
+.admin-brand-tag {
+  font-family: var(--font-geist), sans-serif;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--admin-muted);
+}
+
+.admin-nav-item {
+  font-family: var(--font-geist), sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--admin-muted);
+  text-decoration: none;
+  padding: 6px 0;
+  position: relative;
+  transition: color 0.18s ease;
+}
+
+.admin-nav-item:hover {
+  color: var(--admin-ink);
+}
+
+.admin-nav-item--active {
+  color: var(--admin-ink);
+  font-weight: 600;
+}
+
+.admin-nav-item--active::after {
+  content: "";
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background-color: var(--admin-ink);
+}
+
+/* Typography Helpers */
+.admin-eyebrow {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--admin-muted);
+}
+
+.admin-title {
+  font-family: var(--font-editorial-display), Georgia, serif;
+  font-size: 32px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  line-height: 1.1;
+  color: var(--admin-ink);
+}
+
+.admin-subtitle {
+  font-family: var(--font-editorial-text), Georgia, serif;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--admin-muted);
+}
+
+.admin-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+/* Buttons */
+.admin-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 8px 16px;
+  border-radius: 2px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease, opacity 0.18s ease;
+}
+
+.admin-btn-primary {
+  background-color: var(--admin-ink);
+  color: var(--admin-canvas);
+  border: 1px solid var(--admin-ink);
+}
+
+.admin-btn-primary:hover:not(:disabled) {
+  background-color: var(--admin-ink-hover);
+  border-color: var(--admin-ink-hover);
+}
+
+.admin-btn-secondary {
+  background-color: var(--admin-secondary);
+  color: var(--admin-ink);
+  border: 1px solid var(--admin-border);
+}
+
+.admin-btn-secondary:hover:not(:disabled) {
+  background-color: #ded6c8;
+  border-color: #c0b4a4;
+}
+
+.admin-btn-quiet {
+  background-color: transparent;
+  color: var(--admin-muted);
+  border: 1px solid transparent;
+}
+
+.admin-btn-quiet:hover:not(:disabled) {
+  color: var(--admin-ink);
+  background-color: rgba(233, 226, 214, 0.5);
+}
+
+.admin-btn-danger {
+  background-color: transparent;
+  color: var(--admin-danger);
+  border: 1px solid var(--admin-danger-border);
+}
+
+.admin-btn-danger:hover:not(:disabled) {
+  background-color: var(--admin-danger-bg);
+}
+
+.admin-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Form Controls */
+.admin-input,
+.admin-select {
+  background-color: var(--admin-surface);
+  border: 1px solid var(--admin-border);
+  color: var(--admin-ink);
+  font-size: 13px;
+  padding: 8px 12px;
+  border-radius: 2px;
+  outline: none;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.admin-input:focus,
+.admin-select:focus {
+  border-color: var(--admin-ink);
+}
+
+.admin-input::placeholder {
+  color: var(--admin-muted-subtle);
+}
+
+/* Badges */
+.admin-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 2px;
+  line-height: 1.3;
+}
+
+.admin-badge--used {
+  background-color: var(--admin-secondary);
+  color: var(--admin-ink);
+  border: 1px solid var(--admin-border);
+}
+
+.admin-badge--unused {
+  background-color: var(--admin-canvas);
+  color: var(--admin-muted);
+  border: 1px solid var(--admin-border-subtle);
+}
+
+.admin-badge--legacy {
+  background-color: var(--admin-stone);
+  color: var(--admin-muted);
+  border: 1px solid var(--admin-border);
+}
+
+.admin-badge--hero {
+  background-color: var(--admin-ink);
+  color: var(--admin-canvas);
+  border: 1px solid var(--admin-ink);
+}
+
+/* Media Grid & Tiles */
+.admin-media-card {
+  background-color: var(--admin-surface);
+  border: 1px solid var(--admin-border-subtle);
+  border-radius: 2px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.admin-media-card:hover {
+  border-color: var(--admin-border);
+  box-shadow: 0 4px 16px rgba(48, 38, 31, 0.06);
+}
+
+.admin-media-card--selected {
+  border-color: var(--admin-ink) !important;
+  box-shadow: 0 0 0 1px var(--admin-ink);
+}
+
+.admin-stone-frame {
+  background-color: var(--admin-stone);
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+/* Drawer / Dialog */
+.admin-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(48, 38, 31, 0.35);
+  backdrop-filter: blur(4px);
+  z-index: 50;
+}
+
+.admin-drawer-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  max-width: 440px;
+  background-color: var(--admin-canvas);
+  border-left: 1px solid var(--admin-border);
+  z-index: 51;
+  display: flex;
+  flex-direction: column;
+  box-shadow: -8px 0 24px rgba(48, 38, 31, 0.08);
+}
+
+.admin-modal-panel {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 100%;
+  max-width: 520px;
+  background-color: var(--admin-canvas);
+  border: 1px solid var(--admin-border);
+  z-index: 51;
+  border-radius: 2px;
+  box-shadow: 0 16px 40px rgba(48, 38, 31, 0.12);
+}
+
+/* Upload Dropzone */
+.admin-dropzone {
+  border: 1.5px dashed var(--admin-border);
+  background-color: var(--admin-surface);
+  border-radius: 2px;
+  padding: 32px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.admin-dropzone:hover,
+.admin-dropzone--active {
+  border-color: var(--admin-ink);
+  background-color: var(--admin-secondary);
+}
+
+/* Subtle separator rule */
+.admin-divider {
+  height: 1px;
+  background-color: var(--admin-border);
+  border: none;
+  margin: 0;
+}

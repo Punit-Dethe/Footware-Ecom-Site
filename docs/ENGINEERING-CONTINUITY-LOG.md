@@ -1765,3 +1765,42 @@ Recorded Supabase Auth migration, `profiles.role` authority, SSR/session behavio
 ### 2026-09-11 — B1 complete
 
 Recorded first-party persistence schema, server-only domain access, strict Supabase PostgreSQL TLS, and clean-project boundary.
+
+### 2026-09-18 — Mirza Admin + Media Modernization Phase 6A Complete
+
+Recorded:
+- **Mission**: Established the Mirza Studio editorial admin foundation and standalone Media Library UI at `/[country]/[locale]/admin/media` on branch `feat/editorial-media-library-ui`.
+- **Preflight & Invariants**:
+  - Resolved Phase 5 cleanup wording discrepancy in `storefront/src/lib/actions/admin-media-library.ts` and `docs/MEDIA-LIBRARY-BACKEND.md`.
+  - Merged `feat/media-library-backend` into `main` at `819557e5cde3f8d3886f4203cb03a9a65ae13fdb`.
+- **Editorial Admin System (`admin.css`)**:
+  - Scoped design tokens: warm cream canvas `#f3efe8`, card surface `#fffefc`, stone stage `#ece7de`, dark ink `#30261f`, muted text `#625447` / `#706257`, warm borders `#cfc4b6`.
+  - Scoped typography: Cormorant Garamond / EB Garamond headings, Geist Sans UI controls, Geist Mono metadata.
+- **Studio Shell & Security**:
+  - Top navigation bar with quiet active tab underline for `Products`, `Categories`, `Media`.
+  - Fail-closed administrative authorization via `requireAdmin()`.
+  - Mirza Studio Access Restricted gate for unauthenticated or non-admin users.
+- **Media Library UI**:
+  - Server-rendered initial results with 24-item bounded pagination.
+  - Case-insensitive debounced search (`?q=`).
+  - Provider tabs (`?provider=supabase|all|legacy_public`) defaulting to `supabase` to prioritize managed assets while preserving explicit access to legacy rollback copies.
+  - Sorting (`?sort=created_desc|created_asc|size_desc|size_asc`).
+  - Responsive 2- to 5-column grid with stone image frames and usage/rollback badges.
+- **Direct-to-Supabase Upload Modal**:
+  - Client validation (WebP, JPEG, PNG, AVIF <= 10MB).
+  - Direct client `uploadToSignedUrl` to Supabase Storage (zero binary bytes through Vercel serverless compute).
+  - Server-side Sharp finalization: dimension extraction, SHA-256 digest, 16x16 LQIP data URI, dominant color hex.
+- **Inspector Slide-Over Drawer & Safe Deletion**:
+  - High-res stage preview with link to direct storage master.
+  - Full technical specifications (dimensions, file size, MIME type, dominant color, SHA-256 copyable digest, upload date).
+  - Real-time product placements list with links to product editors.
+  - Deletion disabled when attached to products (`usageCount > 0`) or when marked as legacy rollback.
+  - Confirmation dialog before irreversible deletion.
+- **Verification**:
+  - Vitest: 71 test files, 798 tests passing (including 11 unit tests in `media-library-ui.test.ts` and updated `page-auth.test.ts`).
+  - TypeScript: 0 errors (`tsc --noEmit`).
+  - Biome: 357 files clean (0 errors, 0 warnings).
+  - Full Next.js production build: 103 routes compiled successfully.
+  - Headless Playwright visual QA and full E2E lifecycle (upload -> search -> inspect -> delete) executed and verified.
+- **Phase 6B Boundary**: Product media picker in product editor and drag-and-drop reordering explicitly deferred to Phase 6B. Storefront client JS impact strictly 0.
+

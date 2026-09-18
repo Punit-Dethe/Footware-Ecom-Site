@@ -57,12 +57,22 @@ vi.mock("@/components/admin/CategoryManager", () => ({
   CategoryManager: () => null,
 }));
 
+vi.mock("@/lib/db/media-v1", () => ({
+  listMediaLibraryAssets: vi.fn().mockResolvedValue({ items: [], totalCount: 0, limit: 24, offset: 0 }),
+}));
+
+vi.mock("@/components/admin/media/MediaLibraryClient", () => ({
+  MediaLibraryClient: () => null,
+}));
+
 import { AdminAuthError } from "@/lib/auth/admin";
 import AdminProductsPage from "../admin/products/page";
 import ProductNewPage from "../admin/products/new/page";
 import ProductDetailPage from "../admin/products/[id]/page";
 import AdminCategoriesPage from "../admin/categories/page";
 import { AdminIndexPageContent } from "../admin/page";
+import { AdminMediaPageContent } from "../admin/media/page";
+import { listMediaLibraryAssets } from "@/lib/db/media-v1";
 
 describe("Admin Pages Direct Authorization Enforcement", () => {
   beforeEach(() => {
@@ -117,6 +127,13 @@ describe("Admin Pages Direct Authorization Enforcement", () => {
         AdminIndexPageContent({ params: testParams }),
       ).rejects.toThrow("Admin authorization required.");
       expect(mockNavigation.redirect).not.toHaveBeenCalled();
+    });
+
+    it("media library page: rejects before calling listMediaLibraryAssets (DAL calls = 0)", async () => {
+      await expect(
+        AdminMediaPageContent({ params: testParams, searchParams: Promise.resolve({}) }),
+      ).rejects.toThrow("Admin authorization required.");
+      expect(listMediaLibraryAssets).not.toHaveBeenCalled();
     });
   });
 
@@ -255,6 +272,15 @@ describe("Admin Pages Direct Authorization Enforcement", () => {
     it("admin root redirect page: redirects to products when authorized", async () => {
       await AdminIndexPageContent({ params: testParams });
       expect(mockNavigation.redirect).toHaveBeenCalledWith("/us/en/admin/products");
+    });
+
+    it("media library page: executes listMediaLibraryAssets when authorized", async () => {
+      const res = await AdminMediaPageContent({
+        params: testParams,
+        searchParams: Promise.resolve({}),
+      });
+      expect(res).toBeDefined();
+      expect(listMediaLibraryAssets).toHaveBeenCalledTimes(1);
     });
   });
 });
