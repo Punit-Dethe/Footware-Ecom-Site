@@ -2,7 +2,10 @@ import "server-only";
 
 import type { PoolClient } from "pg";
 import { query, transaction } from "./index";
-import type { ResponsiveVariantsSchema } from "@/lib/media/delivery";
+import {
+  getStoragePublicUrl,
+  type ResponsiveVariantsSchema,
+} from "@/lib/media/delivery";
 import { MediaDomainError } from "@/lib/media/errors";
 
 export { MediaDomainError };
@@ -21,6 +24,7 @@ export interface DbMediaAsset {
   dominant_color: string | null;
   lqip: string | null;
   processed_variants: ResponsiveVariantsSchema | null;
+  content_sha256?: string | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -52,6 +56,7 @@ export interface CreateMediaAssetInput {
   dominantColor?: string | null;
   lqip?: string | null;
   processedVariants?: ResponsiveVariantsSchema | null;
+  contentSha256?: string | null;
 }
 
 export interface AttachMediaInput {
@@ -69,6 +74,26 @@ export interface ListMediaAssetsParams {
   offset?: number;
 }
 
+export interface MediaLibraryAssetItem extends DbMediaAsset {
+  publicUrl: string;
+  usageCount: number;
+}
+
+export interface ListMediaLibraryAssetsParams {
+  query?: string;
+  provider?: StorageProvider;
+  limit?: number;
+  offset?: number;
+  sort?: "created_desc" | "created_asc" | "size_desc" | "size_asc";
+}
+
+export interface ListMediaLibraryAssetsResult {
+  items: MediaLibraryAssetItem[];
+  totalCount: number;
+  limit: number;
+  offset: number;
+}
+
 export interface MediaProductUsageItem {
   productId: string;
   productName: string;
@@ -82,6 +107,11 @@ export interface MediaAssetUsageReport {
   assetId: string;
   usageCount: number;
   products: MediaProductUsageItem[];
+}
+
+export interface MediaLibraryAssetDetail extends DbMediaAsset {
+  publicUrl: string;
+  usage: MediaAssetUsageReport;
 }
 
 /**
@@ -101,7 +131,7 @@ export async function createMediaAsset(
       `INSERT INTO public.media_assets (
         ${input.id ? "id," : ""}
         storage_provider, storage_path, original_filename, mime_type, file_size_bytes,
-        width, height, dominant_color, lqip, processed_variants,
+        width, height, dominant_color, lqip, processed_variants, content_sha256,
         created_at, updated_at
       ) VALUES (
         ${input.id ? "$1," : ""}
@@ -115,6 +145,7 @@ export async function createMediaAsset(
         $${input.id ? "9" : "8"},
         $${input.id ? "10" : "9"},
         $${input.id ? "11" : "10"},
+        $${input.id ? "12" : "11"},
         NOW(), NOW()
       ) RETURNING *;`,
       input.id
@@ -130,6 +161,7 @@ export async function createMediaAsset(
             input.dominantColor || null,
             input.lqip || null,
             input.processedVariants ? JSON.stringify(input.processedVariants) : null,
+            input.contentSha256 || null,
           ]
         : [
             provider,
@@ -142,6 +174,7 @@ export async function createMediaAsset(
             input.dominantColor || null,
             input.lqip || null,
             input.processedVariants ? JSON.stringify(input.processedVariants) : null,
+            input.contentSha256 || null,
           ],
     );
 
@@ -591,4 +624,178 @@ export async function reorderProductMediaV1(
   };
 
   return client ? execute(client) : transaction(execute);
+}
+
+/**
+ * Updates placement alt text for a specific product media association.
+ */
+export async function updateProductMediaAltTextV1(
+  productId: string,
+  mediaAssetId: string,
+  altText: string | null,
+  client?: PoolClient,
+): Promise<void> {
+  const runner = client ? client.query.bind(client) : query;
+  const cleanAlt =
+    altText && altText.trim().length > 0 ? altText.trim().slice(0, 255) : null;
+
+  const res = await runner(
+    `UPDATE public.product_media
+     SET alt_text = $1, updated_at = NOW()
+     WHERE product_id = $2 AND media_asset_id = $3;`,
+    [cleanAlt, productId, mediaAssetId],
+  );
+
+  if (res.rowCount === 0) {
+    throw new MediaDomainError(
+      `Cannot update alt text: Media asset '${mediaAssetId}' is not attached to product '${productId}'.`,
+    );
+  }
+}
+
+/**
+ * Lists global Media Library assets with pagination, search, sorting, and bounded usage count.
+ * Guaranteed 0 N+1 queries.
+ */
+export async function listMediaLibraryAssets(
+  params?: ListMediaLibraryAssetsParams,
+  client?: PoolClient,
+): Promise<ListMediaLibraryAssetsResult> {
+  const runner = client ? client.query.bind(client) : query;
+  const conditions: string[] = [];
+  const values: any[] = [];
+
+  if (params?.provider) {
+    values.push(params.provider);
+    conditions.push(`ma.storage_provider = $${values.length}`);
+  }
+
+  if (params?.query && params.query.trim().length > 0) {
+    values.push(`%${params.query.trim()}%`);
+    conditions.push(
+      `(ma.original_filename ILIKE $${values.length} OR ma.storage_path ILIKE $${values.length})`,
+    );
+  }
+
+  const whereClause =
+    conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+
+  let orderBy = "ma.created_at DESC, ma.id ASC";
+  switch (params?.sort) {
+    case "created_asc":
+      orderBy = "ma.created_at ASC, ma.id ASC";
+      break;
+    case "size_desc":
+      orderBy = "ma.file_size_bytes DESC NULLS LAST, ma.created_at DESC";
+      break;
+    case "size_asc":
+      orderBy = "ma.file_size_bytes ASC NULLS LAST, ma.created_at DESC";
+      break;
+    default:
+      orderBy = "ma.created_at DESC, ma.id ASC";
+      break;
+  }
+
+  const limit = Math.min(Math.max(params?.limit ?? 24, 1), 100);
+  const offset = Math.max(params?.offset ?? 0, 0);
+
+  values.push(limit);
+  const limitPlaceholder = `$${values.length}`;
+  values.push(offset);
+  const offsetPlaceholder = `$${values.length}`;
+
+  const sql = `
+    SELECT
+      ma.id,
+      ma.storage_provider,
+      ma.storage_path,
+      ma.original_filename,
+      ma.mime_type,
+      ma.file_size_bytes,
+      ma.width,
+      ma.height,
+      ma.dominant_color,
+      ma.lqip,
+      ma.processed_variants,
+      ma.content_sha256,
+      ma.created_at,
+      ma.updated_at,
+      (
+        SELECT COUNT(*)::int
+        FROM public.product_media pm
+        WHERE pm.media_asset_id = ma.id
+      ) AS usage_count,
+      COUNT(*) OVER()::int AS full_count
+    FROM public.media_assets ma
+    ${whereClause}
+    ORDER BY ${orderBy}
+    LIMIT ${limitPlaceholder} OFFSET ${offsetPlaceholder};
+  `;
+
+  const res = await runner<{
+    id: string;
+    storage_provider: StorageProvider;
+    storage_path: string;
+    original_filename: string | null;
+    mime_type: string | null;
+    file_size_bytes: number | string | null;
+    width: number | null;
+    height: number | null;
+    dominant_color: string | null;
+    lqip: string | null;
+    processed_variants: ResponsiveVariantsSchema | null;
+    content_sha256: string | null;
+    created_at: Date;
+    updated_at: Date;
+    usage_count: number;
+    full_count: number;
+  }>(sql, values);
+
+  const totalCount = res.rows[0]?.full_count ?? 0;
+  const items: MediaLibraryAssetItem[] = res.rows.map((row) => ({
+    id: row.id,
+    storage_provider: row.storage_provider,
+    storage_path: row.storage_path,
+    original_filename: row.original_filename,
+    mime_type: row.mime_type,
+    file_size_bytes:
+      row.file_size_bytes != null ? Number(row.file_size_bytes) : null,
+    width: row.width,
+    height: row.height,
+    dominant_color: row.dominant_color,
+    lqip: row.lqip,
+    processed_variants: row.processed_variants,
+    content_sha256: row.content_sha256,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    usageCount: Number(row.usage_count || 0),
+    publicUrl: getStoragePublicUrl(row.storage_path),
+  }));
+
+  return {
+    items,
+    totalCount,
+    limit,
+    offset,
+  };
+}
+
+/**
+ * Retrieves a single Media Library asset by ID, including resolved public URL
+ * and complete product usage report.
+ */
+export async function getMediaLibraryAsset(
+  id: string,
+  client?: PoolClient,
+): Promise<MediaLibraryAssetDetail | null> {
+  const asset = await getMediaAsset(id, client);
+  if (!asset) return null;
+
+  const usage = await getMediaAssetUsage(id, client);
+
+  return {
+    ...asset,
+    publicUrl: getStoragePublicUrl(asset.storage_path),
+    usage,
+  };
 }

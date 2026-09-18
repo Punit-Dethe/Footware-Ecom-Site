@@ -12,48 +12,44 @@
 
 ## 1. Current canonical snapshot
 
-**Snapshot date:** 2026-09-14
+**Snapshot date:** 2026-09-18
 
 **Repository:** `Punit-Dethe/Footware-Ecom-Site`
 
 **Production storefront:** `https://mirzafootwear.vercel.app`
 
-### Accepted application baseline
-
-Backend baseline (B10 merge, still the last production-verified backend state):
-
-```text
-3367ea2f05fac795cc8df616d4e7a4b59859ef7e
-```
-
-B1 through B10 are **COMPLETE / MERGED / DEPLOYED / PRODUCTION VERIFIED**.
-
-**BACKEND MIGRATION COMPLETE**.
+### Mirza Media Modernization Program Status:
+* **Phase 1 (Media Contract v1 Foundation)**: MERGED (`feat/media-contract-v1`).
+* **Phase 2 (Stone Master Image Pipeline)**: MERGED (`feat/stone-media-pipeline`).
+* **Phase 3 (Supabase Stone-Asset Migration)**: MERGED (`feat/stone-media-supabase-migration`).
+* **Phase 4 (Storefront Cutover to Media Contract v1)**: MERGED (`feat/media-v1-storefront-cutover` into `main` at `e2d5689f1607ad474a757ec7ea643d6cc2ffcdf2`).
+* **Phase 5 (Global Media Library Backend + Upload Pipeline)**: **COMPLETE / VERIFIED** on branch `feat/media-library-backend`.
+  - Added migration `20260918150000_media_library_content_hash.sql` (`content_sha256 VARCHAR(64)`).
+  - Storage path: `media/{assetId}/original.{ext}`.
+  - Direct browser upload to Supabase Storage signed URLs via `requestMediaLibraryUploadAction`.
+  - Finalization via `finalizeMediaLibraryUploadAction` with Sharp format/dimension/dominant-color/LQIP extraction and SHA-256 hash.
+  - Placement actions (`attachMediaAssetToProductAction`, `detachMediaAssetFromProductAction`, `setProductMediaHeroAction`, `reorderProductMediaActionV1`, `updateProductMediaAltTextActionV1`) with zero mutations against `public.product_images`.
+  - Safe deletion via `deleteMediaLibraryAssetAction`: FK-guarded, legacy rollback protected, DB delete executed prior to storage cleanup.
+  - Read DAL (`listMediaLibraryAssets`, `getMediaLibraryAsset`) with single-query total count and usage count aggregation (0 N+1 queries).
+  - Test suite: 70 test files, 785 tests passing.
+  - Real integration smoke test executed on live Supabase storage and PostgreSQL: verified end-to-end upload, HTTP 200 GET, DB insertion, usage isolation, safe deletion, and zero residual drift on canonical counts (100 assets, 100 placements).
+  - Next.js build: 101/101 routes compiled cleanly.
+  - Ready for supervisor review. Do NOT merge to main yet.
 
 ### Current working head
 
-Current `main` head (ahead of the B10 backend baseline):
+Current `main` starting SHA for Phase 5:
 
 ```text
-d70cd44007873746d60cc041ffca4b67d023d7ae  Merge branch 'feat/order-confirmation-email' into main
-```
-
-`main` incorporates the accepted Mirza order-confirmation transactional email workflow (`67adec2df18e7552d5f53babf4058249de9f9367`) and media/typography fidelity fix (`c390101a13766655f88d11ebbaee3a98f2a0df0c`). All work belongs to the **FINAL UI IMPLEMENTATION** phase. No backend/phase work is outstanding.
-
-Diff versus the B10 backend baseline:
-
-```text
-88 files changed, +2349 / -777
+e2d5689f1607ad474a757ec7ea643d6cc2ffcdf2  Merge branch 'feat/media-v1-storefront-cutover' into main
 ```
 
 Current phase:
 
 ```text
-FINAL UI IMPLEMENTATION — IN PROGRESS
+MIRZA MEDIA MODERNIZATION — PHASE 5: GLOBAL MEDIA LIBRARY BACKEND — COMPLETE (Awaiting Review)
+Next: PHASE 6 — MEDIA LIBRARY ADMIN UI
 ```
-
-(Still do not start Media Contract v1 or the final performance pass until the
-editorial UI is complete.)
 
 Canonical B10 references:
 * B10.1 accepted SHA: `5d858a1fe6aff98479eda39baa3305ae8d208104`

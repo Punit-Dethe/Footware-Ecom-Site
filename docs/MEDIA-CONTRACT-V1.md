@@ -47,6 +47,7 @@ Represents the immutable physical asset and its metadata.
 | `dominant_color` | `VARCHAR(30)` | Dominant hex color code (e.g. `#887868`) |
 | `lqip` | `TEXT` | Base64-encoded low quality image placeholder data URI |
 | `processed_variants`| `JSONB` | Multi-resolution responsive derivative mapping (`160`, `320`, `640`, `960`, `1280`, `1600`) |
+| `content_sha256` | `VARCHAR(64)` | SHA-256 integrity hash of verified image binary (Phase 5) |
 | `created_at` | `TIMESTAMPTZ` | Timestamp of asset creation |
 | `updated_at` | `TIMESTAMPTZ` | Timestamp of last metadata update |
 
@@ -54,6 +55,7 @@ Represents the immutable physical asset and its metadata.
 - `CONSTRAINT uq_media_assets_provider_path UNIQUE (storage_provider, storage_path)`
 - `INDEX idx_media_assets_provider (storage_provider)`
 - `INDEX idx_media_assets_created_at (created_at DESC)`
+- `INDEX idx_media_assets_content_sha256 (content_sha256) WHERE content_sha256 IS NOT NULL`
 - RLS enabled; revoked from untrusted client roles (`anon`, `authenticated`).
 
 ### 2.2 `public.product_media`
