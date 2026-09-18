@@ -148,7 +148,6 @@ export function MediaLibraryClient({
           {[
             { label: "Supabase", value: "supabase" },
             { label: "All Media", value: "all" },
-            { label: "Legacy Rollback", value: "legacy_public" },
           ].map((tab) => {
             const isCurrent = searchParamsState.provider === tab.value;
             return (

@@ -194,7 +194,7 @@ export function CategoryManager({ categories }: CategoryManagerProps) {
                     <td className="admin-td">
                       <div className={`flex items-start ${isChild ? "pl-5" : ""}`}>
                         {isChild && (
-                          <span className="text-[#8c7e73] font-mono mr-2 select-none">
+                          <span className="text-[#8c7e73] mr-2 select-none">
                             └─
                           </span>
                         )}
@@ -210,7 +210,7 @@ export function CategoryManager({ categories }: CategoryManagerProps) {
                         </div>
                       </div>
                     </td>
-                    <td className="admin-td font-mono text-xs text-[#706257]">
+                    <td className="admin-td text-xs text-[#706257]">
                       {c.slug}
                     </td>
                     <td className="admin-td text-xs text-[#706257]">

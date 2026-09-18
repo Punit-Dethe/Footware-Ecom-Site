@@ -198,8 +198,7 @@ describe("Phase 6B: Product ↔ Media Library Integration Suite", () => {
       // Gallery section shows non-hero managed file
       expect(screen.getByText("derby-side-angle.webp")).toBeInTheDocument();
 
-      // Rollback asset is NOT in the editable gallery (no actions)
-      expect(screen.getByText(/1 legacy asset retained internally for safe rollback/i)).toBeInTheDocument();
+      // Rollback asset is filtered out and NOT in the editable gallery
       expect(screen.queryByText("shoe-01.webp")).not.toBeInTheDocument();
     });
 

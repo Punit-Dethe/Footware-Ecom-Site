@@ -40,20 +40,6 @@ export function generateGlobalMediaStoragePath(
   return { assetId, storagePath };
 }
 
-/**
- * @deprecated LEGACY — DO NOT USE FOR NEW ADMIN MEDIA.
- * Generates a collision-resistant unique storage path for a product-owned media item.
- * Format: products/<product-id>/<media-id>/original.<ext>
- */
-export function generateMediaStoragePath(
-  productId: string,
-  ext: string,
-  mediaId: string = crypto.randomUUID(),
-): { mediaId: string; storagePath: string } {
-  const cleanExt = ext.replace(/^\./, "").toLowerCase() || "webp";
-  const storagePath = `products/${productId}/${mediaId}/original.${cleanExt}`;
-  return { mediaId, storagePath };
-}
 
 /**
  * Creates a signed upload URL permitting the client to upload directly to an exact object path.

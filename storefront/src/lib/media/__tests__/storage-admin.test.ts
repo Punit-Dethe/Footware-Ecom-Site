@@ -9,7 +9,7 @@ vi.mock("@supabase/supabase-js", () => ({
 
 import {
   deleteStorageObjects,
-  generateMediaStoragePath,
+  generateGlobalMediaStoragePath,
   getStorageAdminClient,
 } from "../storage-admin";
 
@@ -47,14 +47,13 @@ describe("Storage Admin Client and Invariants", () => {
     );
   });
 
-  it("generates deterministic collision-resistant storage path", () => {
-    const { mediaId, storagePath } = generateMediaStoragePath(
-      "prod-123",
+  it("generates deterministic collision-resistant global storage path", () => {
+    const { assetId, storagePath } = generateGlobalMediaStoragePath(
       "webp",
       "media-456",
     );
-    expect(mediaId).toBe("media-456");
-    expect(storagePath).toBe("products/prod-123/media-456/original.webp");
+    expect(assetId).toBe("media-456");
+    expect(storagePath).toBe("media/media-456/original.webp");
   });
 
   it("returns structured failure from deleteStorageObjects on storage error", async () => {
@@ -77,29 +76,16 @@ describe("Storage Admin Client and Invariants", () => {
     expect(res.error).toBe("Internal Storage Exception");
   });
 
-  it("verifies 0 references to SUPABASE_SERVICE_ROLE_KEY across B7 media files", () => {
+  it("verifies 0 references to SUPABASE_SERVICE_ROLE_KEY in storage-admin module", () => {
     const storageAdminSrc = fs.readFileSync(
       path.resolve(__dirname, "../storage-admin.ts"),
       "utf8",
     );
-    const migrationScriptSrc = fs.readFileSync(
-      path.resolve(__dirname, "../../../../scripts/006_b6c_backfill_product_images.mjs"),
-      "utf8",
-    );
 
     expect(storageAdminSrc).not.toContain("SUPABASE_SERVICE_ROLE_KEY");
-    expect(migrationScriptSrc).not.toContain("SUPABASE_SERVICE_ROLE_KEY");
   });
 
-  it("verifies 0 committed DNS overrides (setServers/dns.lookup) in migration script", () => {
-    const migrationScriptSrc = fs.readFileSync(
-      path.resolve(__dirname, "../../../../scripts/006_b6c_backfill_product_images.mjs"),
-      "utf8",
-    );
-
-    expect(migrationScriptSrc).not.toContain("setServers");
-    expect(migrationScriptSrc).not.toContain("dns.lookup");
-    expect(migrationScriptSrc).not.toContain("8.8.8.8");
-    expect(migrationScriptSrc).not.toContain("1.1.1.1");
-  });
+  // Note: The legacy 006_b6c_backfill_product_images.mjs script was deleted
+  // in Phase 9 Part E. Its DNS override and service-role-key invariant tests
+  // are no longer needed since the script no longer exists.
 });

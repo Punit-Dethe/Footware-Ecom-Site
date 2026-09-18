@@ -167,7 +167,7 @@ export function ProductFilterBar({
       )}
 
       {isPending && (
-        <span className="text-[10px] uppercase font-mono tracking-wider text-[#706257] animate-pulse self-center">
+        <span className="text-[10px] uppercase tracking-wider text-[#706257] animate-pulse self-center">
           Updating...
         </span>
       )}

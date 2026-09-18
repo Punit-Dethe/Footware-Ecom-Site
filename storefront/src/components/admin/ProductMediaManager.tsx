@@ -45,12 +45,9 @@ export function ProductMediaManager({
   const uploadTriggerRef = useRef<HTMLButtonElement>(null);
   const detachTriggerRef = useRef<HTMLButtonElement>(null);
 
-  // Separate managed vs legacy rollback media
+  // Managed media list
   const managedMedia = mediaList.filter(
     (m) => m.asset.provider !== "legacy_public",
-  );
-  const rollbackMedia = mediaList.filter(
-    (m) => m.asset.provider === "legacy_public",
   );
 
   // Identify primary hero
@@ -472,24 +469,6 @@ export function ProductMediaManager({
                   </div>
                 ))}
               </div>
-            </div>
-          )}
-
-          {/* ROLLBACK RETENTION FOOTNOTE */}
-          {rollbackMedia.length > 0 && (
-            <div className="pt-4 border-t border-[#e9e2d6] text-[11px] text-[#8c7e73] flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="admin-badge admin-badge--legacy text-[8px] py-0 px-1.5">
-                  Rollback Copy
-                </span>
-                <span>
-                  {rollbackMedia.length} legacy asset{rollbackMedia.length > 1 ? "s" : ""}{" "}
-                  retained internally for safe rollback (not visible to customers).
-                </span>
-              </div>
-              <span className="text-[10px] italic text-[#a3978d]">
-                Read-only &bull; Phase 9 cleanup
-              </span>
             </div>
           )}
         </div>

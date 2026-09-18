@@ -273,7 +273,7 @@ export function MediaDetailDrawer({
                               navigator.clipboard.writeText(currentAsset.content_sha256);
                             }
                           }}
-                          className="text-[10px] text-[#706257] hover:text-[#30261f] uppercase tracking-wider font-mono flex-shrink-0"
+                          className="text-[10px] text-[#706257] hover:text-[#30261f] uppercase tracking-wider flex-shrink-0"
                           title="Copy SHA-256 hash"
                         >
                           Copy

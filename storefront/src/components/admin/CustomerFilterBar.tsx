@@ -127,7 +127,7 @@ export function CustomerFilterBar({
           )}
 
           {isPending && (
-            <span className="text-[11px] text-[#706257] font-mono animate-pulse">
+            <span className="text-[11px] text-[#706257] animate-pulse">
               Updating...
             </span>
           )}

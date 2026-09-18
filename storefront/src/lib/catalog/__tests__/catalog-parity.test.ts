@@ -152,7 +152,11 @@ describe("B6A Catalog Parity & Read Model Tests", () => {
         /^https:\/\/[^/]+\/storage\/v1\/object\/public\/product-media\/media\/[0-9a-f-]+\/original\.webp$/,
       );
       expect(found?.primary_media.url).toBe(found?.thumbnail_url);
-      expect(fs.existsSync(path.resolve(process.cwd(), `public${image}`))).toBe(true);
+      // Only historical order items require static /catalog-shoes retention (shoe-01, 02, 05)
+      const filename = `shoe-${String(index + 1).padStart(2, "0")}.webp`;
+      if (["shoe-01.webp", "shoe-02.webp", "shoe-05.webp"].includes(filename)) {
+        expect(fs.existsSync(path.resolve(process.cwd(), `public${image}`))).toBe(true);
+      }
     }
   });
 

@@ -3,7 +3,7 @@ import "@/app/admin.css";
 import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
-import { AdminTopNav } from "@/components/admin/AdminTopNav";
+import { AdminSidebar } from "@/components/admin/AdminSidebar";
 import { getAdminIdentity } from "@/lib/auth/admin";
 
 interface AdminLayoutProps {
@@ -26,7 +26,7 @@ async function AdminLayoutContent({ children, params }: AdminLayoutProps) {
 
   if (!adminIdentity) {
     return (
-      <div className="admin-shell flex items-center justify-center p-6">
+      <div className="admin-shell flex items-center justify-center p-6 min-h-screen">
         <div className="max-w-md w-full bg-[#fffefc] border border-[#cfc4b6] p-10 text-center rounded-[2px] shadow-sm">
           <div className="admin-eyebrow mb-2">Mirza Studio</div>
           <h1 className="admin-title text-2xl mb-3">Access Restricted</h1>
@@ -54,36 +54,17 @@ async function AdminLayoutContent({ children, params }: AdminLayoutProps) {
 
   const basePath = `/${country}/${locale}/admin`;
   const storefrontPath = `/${country}/${locale}`;
+  const adminEmail = adminIdentity.email || adminIdentity.userId;
 
   return (
-    <div className="admin-shell">
-      <header className="admin-header">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-8 sm:gap-10">
-            <Link href={basePath} className="flex items-baseline gap-2.5 no-underline">
-              <span className="admin-brand">MIRZA</span>
-              <span className="text-[#cfc4b6] text-xs">/</span>
-              <span className="admin-brand-tag">Studio</span>
-            </Link>
+    <div className="admin-shell min-h-screen flex flex-col lg:flex-row bg-[#f3efe8]">
+      <AdminSidebar
+        basePath={basePath}
+        storefrontPath={storefrontPath}
+        adminEmail={adminEmail}
+      />
 
-            <AdminTopNav basePath={basePath} />
-          </div>
-
-          <div className="flex items-center gap-5 text-xs">
-            <span className="admin-mono text-[#706257] hidden md:inline text-[11px]">
-              {adminIdentity.email || adminIdentity.userId}
-            </span>
-            <Link
-              href={storefrontPath}
-              className="admin-btn admin-btn-quiet text-[10px] tracking-wider uppercase py-1.5 px-3"
-            >
-              Exit to Storefront &rarr;
-            </Link>
-          </div>
-        </div>
-      </header>
-
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
+      <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 max-w-7xl">
         <Suspense fallback={null}>{children}</Suspense>
       </main>
     </div>
