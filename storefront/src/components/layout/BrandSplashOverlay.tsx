@@ -16,22 +16,21 @@ export function BrandSplashOverlay() {
       "(prefers-reduced-motion: reduce)",
     ).matches;
 
-    if (reducedMotion) {
-      document.documentElement.dataset.mirzaSplash = "seen";
-      setVisible(false);
-      return;
-    }
+    // Normal: 2050ms exit / 2400ms unmount
+    // Reduced motion: 650ms presentation / 900ms unmount (calm, intentional, no hydration flash)
+    const exitDelay = reducedMotion ? 650 : 2050;
+    const unmountDelay = reducedMotion ? 900 : 2400;
 
     // Single authoritative lifecycle timer
     const exitTimer = window.setTimeout(() => {
       // Release scroll lock immediately at dismissal start
       document.documentElement.dataset.mirzaSplash = "seen";
       setExiting(true);
-    }, 2050);
+    }, exitDelay);
 
     const unmountTimer = window.setTimeout(() => {
       setVisible(false);
-    }, 2400);
+    }, unmountDelay);
 
     return () => {
       window.clearTimeout(exitTimer);
