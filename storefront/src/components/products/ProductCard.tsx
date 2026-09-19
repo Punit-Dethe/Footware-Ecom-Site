@@ -1,6 +1,5 @@
 "use client";
 
-import { getImageProps } from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -11,39 +10,6 @@ import { trackSelectItem } from "@/lib/analytics/gtm";
 import type { ProductMedia } from "@/lib/media/types";
 import type { Product } from "@/types/commerce";
 
-const prewarmedHeros = new Set<string>();
-
-function prewarmPdpHero(heroSrc: string) {
-  if (
-    typeof document === "undefined" ||
-    !heroSrc ||
-    prewarmedHeros.has(heroSrc)
-  ) {
-    return;
-  }
-  prewarmedHeros.add(heroSrc);
-
-  const { props } = getImageProps({
-    src: heroSrc,
-    alt: "",
-    fill: true,
-    sizes: "(max-width: 768px) 100vw, 50vw",
-    quality: 75,
-    priority: true,
-  });
-
-  const link = document.createElement("link");
-  link.rel = "preload";
-  link.as = "image";
-  if (props.srcSet) {
-    link.imageSrcset = props.srcSet;
-  }
-  if (props.sizes) {
-    link.imageSizes = props.sizes;
-  }
-  link.fetchPriority = "high";
-  document.head.appendChild(link);
-}
 
 interface ProductCardProps {
   product: Product;
@@ -82,20 +48,13 @@ export const ProductCard = memo(function ProductCard({
   const imageUrl = media.mainUrl;
   const productHref = `${basePath}/products/${product.slug}${categoryId ? `?category_id=${categoryId}` : ""}`;
   const isHighPriority = fetchPriority === "high" || Boolean(priority);
-  const pdpHeroSrc =
-    media.variants?.["1600"]?.webp ||
-    (product as any).media?.[0]?.xlarge_url ||
-    (product as any).primary_media?.xlarge_url ||
-    media.mainUrl;
 
   const handleIntent = useCallback(() => {
+
     if (!isHighPriority && productHref) {
       router.prefetch(productHref);
     }
-    if (pdpHeroSrc) {
-      prewarmPdpHero(pdpHeroSrc);
-    }
-  }, [isHighPriority, productHref, pdpHeroSrc, router]);
+  }, [isHighPriority, productHref, router]);
 
   // Current display price
   const displayPrice = product.price?.display_amount;
@@ -134,6 +93,7 @@ export const ProductCard = memo(function ProductCard({
       <div className="product-card__image relative aspect-square overflow-hidden bg-white">
         <ProductImage
           src={imageUrl}
+          variants={media.variants}
           alt={product.name}
           fill
           className="object-cover group-hover:scale-105 transition-transform duration-300"

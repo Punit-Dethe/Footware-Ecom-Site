@@ -2,9 +2,9 @@
 
 import type { Media } from "@/types/commerce";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
-import Image from "next/image";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useRef } from "react";
+import { ProductImage } from "@/components/ui/product-image";
 
 const SWIPE_THRESHOLD_PX = 50;
 const SWIPE_MAX_VERTICAL_PX = 75;
@@ -170,12 +170,14 @@ export function MediaLightbox({
       )}
 
       <div className="relative max-w-4xl max-h-[90vh] w-full h-full m-4">
-        <Image
+        <ProductImage
           src={src}
+          variants={current?.variants}
           alt={current?.alt || productName}
           fill
           className="object-contain pointer-events-none"
           sizes="100vw"
+          priority
         />
       </div>
 

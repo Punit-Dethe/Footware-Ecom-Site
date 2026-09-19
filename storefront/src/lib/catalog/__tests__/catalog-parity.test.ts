@@ -149,9 +149,12 @@ describe("B6A Catalog Parity & Read Model Tests", () => {
         [6, 7, 8, 9, 10, 11, 12].map((size) => `Size: UK/India ${size}`),
       );
       expect(found?.thumbnail_url).toMatch(
-        /^https:\/\/[^/]+\/storage\/v1\/object\/public\/product-media\/media\/[0-9a-f-]+\/original\.webp$/,
+        /^https:\/\/[^/]+\/storage\/v1\/object\/public\/product-media\/media\/[0-9a-f-]+\/(original|variants\/320(-[0-9a-f]{12})?)\.webp$/,
       );
-      expect(found?.primary_media.url).toBe(found?.thumbnail_url);
+      expect(found?.primary_media.url).toMatch(
+        /^https:\/\/[^/]+\/storage\/v1\/object\/public\/product-media\/media\/[0-9a-f-]+\/(original|variants\/640(-[0-9a-f]{12})?)\.webp$/,
+      );
+
       // Only historical order items require static /catalog-shoes retention (shoe-01, 02, 05)
       const filename = `shoe-${String(index + 1).padStart(2, "0")}.webp`;
       if (["shoe-01.webp", "shoe-02.webp", "shoe-05.webp"].includes(filename)) {
@@ -524,49 +527,42 @@ describe("Category Relationships & Product Integrity Rules", () => {
   });
 });
 
-describe("Outer Cache Invalidation Tag Propagation", () => {
+describe("Authoritative Catalog Cache Invalidation Tag Propagation", () => {
   beforeEach(() => {
     vi.mocked(cacheTag).mockClear();
   });
 
   it("attaches 'catalog-public' tag to cachedListProducts", async () => {
     await cachedListProducts(undefined, {}, "dtc");
-    expect(cacheTag).toHaveBeenCalledWith("catalog-public", expect.anything());
+    expect(cacheTag).toHaveBeenCalledWith("catalog-public");
   });
 
   it("attaches 'catalog-public' tag to cachedGetProduct", async () => {
     await cachedGetProduct("shoe-2026-09-001", [], {}, "dtc");
-    expect(cacheTag).toHaveBeenCalledWith(
-      "catalog-public",
-      expect.anything(),
-      expect.anything(),
-    );
+    expect(cacheTag).toHaveBeenCalledWith("catalog-public");
   });
 
   it("attaches 'catalog-public' tag to cachedGetProductFilters", async () => {
     await cachedGetProductFilters(undefined, {}, "dtc");
-    expect(cacheTag).toHaveBeenCalledWith("catalog-public", expect.anything());
+    expect(cacheTag).toHaveBeenCalledWith("catalog-public");
   });
 
   it("attaches 'catalog-public' tag to cachedListCategories", async () => {
     await cachedListCategories(undefined, {});
-    expect(cacheTag).toHaveBeenCalledWith("categories", "catalog-public");
+    expect(cacheTag).toHaveBeenCalledWith("catalog-public");
   });
 
   it("attaches 'catalog-public' tag to cachedGetCategory", async () => {
     await cachedGetCategory("office-wear", undefined, {});
-    expect(cacheTag).toHaveBeenCalledWith("catalog-public", "category");
+    expect(cacheTag).toHaveBeenCalledWith("catalog-public");
   });
 
   it("attaches 'catalog-public' tag to cachedListCategoryProducts", async () => {
     await cachedListCategoryProducts("office-wear", undefined, {});
-    expect(cacheTag).toHaveBeenCalledWith(
-      "catalog-public",
-      "products",
-      expect.anything(),
-    );
+    expect(cacheTag).toHaveBeenCalledWith("catalog-public");
   });
 });
+
 
 describe("searchCatalogVariants in-memory search", () => {
   it("returns empty array for query with fewer than 2 characters", async () => {

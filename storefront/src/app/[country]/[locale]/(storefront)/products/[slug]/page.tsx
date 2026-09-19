@@ -6,8 +6,7 @@ import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
 import { Breadcrumbs } from "@/components/navigation/Breadcrumbs";
 import { JsonLd } from "@/components/seo/JsonLd";
-import { listCatalogProducts } from "@/lib/catalog/catalog-repository";
-import { getCachedProduct, PRODUCT_PAGE_EXPAND } from "@/lib/data/cached";
+import { getPublicCatalogSnapshot } from "@/lib/catalog/catalog-repository";
 import { getProductMedia } from "@/lib/media/catalog-images";
 import { generateProductMetadata } from "@/lib/metadata/product";
 import {
@@ -33,7 +32,7 @@ interface ProductPageProps {
 export async function generateStaticParams() {
   const country = getDefaultCountry();
   const locale = getDefaultLocale();
-  const products = await listCatalogProducts();
+  const { products } = await getPublicCatalogSnapshot();
 
   return products.map((p) => ({
     country,
@@ -92,12 +91,25 @@ async function ProductPageContent({ params, searchParams }: ProductPageProps) {
   ]);
   const basePath = `/${country}/${locale}`;
 
-  let product;
-  try {
-    product = await getCachedProduct(slug, PRODUCT_PAGE_EXPAND);
-  } catch {
-    notFound();
-  }
+  const snapshot = await getPublicCatalogSnapshot();
+  const clean = slug.toLowerCase().trim();
+  const product =
+    snapshot.products.find(
+      (p) =>
+        p.slug.toLowerCase() === clean ||
+        p.id.toLowerCase() === clean ||
+        p.sku?.toLowerCase() === clean ||
+        p.name
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-|-$/g, "") === clean ||
+        p.variants?.some(
+          (v) =>
+            v.sku.toLowerCase() === clean ||
+            v.id.toLowerCase() === clean ||
+            v.sku.toLowerCase().endsWith(`-${clean}`),
+        ),
+    ) || null;
 
   if (!product) {
     notFound();
@@ -115,7 +127,7 @@ async function ProductPageContent({ params, searchParams }: ProductPageProps) {
     product.categories || [],
     category_id,
   );
-  const catalogProducts = await listCatalogProducts();
+  const catalogProducts = snapshot.products;
   const categoryProducts = breadcrumbCategory
     ? catalogProducts.filter((candidate) =>
         candidate.categories.some(
@@ -136,6 +148,7 @@ async function ProductPageContent({ params, searchParams }: ProductPageProps) {
     currentIndex >= 0 && categoryProducts.length > 1
       ? categoryProducts[(currentIndex + 1) % categoryProducts.length]
       : null;
+
   const t = await getTranslations({
     locale: locale as Locale,
     namespace: "products",

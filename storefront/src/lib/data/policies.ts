@@ -1,17 +1,12 @@
 "use server";
 
-import { cacheLife, cacheTag } from "next/cache";
 import { POLICIES } from "@/lib/catalog/store-config";
 import type { Policy } from "@/types/commerce";
 
-export async function cachedGetPolicy(
+export async function getPolicy(
   slugOrId: string,
   _options?: { locale?: string; country?: string },
 ): Promise<Policy | null> {
-  "use cache: remote";
-  cacheLife("tenMinutes");
-  cacheTag("policies", `policy:${slugOrId}`);
-
   const found = POLICIES.find(
     (p) => p.slug === slugOrId || p.id === slugOrId,
   );
@@ -26,9 +21,5 @@ export async function cachedGetPolicy(
   };
 }
 
-export async function getPolicy(
-  slugOrId: string,
-  options?: { locale?: string; country?: string },
-): Promise<Policy | null> {
-  return cachedGetPolicy(slugOrId, options);
-}
+export const cachedGetPolicy = getPolicy;
+

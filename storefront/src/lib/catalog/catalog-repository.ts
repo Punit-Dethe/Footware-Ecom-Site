@@ -37,6 +37,7 @@ export interface CatalogMedia {
   variant_ids?: string[];
   focal_point_x?: number;
   focal_point_y?: number;
+  variants?: ReturnType<typeof resolveResponsiveVariants>;
 }
 
 export interface CatalogOptionValue {
@@ -198,7 +199,7 @@ export function adaptRawCatalogToPublicSnapshot(
       ? getStoragePublicUrl(heroImage.storage_path)
       : "/placeholder.svg";
     const primaryUrl = heroVariants?.["640"]?.webp || heroMainUrl;
-    const originalUrl = heroVariants?.["1600"]?.webp || heroMainUrl;
+    const originalUrl = heroVariants?.["1200"]?.webp || heroMainUrl;
     const thumbUrl = heroVariants?.["320"]?.webp || heroMainUrl;
 
     const variants: CatalogVariant[] = dbVariants.map((v, sIdx) => {
@@ -284,12 +285,13 @@ export function adaptRawCatalogToPublicSnapshot(
         alt: img.alt_text || p.name,
         position: img.position ?? idx + 1,
         media_type: "image",
-        original_url: imgVariants?.["1600"]?.webp || main,
+        original_url: imgVariants?.["1200"]?.webp || main,
         large_url: imgVariants?.["640"]?.webp || main,
-        xlarge_url: imgVariants?.["1600"]?.webp || main,
+        xlarge_url: imgVariants?.["1200"]?.webp || main,
         small_url: imgVariants?.["320"]?.webp || main,
         mini_url: imgVariants?.["320"]?.webp || main,
         variant_ids: variants.map((v) => v.id),
+        variants: imgVariants,
       };
     });
 
@@ -307,7 +309,9 @@ export function adaptRawCatalogToPublicSnapshot(
         small_url: thumbUrl,
         mini_url: thumbUrl,
         variant_ids: variants.map((v) => v.id),
+        variants: heroVariants,
       };
+
 
     const hasStock =
       p.status === "active" && variants.some((v) => v.in_stock && v.purchasable);

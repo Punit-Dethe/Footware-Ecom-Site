@@ -168,6 +168,7 @@ function MediaGalleryInner({
         <ProductImage
           key={safeIndex}
           src={mainImageUrl}
+          variants={selectedImage?.variants}
           alt={selectedImage?.alt || productName}
           fill
           className={editorial ? "object-contain" : "object-cover"}
@@ -175,7 +176,7 @@ function MediaGalleryInner({
           loading="eager"
           priority
           quality={75}
-          sizes="(max-width: 768px) 100vw, 50vw"
+          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 600px"
           placeholder="blur"
           blurDataURL={BLUR_PLACEHOLDER}
           iconClassName="w-24 h-24"
@@ -210,6 +211,7 @@ function MediaGalleryInner({
               >
                 <ProductImage
                   src={thumbUrl}
+                  variants={image.variants}
                   alt={image.alt || `${productName} ${index + 1}`}
                   fill
                   className={editorial ? "object-contain" : "object-cover"}
