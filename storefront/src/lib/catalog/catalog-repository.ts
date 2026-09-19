@@ -376,12 +376,35 @@ export function adaptRawCatalogToPublicSnapshot(
   return { products, categories };
 }
 
+const CATALOG_CACHE_SCHEMA_VERSION = "hashed-media-v2";
+
+/**
+ * Each deployment gets a distinct persistent catalog cache key.
+ *
+ * This prevents Vercel's remote cache from carrying catalog snapshots across
+ * deployments after an out-of-band media pointer/schema cutover. Runtime/admin
+ * catalog mutations still invalidate the shared "catalog-public" tag normally.
+ */
+function getCatalogCacheVersion(): string {
+  const deploymentSha = process.env.VERCEL_GIT_COMMIT_SHA || "local";
+  return `${CATALOG_CACHE_SCHEMA_VERSION}:${deploymentSha}`;
+}
+
 /**
  * Cached public catalog snapshot loaded from PostgreSQL.
  * Invalidated by cacheTag("catalog-public").
+ *
+ * cacheVersion is intentionally an argument so it participates in the
+ * persistent cache key instead of being an untracked module-level closure.
  */
-async function cachedCatalogSnapshot(): Promise<PublicCatalogSnapshot> {
+async function cachedCatalogSnapshot(
+  cacheVersion: string,
+): Promise<PublicCatalogSnapshot> {
   "use cache: remote";
+  // The value is part of the cache key even though the query itself does not
+  // otherwise depend on it.
+  void cacheVersion;
+
   try {
     cacheLife("hours");
     cacheTag("catalog-public");
@@ -398,7 +421,7 @@ async function cachedCatalogSnapshot(): Promise<PublicCatalogSnapshot> {
  * Request-memoized via React cache() and multi-tenant cached via Next.js remote cache.
  */
 export const getPublicCatalogSnapshot = cache(async () => {
-  return await cachedCatalogSnapshot();
+  return await cachedCatalogSnapshot(getCatalogCacheVersion());
 });
 
 /**
