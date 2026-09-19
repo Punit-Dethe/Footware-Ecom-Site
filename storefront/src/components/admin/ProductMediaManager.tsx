@@ -45,10 +45,8 @@ export function ProductMediaManager({
   const uploadTriggerRef = useRef<HTMLButtonElement>(null);
   const detachTriggerRef = useRef<HTMLButtonElement>(null);
 
-  // Managed media list
-  const managedMedia = mediaList.filter(
-    (m) => m.asset.provider !== "legacy_public",
-  );
+  // Active Media Contract placements directly
+  const managedMedia = mediaList;
 
   // Identify primary hero
   const heroMedia =

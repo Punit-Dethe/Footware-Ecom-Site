@@ -170,10 +170,7 @@ media      = /catalog-shoes/shoe-NN.webp
 The customer-facing storefront reads directly from `public.product_media` and `public.media_assets`.
 The 31 canonical shoes are served from their authoritative Supabase Storage stone masters
 (`media/{assetId}/original.webp`) through `getStoragePublicUrl()`.
-The legacy table `public.product_images` and static directory `storefront/public/catalog-shoes/`
-are strictly preserved as rollback/transitional data. Legacy admin media mutation controls
-in `ProductMediaManager` have been guarded with a migration warning while the global Media Library
-and admin redesign are pending.
+The legacy table `public.product_images` has been dropped via migration `20260919000000_drop_legacy_product_images.sql`. Static assets for historical orders remain in `storefront/public/catalog-shoes/`. Legacy admin media mutation controls (`insertProductMedia`, `deleteProductMedia`) are completely eliminated from all active write paths.
 
 ### 6.1 Media Contract v1 & Media Library Backend (Phases 1–5)
 1. **Physical & Placement Decoupling**:
@@ -185,13 +182,11 @@ and admin redesign are pending.
    - Client invokes `finalizeMediaLibraryUploadAction`: Server downloads buffer, validates and decodes with Sharp (format, dimensions, dominant color, LQIP), computes SHA-256 integrity hash, and inserts idempotent record into `public.media_assets`.
 3. **Placement & Deletion Safety**:
    - Products are attached via `attachMediaAssetToProductAction` without file duplication.
-   - Asset deletion (`deleteMediaLibraryAssetAction`) enforces strict foreign-key protection: rejects deletion of assets currently attached to products (`usage_count > 0`), rejects deletion of legacy rollback assets, and performs DB deletion before Storage object cleanup.
+   - Asset deletion (`deleteMediaLibraryAssetAction`) enforces strict foreign-key protection: rejects deletion of assets currently attached to products (`usage_count > 0`), and performs DB deletion before Supabase Storage object cleanup.
 4. **Cache Invalidation**:
    - All product media mutations invoke `updateTag("catalog-public")` to revalidate customer-facing Next.js PPR cache.
 
-The retired 38-product demo catalog (`office-footwear-01`,
-`traditional-footwear-NN`, categories `formal-office` / `traditional-indian`) is
-gone. Any documentation or smoke test still referencing those identifiers is stale.
+The retired demo catalog has been cleaned up: 36 dead legacy products removed, with 2 archived legacy products (`office-footwear-01` and `office-footwear-03`) temporarily retained solely because active guest carts hold FK references.
 
 ---
 
@@ -238,7 +233,7 @@ Following Phase 6B:
 - **Customer Storefront Media Authority**: Media Contract v1 (`public.product_media` + `public.media_assets`).
 - **Admin Product Media Authority**: Media Contract v1 (`public.product_media` + `public.media_assets`).
 - **Global Media Library Authority**: Media Contract v1 (`public.media_assets` direct signed uploads + Sharp processing).
-- **Legacy `public.product_images` Status**: Retained exclusively for emergency rollback and historical migration reference. Active admin read/write dependency count: 0.
+- **Legacy `public.product_images` Status**: Dropped permanently via `20260919000000_drop_legacy_product_images.sql` without CASCADE. Active admin read/write dependency count: 0. Rollback window has ended.
 
 ---
 
@@ -248,7 +243,7 @@ The Mirza Admin Studio (`/(admin)/admin/*`) provides a unified, editorial contro
 
 1. **Design Tokens & Typography**:
    - Shared CSS variables (`--admin-canvas: #f3efe8`, `--admin-surface: #fffefc`, `--admin-secondary: #e9e2d6`, `--admin-stone: #ece7de`, `--admin-ink: #30261f`, `--admin-muted: #706257`, `--admin-border: #cfc4b6`).
-   - Fonts: `Cormorant Garamond` (`--font-editorial-display`), `EB Garamond` (`--font-editorial-text`), and `Geist` (`--font-geist`).
+   - Typography: MIRZA wordmark uses branded serif (`Cormorant Garamond`, `--font-editorial-display`). All other Admin Studio UI elements strictly use `Geist` (`--font-geist`) with `tabular-nums` for numeric and identifier alignment. (`EB Garamond` is not used in Admin UI).
    - Replaced generic SaaS gray tables, shadow-sm, and bright pill badges with quiet typography, thin warm dividers, and flat surfaces.
 2. **Data Access Models**:
    - **Overview (`/admin`)**: `getAdminCatalogOverview()` executes bounded metric queries and recent product delivery in exactly 2 SQL queries with Media Contract v1 hero resolution.
@@ -266,11 +261,11 @@ The Mirza Admin Studio (`/(admin)/admin/*`) provides a unified, editorial contro
 Phase 8 introduces read-only operational domains for **Orders** and **Customers** within the unified Mirza Admin Studio (`/(admin)/admin/*`), completing the business control plane alongside Catalog:
 
 1. **Navigation Structure**:
-   - `AdminTopNav.tsx` organizes Studio navigation into logical operational groups:
+   - `AdminSidebar.tsx` provides persistent desktop navigation and an accessible mobile slide-over drawer organized into logical operational groups:
      - **Studio**: Overview (`/admin`)
      - **Catalog**: Products (`/admin/products`), Categories (`/admin/categories`), Media (`/admin/media`)
      - **Commerce**: Orders (`/admin/orders`), Customers (`/admin/customers`)
-   - Includes full keyboard focus rings, active path matching, and responsive horizontal overflow handling (`scrollbar-none`).
+   - Replaced legacy top navigation shell (`AdminTopNav.tsx` removed). Includes full keyboard focus rings, active path matching, and responsive drawer handling.
 
 2. **Orders Domain (`src/lib/db/admin-commerce.ts`)**:
    - **Snapshot Authority**: Orders and line items are immutable records. Line items are read directly from `order_items` schema columns (`product_name`, `sku`, `size_option`, `price_in_cents`, `quantity`, `total_in_cents`, `thumbnail_url`), never dynamically re-priced or re-linked to mutated catalog records.

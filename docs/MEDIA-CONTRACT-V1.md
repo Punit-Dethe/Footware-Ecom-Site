@@ -37,7 +37,7 @@ Represents the immutable physical asset and its metadata.
 | Column | Type | Constraints / Description |
 | :--- | :--- | :--- |
 | `id` | `UUID` | Primary Key, `DEFAULT gen_random_uuid()` |
-| `storage_provider` | `VARCHAR(50)` | Storage backend identifier: `'legacy_public'` or `'supabase'` |
+| `storage_provider` | `VARCHAR(50)` | Storage backend identifier: `'supabase'` (active; `'legacy_public'` retired in Phase 9) |
 | `storage_path` | `VARCHAR(500)` | Unique relative asset path (e.g. `/catalog-shoes/shoe-01.webp` or `products/...`) |
 | `original_filename`| `VARCHAR(255)` | Source filename at time of upload |
 | `mime_type` | `VARCHAR(100)` | MIME type (`image/webp`, `image/avif`, `image/jpeg`, `image/png`) |
@@ -83,7 +83,7 @@ Represents product placement, gallery ordering, hero designation, and contextual
 
 ## 3. Storage Providers & Namespaces
 
-### 3.1 Transitional Providers (Phase 1)
+### 3.1 Historical Phase 1–3 Provider Classification
 - **`legacy_public`**:
   - Serves root-relative paths like `/catalog-shoes/shoe-NN.webp` from `storefront/public/catalog-shoes/`.
   - Used by the 31 active catalog shoes.
@@ -91,7 +91,7 @@ Represents product placement, gallery ordering, hero designation, and contextual
   - Serves objects from the Supabase Storage `product-media` public bucket.
   - Legacy paths use `products/{productId}/{mediaId}/original.<ext>`.
 
-### 3.2 Preferred Future Storage Namespace (Phase 2+)
+### 3.2 Canonical Storage Namespace (Active Phase 9)
 To fully decouple physical storage from product ownership, new uploads will use the product-agnostic global asset namespace:
 - **Original asset:**
   `media/{assetId}/original.<ext>`
@@ -148,11 +148,11 @@ Migration `20260918000000_media_contract_v1.sql` performs an idempotent, forward
    - All visual metadata (dimensions, dominant color, LQIP, responsive variants, original filename, MIME, file size) is fully preserved.
 2. Every product attachment is copied into `public.product_media` preserving `product_id`, `position`, `is_hero`, and `alt_text`.
 3. `ON CONFLICT DO NOTHING` ensures the migration is safe to run multiple times without duplicating data.
-4. **Rollback Safety**: `public.product_images` is **not** deleted or modified in Phase 1.
+4. **Rollback Safety (Historical Phase 1)**: `public.product_images` was not deleted or modified during initial cutover (subsequently dropped in Phase 9).
 
 ---
 
-## 7. Evolution & Storefront Cutover (Phase 4)
+## 7. Evolution & Storefront Cutover (Historical Phase 4)
 
 As of Phase 4 (`feat/media-v1-storefront-cutover`):
 - **Customer Read Authority**: Public catalog reads (`loadPublicCatalogRows`) and checkout order thumbnail snapshots (`createOrderFromCart`) have officially cut over to `public.product_media` joined with `public.media_assets`.
@@ -165,7 +165,7 @@ As of Phase 4 (`feat/media-v1-storefront-cutover`):
 
 ---
 
-## 8. Admin Product Management Cutover (Phase 6B)
+## 8. Admin Product Management Cutover (Historical Phase 6B)
 
 As of Phase 6B (`feat/product-media-library-integration`):
 - **Admin Read Authority**: `AdminProductDetail.media` completely supersedes `images: DbProductImageRow[]`. Both `getAdminProduct` and `getAdminProductWithClient` read exclusively from `listProductMediaV1(productId)`. Zero active admin reads or writes touch `public.product_images`.
@@ -185,6 +185,8 @@ As of Phase 9 (`feat/final-production-cleanup`):
 - **Rollback Window Concluded**: `legacy_public` media assets and placements have been completely retired (0 `legacy_public` DB rows). All active-runtime checks (`storage_provider != 'legacy_public'`, rollback guards, and fallback branches) have been removed.
 - **Storage Consistency**: 31 canonical products hold 31 hero assets in `product-media` storage under `media/{assetId}/original.webp`, all verified HTTP 200 OK.
 - **Historical Order Fidelity**: 3 static shoe images (`shoe-01.webp`, `shoe-02.webp`, `shoe-05.webp`) are retained in `storefront/public/catalog-shoes/` exclusively to preserve immutable visual snapshots for 3 historical orders. All 28 unused static shoe files were safely removed.
+- **Product Media Manager**: Operates directly on active Media Contract placements with zero legacy rollback copy filtering or copy preservation.
+- **Media Library**: Operates strictly on active Supabase Storage assets without legacy provider filtering tabs.
 
 
 

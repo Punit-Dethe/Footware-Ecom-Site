@@ -206,7 +206,7 @@ describe("Media Contract v1 Tests", () => {
       });
 
       const list = await listMediaAssets({
-        storageProvider: "legacy_public",
+        storageProvider: "supabase",
         limit: 10,
         offset: 0,
       });
@@ -214,7 +214,7 @@ describe("Media Contract v1 Tests", () => {
       expect(list).toHaveLength(2);
       expect(mockDb.query).toHaveBeenCalledWith(
         expect.stringContaining("WHERE storage_provider = $1"),
-        ["legacy_public", 10, 0],
+        ["supabase", 10, 0],
       );
     });
 
@@ -518,8 +518,8 @@ describe("Media Contract v1 Tests", () => {
             pm_created_at: new Date(),
             pm_updated_at: new Date(),
             ma_id: TEST_ASSET_1,
-            storage_provider: "legacy_public",
-            storage_path: "/catalog-shoes/shoe-01.webp",
+            storage_provider: "supabase",
+            storage_path: "media/test/shoe-01.webp",
             original_filename: "shoe-01.webp",
             mime_type: "image/webp",
             file_size_bytes: 43720,
@@ -539,8 +539,8 @@ describe("Media Contract v1 Tests", () => {
       expect(items).toHaveLength(1);
       expect(items[0].id).toBe("pm-1");
       expect(items[0].is_hero).toBe(true);
-      expect(items[0].asset.storage_provider).toBe("legacy_public");
-      expect(items[0].asset.storage_path).toBe("/catalog-shoes/shoe-01.webp");
+      expect(items[0].asset.storage_provider).toBe("supabase");
+      expect(items[0].asset.storage_path).toBe("media/test/shoe-01.webp");
     });
   });
 

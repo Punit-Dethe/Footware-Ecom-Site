@@ -191,8 +191,8 @@ describe("Media Contract v1 Storefront Cutover (Phase 4)", () => {
     });
   });
 
-  describe("3. Legacy Fallback Semantics for Unmigrated Products", () => {
-    it("gracefully falls back to legacy_public media if product has not migrated", () => {
+  describe("3. Root-Relative Path Preservation for Historical Order Assets", () => {
+    it("gracefully resolves root-relative media paths if present in raw snapshot", () => {
       const raw = {
         products: [
           {
@@ -211,7 +211,7 @@ describe("Media Contract v1 Storefront Cutover (Phase 4)", () => {
             images: [
               {
                 id: "pm-legacy-1",
-                storage_provider: "legacy_public",
+                storage_provider: "supabase",
                 storage_path: "/catalog-shoes/shoe-99.webp",
                 alt_text: "Unmigrated Shoe",
                 position: 1,

@@ -409,7 +409,6 @@ export interface SimpleActionResult {
 
 /**
  * Attaches a global media asset to a product placement.
- * Guards against attaching legacy_public rollback assets.
  * Invalidates public catalog cache on success.
  */
 export async function attachMediaAssetToProductAction(
@@ -464,7 +463,7 @@ export async function attachMediaAssetToProductAction(
 /**
  * Attaches multiple global media assets to a product in a single atomic database transaction.
  * All-or-nothing: any failure rolls back all attachments in the batch.
- * Rejects duplicates, missing assets, and legacy_public assets before mutation.
+ * Rejects duplicates and missing assets before mutation.
  * Managed-aware: if product has zero managed placements, the first attached asset becomes hero
  * and remaining assets become gallery; if managed placements already exist, all become gallery.
  * Invalidates public catalog cache once, strictly after successful transaction commit.
@@ -621,7 +620,6 @@ export async function detachMediaAssetFromProductAction(
 
 /**
  * Atomically promotes a product's attached media asset to hero.
- * Rejects legacy_public rollback assets.
  * Invalidates public catalog cache on success.
  */
 export async function setProductMediaHeroAction(
@@ -774,7 +772,7 @@ export interface ListMediaLibraryAssetsActionResult {
 
 /**
  * Authenticated Server Action for the Product Media Library Picker.
- * Exclusively queries active 'supabase' assets (never legacy_public).
+ * Exclusively queries active 'supabase' assets.
  */
 export async function listMediaLibraryAssetsAction(
   params?: ListMediaLibraryAssetsActionParams,
@@ -787,7 +785,7 @@ export async function listMediaLibraryAssetsAction(
 
     const result = await listMediaLibraryAssets({
       query: params?.q,
-      provider: "supabase", // Enforce Supabase only (no legacy_public)
+      provider: "supabase",
       sort: params?.sort || "created_desc",
       limit,
       offset,

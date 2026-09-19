@@ -101,26 +101,6 @@ const SAMPLE_GALLERY_PLACEMENT: AdminProductMediaPlacement = {
   },
 };
 
-const SAMPLE_ROLLBACK_PLACEMENT: AdminProductMediaPlacement = {
-  id: "pm-3",
-  productId: "prod-1",
-  mediaAssetId: "asset-3",
-  position: 2,
-  isHero: false,
-  altText: "Legacy rollback copy",
-  asset: {
-    id: "asset-3",
-    provider: "legacy_public",
-    storagePath: "/catalog-shoes/shoe-01.webp",
-    publicUrl: "/catalog-shoes/shoe-01.webp",
-    filename: "shoe-01.webp",
-    width: 800,
-    height: 800,
-    fileSize: 45000,
-    dominantColor: "#ffffff",
-    lqip: null,
-  },
-};
 
 describe("Phase 6B: Product ↔ Media Library Integration Suite", () => {
   beforeEach(() => {
@@ -133,7 +113,7 @@ describe("Phase 6B: Product ↔ Media Library Integration Suite", () => {
     mockActions.attachMediaAssetsToProductAction.mockResolvedValue({ success: true });
     mockActions.getProductMediaV1Action.mockResolvedValue({
       success: true,
-      media: [SAMPLE_HERO_PLACEMENT, SAMPLE_GALLERY_PLACEMENT, SAMPLE_ROLLBACK_PLACEMENT],
+      media: [SAMPLE_HERO_PLACEMENT, SAMPLE_GALLERY_PLACEMENT],
     });
     mockActions.listMediaLibraryAssetsAction.mockResolvedValue({
       success: true,
@@ -182,12 +162,12 @@ describe("Phase 6B: Product ↔ Media Library Integration Suite", () => {
   });
 
   describe("1. Admin Product Media Authority & Placement Separation", () => {
-    it("renders authoritative hero and editable gallery while isolating rollback copy", () => {
+    it("renders authoritative hero and editable gallery directly from placements", () => {
       render(
         <ProductMediaManager
           productId="prod-1"
           productStatus="active"
-          initialMedia={[SAMPLE_HERO_PLACEMENT, SAMPLE_GALLERY_PLACEMENT, SAMPLE_ROLLBACK_PLACEMENT]}
+          initialMedia={[SAMPLE_HERO_PLACEMENT, SAMPLE_GALLERY_PLACEMENT]}
         />,
       );
 
@@ -197,9 +177,6 @@ describe("Phase 6B: Product ↔ Media Library Integration Suite", () => {
 
       // Gallery section shows non-hero managed file
       expect(screen.getByText("derby-side-angle.webp")).toBeInTheDocument();
-
-      // Rollback asset is filtered out and NOT in the editable gallery
-      expect(screen.queryByText("shoe-01.webp")).not.toBeInTheDocument();
     });
 
     it("renders polished empty state for products with zero managed media", () => {

@@ -43,7 +43,7 @@ public.product_media ──► public.products
 1. **Product Independence**: Uploading an asset registers a `public.media_assets` record without creating or requiring a `public.product_media` association.
 2. **Direct-to-Storage Ingestion**: Image binaries are streamed directly from client browsers to Supabase Storage signed URLs. Large payload bodies never traverse Next.js Server Action bodies, eliminating Vercel serverless memory and timeout bottlenecks.
 3. **Server-Side Validation Authority**: Storage objects are downloaded server-side and decoded using Sharp to ensure untrusted client declarations cannot introduce spoofed MIME types, SVGs, or oversized payloads.
-4. **Zero Storefront Mutation**: Storefront public queries (`listCatalogProducts`, `getProductDetailBySlug`, etc.) and legacy tables (`public.product_images`) are untouched.
+4. **Zero Storefront Mutation**: Storefront public queries (`listCatalogProducts`, `getProductDetailBySlug`, etc.) read exclusively from Media Contract v1; legacy table `public.product_images` was subsequently dropped in Phase 9.
 5. **Safe Deletion Sequence**: Deletion removes database records first (guarded by `ON DELETE RESTRICT` foreign keys against concurrent attachment), then cleans up physical storage objects. If physical storage cleanup fails, a structured warning is returned without rolling back the DB delete.
 
 ---
@@ -113,7 +113,7 @@ All Media Library actions require admin authorization via `requireAdmin()`. Infr
 
 ### 4.2 Product Placement Actions
 
-All placement actions invalidate `updateTag("catalog-public")` upon success and perform zero mutations against legacy `public.product_images`.
+All placement actions invalidate `updateTag("catalog-public")` upon success and operate solely on `public.product_media`.
 
 - **`attachMediaAssetToProductAction(productId, mediaAssetId, options?)`**: Attaches global asset to product with optional `isHero` and `altText`.
 - **`detachMediaAssetFromProductAction(productId, mediaAssetId)`**: Detaches asset from product. If the detached asset was hero, promotes the next available gallery item automatically.
@@ -125,7 +125,6 @@ All placement actions invalidate `updateTag("catalog-public")` upon success and 
 
 #### `deleteMediaLibraryAssetAction(assetId)`
 - **Auth**: Enforces `requireAdmin()`.
-- **Rollback Guard**: Rejects deletion of `legacy_public` assets (`"Legacy assets are read-only during the rollback window and cannot be deleted."`).
 - **Usage Guard**: Queries `getMediaAssetUsage(assetId)`. Rejects deletion if `usageCount > 0` with descriptive error listing attached product titles.
 - **Deletion Ordering**:
   1. Executes database deletion (`DELETE FROM public.media_assets WHERE id = $1`). This is guarded by foreign key `ON DELETE RESTRICT` in `public.product_media`, preventing race conditions where another admin attaches the image concurrently.
@@ -142,7 +141,7 @@ Provides bounded, paginated retrieval for the future Media Library UI:
 - **0 N+1 Queries**: Single query using `COUNT(*) OVER() AS full_count` and correlated subquery `(SELECT COUNT(*)::int FROM public.product_media pm WHERE pm.media_asset_id = ma.id) AS usage_count`.
 - **Filtering**:
   - `query`: Case-insensitive substring match against `ma.original_filename` and `ma.storage_path`.
-  - `provider`: Filter by `'supabase'` or `'legacy_public'`.
+  - `provider`: Filter by storage provider (defaults to `'supabase'`; legacy rollback window ended).
   - `sort`: `'created_desc'` (default), `'created_asc'`, `'size_desc'`, `'size_asc'`.
   - `limit`: Bounded between 1 and 100 (default 24).
   - `offset`: Bounded >= 0.

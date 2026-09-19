@@ -26,7 +26,7 @@ storefront/src/app/[country]/[locale]/(admin)/
 
 ### Authorization Contract
 - Layout-level and page-level enforcement via `requireAdmin()`.
-- Unauthenticated or non-admin callers are intercepted and presented with the Mirza Studio **Access Restricted** screen (warm cream surface, Cormorant Garamond typography, clear actions to sign in or return to the storefront).
+- Unauthenticated or non-admin callers are intercepted and presented with the Mirza Studio **Access Restricted** screen (warm cream surface, Geist typography with Cormorant Garamond brand wordmark, clear actions to sign in or return to the storefront).
 - Zero customer-facing or unauthenticated data leakage.
 - Direct invocation of `connection()` in Next.js Server Components ensuring strict dynamic request evaluation.
 
@@ -123,9 +123,8 @@ Browser (User drops file)
   - Real-time product placements fetched via `getMediaLibraryAssetDetailAction(assetId)`.
   - Displays linked product names, position, hero badge (`Hero Asset`), and direct link to edit the product (`/admin/products/[id]`).
 - **Safe Delete Guards**:
-  - If `usageCount > 0`: Delete button is permanently disabled with tooltip: `"Cannot delete asset attached to N product(s). Detach from all products first."`
-  - If `storage_provider === 'legacy_public'`: Delete button is disabled with tooltip: `"Legacy rollback assets are protected from deletion."`
-  - If `usageCount === 0` and managed by Supabase: Delete button is enabled. Clicking triggers an editorial confirmation dialog before executing `deleteMediaLibraryAssetAction`.
+  - If `usageCount > 0`: Delete button is permanently disabled with notice: `"Cannot delete asset attached to N product(s). Detach from all products first."`
+  - If `usageCount === 0`: Delete button is enabled. Clicking triggers an editorial confirmation dialog before executing `deleteMediaLibraryAssetAction`.
 
 ---
 
@@ -149,11 +148,10 @@ Phase 6B completes the product media management workflow within the Mirza admin 
 1. **Admin Product Detail Authority**:
    - `AdminProductDetail.media` replaces legacy `images: DbProductImageRow[]`.
    - `getAdminProduct` and `getAdminProductWithClient` load placements via `listProductMediaV1(productId)`.
-   - Complete elimination of active admin read dependencies on `public.product_images`.
-2. **Rollback Media Isolation**:
-   - `storage_provider = 'legacy_public'` assets are excluded from the editable hero and gallery.
-   - Retained quietly as a read-only technical footnote: `1 legacy asset retained internally for safe rollback (not visible to customers). Read-only • Phase 9 cleanup`.
-   - Zero action buttons (`Make Hero`, `Remove`, `Reorder`) exposed on rollback copies.
+   - Complete elimination of active admin read dependencies on `public.product_images` (table dropped in Phase 9).
+2. **Direct Placement Rendering (Phase 9 Current Truth; Historical Phase 1–6 Rollback Isolation Retired)**:
+   - Placements returned by `listProductMediaV1` are rendered directly into the editable hero stage and gallery.
+   - Compatibility filtering and rollback footnote badges are fully eliminated as production contains 0 legacy assets/placements.
 3. **Select from Library Picker (`ProductMediaLibraryPicker`)**:
    - Accessible Radix UI dialog with focus trap, Escape dismissal, and focus restoration.
    - Consumes `listMediaLibraryAssetsAction` with pagination (12 assets/page), search (`q`), and sorting (`newest/oldest`).
@@ -168,7 +166,7 @@ Phase 6B completes the product media management workflow within the Mirza admin 
 6. **Active Product Last-Media & Hero Safety**:
    - Enforced server-side: active products cannot detach their final managed media asset (`Active products must retain at least one managed image. Attach a replacement before removing this asset.`).
    - Detaching a hero automatically promotes the next lowest-position managed asset.
-   - `validatePublishInvariants` strictly requires at least one non-legacy managed media asset before activating a product.
+   - `validatePublishInvariants` strictly requires at least one managed media asset before activating a product.
 7. **Unsaved Form State Protection**:
    - `ProductMediaManager` maintains independent mutation state and re-queries placements via `getProductMediaV1Action(productId)`.
    - Never calls full-page `router.refresh()` which would wipe unsaved product text or variant edits.

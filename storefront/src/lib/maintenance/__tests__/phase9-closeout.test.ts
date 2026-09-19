@@ -135,6 +135,40 @@ describe("Phase 9 Final Supervisor Closeout Invariants", () => {
       // page.tsx
       expect(pageContent).not.toContain("provider");
     });
+
+    it("proves ProductMediaManager.tsx has zero legacy_public filtering or rollback handling", () => {
+      const pmmContent = fs.readFileSync(
+        path.join(
+          STOREFRONT_DIR,
+          "src/components/admin/ProductMediaManager.tsx",
+        ),
+        "utf-8",
+      );
+      expect(pmmContent).not.toContain("legacy_public");
+      expect(pmmContent).not.toContain("legacy");
+    });
+
+    it("proves active runtime source across storefront/src has zero legacy_public occurrences", () => {
+      const srcDir = path.join(STOREFRONT_DIR, "src");
+      const files = getAllFiles(srcDir, [".tsx", ".ts", ".css"]);
+
+      const runtimeFiles = files.filter(
+        (f) =>
+          !f.includes("__tests__") &&
+          !f.endsWith(".test.ts") &&
+          !f.endsWith(".test.tsx"),
+      );
+
+      expect(runtimeFiles.length).toBeGreaterThan(50);
+
+      for (const file of runtimeFiles) {
+        const content = fs.readFileSync(file, "utf-8");
+        expect(
+          content,
+          `Found legacy_public in active runtime file: ${file}`,
+        ).not.toContain("legacy_public");
+      }
+    });
   });
 
   /* --------------------------------------------------------------------------
