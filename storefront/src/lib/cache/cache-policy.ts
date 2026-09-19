@@ -8,18 +8,22 @@
 
 export const CACHE_POLICIES = {
   /**
-   * Class A: Extremely Stable Catalog (Homepage, Category pages)
-   * Edge TTL: 24 hours, Stale-While-Revalidate: 7 days.
+   * Public storefront HTML/RSC.
+   *
+   * Do not add a second manual CDN freshness layer in front of Next.js Cache
+   * Components. Catalog freshness is already controlled by cacheLife/cacheTag/
+   * updateTag/revalidatePath. Keeping these responses out of the outer CDN
+   * avoids stale HTML/RSC retaining superseded media URLs across deployments.
    */
   STABLE_CATALOG:
-    "public, max-age=0, s-maxage=86400, stale-while-revalidate=604800",
+    "private, no-cache, no-store, max-age=0, must-revalidate",
 
   /**
-   * Class B: Active Catalog Content (Product listing, Product Detail Pages)
-   * Edge TTL: 1 hour, Stale-While-Revalidate: 24 hours.
+   * Product listing/detail HTML/RSC follows the same rule: Next owns data/page
+   * freshness; the outer HTTP response must not outlive a catalog invalidation.
    */
   CATALOG_CONTENT:
-    "public, max-age=0, s-maxage=3600, stale-while-revalidate=86400",
+    "private, no-cache, no-store, max-age=0, must-revalidate",
 
   /**
    * Class D: Volatile & Private (Cart, Checkout, User Account)
