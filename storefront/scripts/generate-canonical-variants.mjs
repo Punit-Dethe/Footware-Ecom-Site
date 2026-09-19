@@ -270,6 +270,47 @@ async function main() {
     }
 
     console.log(`\nCompleted processing ${res.rows.length} canonical hero assets!`);
+
+    // Safe media cutover sequence:
+    // generate -> verify Storage -> update processed_variants -> invalidate catalog-public -> revalidate storefront
+    console.log("\n--- CACHE INVALIDATION & CUTOVER SAFETY ---");
+    const appUrl =
+      process.env.NEXT_PUBLIC_APP_URL ||
+      process.env.NEXT_PUBLIC_SITE_URL ||
+      "https://mirzafootwear.vercel.app";
+
+    let invalidated = false;
+    try {
+      const endpoint = `${appUrl.replace(/\/+$/, "")}/api/admin/revalidate-catalog`;
+      console.log(`Attempting automated invalidation via ${endpoint}...`);
+      const revalRes = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "x-admin-secret": process.env.SUPABASE_SECRET_KEY,
+        },
+      });
+
+      if (revalRes.ok) {
+        const body = await revalRes.json();
+        console.log(`Cache invalidation SUCCESS:`, body);
+        invalidated = true;
+      } else {
+        console.warn(`Internal cache invalidation endpoint returned HTTP ${revalRes.status}`);
+      }
+    } catch (e) {
+      console.warn(`Could not reach internal cache invalidation endpoint: ${e.message}`);
+    }
+
+    if (!invalidated) {
+      console.log(`\n===============================================================`);
+      console.log(`MANDATORY STEP REQUIRED: INVALIDATE STOREFRONT CATALOG CACHE`);
+      console.log(`The database has been updated with new processed_variants, but Next.js`);
+      console.log(`storefront cache must be purged to serve new paths.`);
+      console.log(`Run the admin invalidation action or trigger:`);
+      console.log(`  POST /api/admin/revalidate-catalog (Header: x-admin-secret)`);
+      console.log(`Or invoke revalidatePublicCatalogAction() in admin-catalog.`);
+      console.log(`===============================================================\n`);
+    }
   } finally {
     await db.end();
   }
