@@ -1,3 +1,14 @@
+/**
+ * CANONICAL MEDIA CUTOVER WORKFLOW:
+ * 1. generate: Compute immutable content-addressed variants (e.g. 640-{sha12}.webp / .avif)
+ * 2. verify Storage: Upload with upsert: false, cacheControl: 31536000, and verify HTTP 200
+ * 3. update processed_variants: Persist new variant map into PostgreSQL media_assets atomically
+ * 4. invalidate catalog-public: Purge Next.js authoritative catalog snapshot via internal endpoint / Server Action
+ * 5. revalidate storefront: Revalidate Next.js public route and layout caches (revalidatePath("/", "layout"))
+ * 6. verify new paths: Confirm rendered HTML/RSC responses serve hashed URLs with zero broken references
+ * 7. delete previous generation: Only once verified, delete superseded previous generation variant objects
+ */
+
 import crypto from "node:crypto";
 import path from "node:path";
 import { createRequire } from "node:module";
@@ -272,8 +283,8 @@ async function main() {
     console.log(`\nCompleted processing ${res.rows.length} canonical hero assets!`);
 
     // Safe media cutover sequence:
-    // generate -> verify Storage -> update processed_variants -> invalidate catalog-public -> revalidate storefront
-    console.log("\n--- CACHE INVALIDATION & CUTOVER SAFETY ---");
+    // generate -> verify Storage -> update processed_variants -> invalidate catalog-public -> revalidate storefront -> verify new paths -> delete previous generation
+    console.log("\n--- STEP 4 & 5: CACHE INVALIDATION & STOREFRONT REVALIDATION ---");
     const appUrl =
       process.env.NEXT_PUBLIC_APP_URL ||
       process.env.NEXT_PUBLIC_SITE_URL ||
@@ -310,6 +321,10 @@ async function main() {
       console.log(`  POST /api/admin/revalidate-catalog (Header: x-admin-secret)`);
       console.log(`Or invoke revalidatePublicCatalogAction() in admin-catalog.`);
       console.log(`===============================================================\n`);
+    } else {
+      console.log(`\n--- STEP 6 & 7: NEXT ACTIONS ---`);
+      console.log(`1. Verify new paths: Verify rendered HTML/RSC responses serve hashed URLs with zero broken references.`);
+      console.log(`2. Delete previous generation: Only after verifying storefront health, delete superseded previous generation variant objects in Storage.\n`);
     }
   } finally {
     await db.end();
