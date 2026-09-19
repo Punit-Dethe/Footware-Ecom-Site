@@ -41,7 +41,10 @@ export function ProductImage({
   const webpSrcSet = variants ? generateSrcSet(variants, "webp") : null;
 
   if (avifSrcSet || webpSrcSet) {
-    const isPriority = rest.priority || fetchPriority === "high";
+    const isPriority =
+      Boolean(rest.priority) ||
+      fetchPriority === "high" ||
+      rest.loading === "eager";
     const fallbackSrc =
       variants?.["1200"]?.webp ||
       variants?.["960"]?.webp ||
@@ -68,7 +71,7 @@ export function ProductImage({
           src={fallbackSrc}
           alt={rest.alt || ""}
           loading={isPriority ? "eager" : "lazy"}
-          fetchPriority={fetchPriority}
+          fetchPriority={fetchPriority ?? (isPriority ? "high" : undefined)}
           decoding="async"
           className={rest.className}
           style={{

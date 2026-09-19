@@ -149,10 +149,10 @@ describe("B6A Catalog Parity & Read Model Tests", () => {
         [6, 7, 8, 9, 10, 11, 12].map((size) => `Size: UK/India ${size}`),
       );
       expect(found?.thumbnail_url).toMatch(
-        /^https:\/\/[^/]+\/storage\/v1\/object\/public\/product-media\/media\/[0-9a-f-]+\/(original|variants\/320)\.webp$/,
+        /^https:\/\/[^/]+\/storage\/v1\/object\/public\/product-media\/media\/[0-9a-f-]+\/(original|variants\/320(-[0-9a-f]{12})?)\.webp$/,
       );
       expect(found?.primary_media.url).toMatch(
-        /^https:\/\/[^/]+\/storage\/v1\/object\/public\/product-media\/media\/[0-9a-f-]+\/(original|variants\/640)\.webp$/,
+        /^https:\/\/[^/]+\/storage\/v1\/object\/public\/product-media\/media\/[0-9a-f-]+\/(original|variants\/640(-[0-9a-f]{12})?)\.webp$/,
       );
 
       // Only historical order items require static /catalog-shoes retention (shoe-01, 02, 05)

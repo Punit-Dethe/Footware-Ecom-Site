@@ -168,7 +168,7 @@ function MediaGalleryInner({
         <ProductImage
           key={safeIndex}
           src={mainImageUrl}
-          variants={(selectedImage as any)?.variants}
+          variants={selectedImage?.variants}
           alt={selectedImage?.alt || productName}
           fill
           className={editorial ? "object-contain" : "object-cover"}
@@ -211,6 +211,7 @@ function MediaGalleryInner({
               >
                 <ProductImage
                   src={thumbUrl}
+                  variants={image.variants}
                   alt={image.alt || `${productName} ${index + 1}`}
                   fill
                   className={editorial ? "object-contain" : "object-cover"}

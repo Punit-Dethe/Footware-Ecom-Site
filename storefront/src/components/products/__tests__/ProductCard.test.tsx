@@ -148,4 +148,40 @@ describe("ProductCard", () => {
     const link = screen.getByRole("link");
     expect(link).toHaveAttribute("href", "/products/classic-t-shirt");
   });
+
+  it("passes product_media.variants to render direct responsive <picture>", () => {
+    const productWithVariants = {
+      ...baseProduct,
+      product_media: {
+        mainUrl: "https://example.com/shirt.jpg",
+        variants: {
+          "320": {
+            avif: "https://example.com/variants/320.avif",
+            webp: "https://example.com/variants/320.webp",
+          },
+          "640": {
+            avif: "https://example.com/variants/640.avif",
+            webp: "https://example.com/variants/640.webp",
+          },
+          "960": {
+            avif: "https://example.com/variants/960.avif",
+            webp: "https://example.com/variants/960.webp",
+          },
+          "1200": {
+            avif: "https://example.com/variants/1200.avif",
+            webp: "https://example.com/variants/1200.webp",
+          },
+        },
+      },
+    } as unknown as Product;
+
+    const { container } = render(
+      <ProductCard product={productWithVariants} basePath="/us/en" />,
+    );
+
+    const picture = container.querySelector("picture");
+    expect(picture).toBeInTheDocument();
+    const avifSource = picture?.querySelector('source[type="image/avif"]');
+    expect(avifSource).toBeInTheDocument();
+  });
 });
