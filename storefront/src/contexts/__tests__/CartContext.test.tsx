@@ -168,6 +168,46 @@ describe("CartContext", () => {
 
       expect(mockToastError).toHaveBeenCalledWith("failedToAddItem");
     });
+
+    it("protects against stale initial hydration overwriting a fast mutation", async () => {
+      let resolveInitialRefresh!: (value: any) => void;
+      const initialRefreshPromise = new Promise((resolve) => {
+        resolveInitialRefresh = resolve;
+      });
+
+      // Initial mount calls getCart which stays pending (slow network / cold start)
+      mockGetCart.mockImplementationOnce(() => initialRefreshPromise as any);
+
+      // Add to Cart returns quickly with mutated authoritative cart
+      const mutatedCart = {
+        id: "cart-mutated",
+        items: [{ id: "li-new", quantity: 1, name: "Sneaker" }],
+      } as never;
+      mockAddToCart.mockResolvedValueOnce({
+        success: true as const,
+        cart: mutatedCart,
+      });
+
+      const { result } = renderHook(() => useCart(), { wrapper });
+
+      // While initial hydration is still pending, user adds item
+      await act(async () => {
+        await result.current.addItem("variant-new", 1);
+      });
+
+      // Mutation completed and updated state
+      expect(result.current.cart).toBe(mutatedCart);
+      expect(result.current.loading).toBe(false);
+
+      // Now the old initial refresh finally resolves with an empty/null cart
+      await act(async () => {
+        resolveInitialRefresh(null);
+      });
+
+      // Mutation state MUST win permanently and not be overwritten by stale hydration
+      expect(result.current.cart).toBe(mutatedCart);
+      expect(result.current.loading).toBe(false);
+    });
   });
 
   describe("updateItem", () => {

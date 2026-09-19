@@ -56,18 +56,29 @@ export function CartProvider({
   const auth = useOptionalAuth();
   const userId = auth?.user?.id ?? null;
   const prevUserRef = useRef<string | null | undefined>(undefined);
+  const requestSeqRef = useRef(0);
 
   const openCart = useCallback(() => setIsOpen(true), []);
   const closeCart = useCallback(() => setIsOpen(false), []);
 
   const refreshCart = useCallback(async () => {
+    const seq = ++requestSeqRef.current;
     try {
       const cartData = await getCartAction(undefined, surface);
+      if (seq < requestSeqRef.current) {
+        // Stale response: a newer mutation or refresh has already started
+        return;
+      }
       setCart(cartData);
     } catch {
+      if (seq < requestSeqRef.current) {
+        return;
+      }
       setCart(null);
     } finally {
-      setLoading(false);
+      if (seq >= requestSeqRef.current) {
+        setLoading(false);
+      }
     }
   }, [surface]);
 
@@ -100,19 +111,29 @@ export function CartProvider({
       fallbackMessage: string,
       onSuccess?: () => void,
     ) => {
+      const seq = ++requestSeqRef.current;
       setUpdating(true);
       try {
         const result = await action();
+        if (seq < requestSeqRef.current) {
+          // Stale mutation: a newer mutation or action has taken precedence
+          return;
+        }
         if (result.success) {
           setCart(result.cart ?? null);
+          setLoading(false);
           onSuccess?.();
         } else {
           toast.error(result.error || fallbackMessage);
         }
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : fallbackMessage);
+        if (seq >= requestSeqRef.current) {
+          toast.error(error instanceof Error ? error.message : fallbackMessage);
+        }
       } finally {
-        setUpdating(false);
+        if (seq >= requestSeqRef.current) {
+          setUpdating(false);
+        }
       }
     },
     [],

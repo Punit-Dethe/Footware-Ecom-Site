@@ -118,10 +118,6 @@ export function PaymentSection({
               setProcessing(false);
               return { error: t("failedToSaveBilling") };
             }
-          } else {
-            await onUpdateBillingAddress({
-              use_shipping: true,
-            });
           }
 
           await onPaymentComplete();

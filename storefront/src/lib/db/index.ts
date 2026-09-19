@@ -1,4 +1,5 @@
 import "server-only";
+import { attachDatabasePool } from "@vercel/functions";
 import {
   Pool,
   type PoolClient,
@@ -135,11 +136,62 @@ export function getDbPool(): Pool {
     console.error("[db] Unexpected idle PostgreSQL client error:", err.message);
   });
 
-  if (process.env.NODE_ENV !== "production") {
-    globalForDb.dbPool = pool;
+  // Fluid compute safe attachment: register pool with Vercel function suspension manager exactly once
+  try {
+    if (typeof attachDatabasePool === "function") {
+      attachDatabasePool(pool);
+    }
+  } catch {
+    // Non-Vercel environments or unsupported runtimes proceed safely
   }
 
+  // Unconditional singleton assignment ensures warm Vercel lambda instances retain pool
+  globalForDb.dbPool = pool;
+
   return pool;
+}
+
+function isPerfDiagnosticsEnabled(): boolean {
+  return process.env.PERF_DIAGNOSTICS === "1";
+}
+
+function inferOperationName(text: string): string {
+  const normalized = text.trim().toUpperCase();
+  if (normalized.startsWith("SELECT") && normalized.includes("FROM PUBLIC.CARTS")) return "cart.find";
+  if (normalized.startsWith("SELECT") && normalized.includes("FROM PUBLIC.CART_ITEMS")) return "cart.items";
+  if (
+    normalized.includes("INTO PUBLIC.CART_ITEMS") ||
+    normalized.includes("UPDATE PUBLIC.CART_ITEMS") ||
+    normalized.includes("DELETE FROM PUBLIC.CART_ITEMS")
+  ) {
+    return "cart.mutate";
+  }
+  if (normalized.includes("FROM PUBLIC.VARIANTS")) return "variant.resolve";
+  if (normalized.includes("INTO PUBLIC.ORDERS") || normalized.includes("INTO PUBLIC.ORDER_ITEMS")) return "order.place";
+  if (normalized.includes("PUBLIC.CATEGORIES")) return "catalog.categories";
+  if (normalized.includes("PUBLIC.PRODUCTS")) return "catalog.products";
+  return "db.query";
+}
+
+function logPerfTiming(metric: {
+  type: "query" | "transaction";
+  op: string;
+  totalMs: number;
+  connectMs?: number;
+  sqlMs?: number;
+  txMs?: number;
+  poolState: { total: number; idle: number; waiting: number };
+}) {
+  if (!isPerfDiagnosticsEnabled()) return;
+  const parts = [
+    `[db:perf] ${metric.type}:${metric.op}`,
+    `total=${metric.totalMs}ms`,
+  ];
+  if (metric.connectMs != null) parts.push(`conn=${metric.connectMs}ms`);
+  if (metric.sqlMs != null) parts.push(`sql=${metric.sqlMs}ms`);
+  if (metric.txMs != null) parts.push(`tx=${metric.txMs}ms`);
+  parts.push(`pool(tot=${metric.poolState.total},idle=${metric.poolState.idle},wait=${metric.poolState.waiting})`);
+  console.log(parts.join(" | "));
 }
 
 /**
@@ -148,19 +200,46 @@ export function getDbPool(): Pool {
 export async function query<R extends QueryResultRow = any>(
   text: string,
   params?: any[],
+  opName?: string,
 ): Promise<QueryResult<R>> {
   const pool = getDbPool();
-  const start = Date.now();
+  const op = opName || inferOperationName(text);
+  const start = performance.now();
+  const poolState = {
+    total: pool.totalCount,
+    idle: pool.idleCount,
+    waiting: pool.waitingCount,
+  };
+
+  const client = await pool.connect();
+  const connEnd = performance.now();
   try {
-    const res = await pool.query<R>(text, params);
+    const sqlStart = performance.now();
+    const res = await client.query<R>(text, params);
+    const sqlEnd = performance.now();
+
+    const totalMs = Math.round(sqlEnd - start);
+    const connMs = Math.round(connEnd - start);
+    const sqlMs = Math.round(sqlEnd - sqlStart);
+
+    logPerfTiming({
+      type: "query",
+      op,
+      totalMs,
+      connectMs: connMs,
+      sqlMs,
+      poolState,
+    });
+
     return res;
   } catch (error) {
-    const duration = Date.now() - start;
-    console.error(`[db] Query error (${duration}ms):`, {
+    const duration = Math.round(performance.now() - start);
+    console.error(`[db] Query error (${op}, ${duration}ms):`, {
       message: error instanceof Error ? error.message : String(error),
-      query: text.slice(0, 100),
     });
     throw error;
+  } finally {
+    client.release();
   }
 }
 
@@ -169,16 +248,43 @@ export async function query<R extends QueryResultRow = any>(
  */
 export async function transaction<T>(
   callback: (client: PoolClient) => Promise<T>,
+  opName = "tx",
 ): Promise<T> {
   const pool = getDbPool();
+  const start = performance.now();
+  const poolState = {
+    total: pool.totalCount,
+    idle: pool.idleCount,
+    waiting: pool.waitingCount,
+  };
+
   const client = await pool.connect();
+  const acqEnd = performance.now();
+  const acqMs = Math.round(acqEnd - start);
   try {
     await client.query("BEGIN");
     const result = await callback(client);
     await client.query("COMMIT");
+    const end = performance.now();
+    const txMs = Math.round(end - acqEnd);
+    const totalMs = Math.round(end - start);
+
+    logPerfTiming({
+      type: "transaction",
+      op: opName,
+      totalMs,
+      connectMs: acqMs,
+      txMs,
+      poolState,
+    });
+
     return result;
   } catch (error) {
     await client.query("ROLLBACK");
+    const duration = Math.round(performance.now() - start);
+    console.error(`[db] Transaction error (${opName}, ${duration}ms):`, {
+      message: error instanceof Error ? error.message : String(error),
+    });
     throw error;
   } finally {
     client.release();
