@@ -56,6 +56,7 @@ import {
   deleteCategoryAction,
   restoreProductAction,
   saveProductAction,
+  revalidatePublicCatalogAction,
 } from "../admin-catalog";
 
 describe("Admin Catalog Server Actions", () => {
@@ -210,6 +211,36 @@ describe("Admin Catalog Server Actions", () => {
       expect(res.error).toBe("Admin authorization required.");
       expect(mockDal.saveAdminProduct).not.toHaveBeenCalled();
       expect(mockCache.updateTag).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("revalidatePublicCatalogAction", () => {
+    it("invalidates catalog-public and revalidates root layout when admin is authorized", async () => {
+      mockAuth.requireAdmin.mockResolvedValue({ id: "admin-1", email: "admin@example.com" });
+
+      const res = await revalidatePublicCatalogAction();
+
+      expect(mockAuth.requireAdmin).toHaveBeenCalled();
+      expect(mockCache.updateTag).toHaveBeenCalledWith("catalog-public");
+      expect(mockCache.revalidatePath).toHaveBeenCalledWith("/", "layout");
+      expect(res).toEqual({
+        success: true,
+        data: { invalidated: true },
+      });
+    });
+
+    it("rejects unauthorized caller without invalidating cache", async () => {
+      const { AdminAuthError } = await import("@/lib/auth/admin");
+      mockAuth.requireAdmin.mockRejectedValue(
+        new AdminAuthError("User is not an authorized administrator.", "FORBIDDEN"),
+      );
+
+      const res = await revalidatePublicCatalogAction();
+
+      expect(res.success).toBe(false);
+      expect(res.error).toBe("Admin authorization required.");
+      expect(mockCache.updateTag).not.toHaveBeenCalled();
+      expect(mockCache.revalidatePath).not.toHaveBeenCalled();
     });
   });
 });

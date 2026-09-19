@@ -208,6 +208,24 @@ export async function deleteCategoryAction(
   }
 }
 
+/**
+ * Explicitly invalidates the authoritative public catalog snapshot
+ * and revalidates public storefront routes/layouts.
+ */
+export async function revalidatePublicCatalogAction(): Promise<ActionState<{ invalidated: boolean }>> {
+  try {
+    await requireAdmin();
+    updateTag("catalog-public");
+    revalidatePath("/", "layout");
+    return {
+      success: true,
+      data: { invalidated: true },
+    };
+  } catch (err: any) {
+    return handleActionError(err);
+  }
+}
+
 function handleActionError(err: any): ActionState<any> {
   if (
     err instanceof AdminAuthError ||
