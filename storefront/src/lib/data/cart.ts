@@ -252,14 +252,14 @@ async function dropSurfaceCartCookies(surface: Surface): Promise<void> {
 }
 
 /**
- * Get the current authorized cart for a surface.
- * Returns null if no cart exists, or if cart ID does not match the caller's authorization.
- * Persistent PostgreSQL cart is the sole source of truth; zero legacy cart read fallbacks.
+ * Resolves the raw authorized PostgreSQL DbCart without loading line items or adapting catalog.
+ * Solves single-resolution auth invariant for cart mutations.
+ * Anonymous requests make 0 remote Supabase Auth network calls.
  */
-export async function getCart(
-  explicitCartId?: string,
+export async function getAuthorizedDbCart(
   surface: Surface = DEFAULT_SURFACE,
-): Promise<Cart | null> {
+  explicitCartId?: string,
+): Promise<DbCart | null> {
   const auth = await verifyAuthSession();
   const rawGuestToken = await getCartToken(surface);
 
@@ -268,7 +268,6 @@ export async function getCart(
     const verifiedUserId = auth.userId;
     let userCart: DbCart | null = null;
 
-    // If an active guest token is present, claim or merge it into the user cart
     if (rawGuestToken) {
       const guestTokenHash = hashGuestToken(rawGuestToken);
       userCart = await claimOrMergeGuestCart(
@@ -276,7 +275,6 @@ export async function getCart(
         guestTokenHash,
         surface,
       );
-      // Clear the raw guest token cookie now that it is merged into the user cart
       try {
         await clearCartToken(surface);
         await setCartCookies(userCart.id, undefined, surface);
@@ -291,38 +289,117 @@ export async function getCart(
       return null;
     }
 
-    // IDOR Protection: explicit cart lookup must match the authenticated user's cart
     if (explicitCartId && userCart.id !== explicitCartId) {
       return null;
     }
 
-    const items = await loadCartItems(userCart.id);
-    return await adaptDbCartToCommerceCart(userCart, items, surface);
+    return userCart;
   }
 
   // Anonymous guest flow
   if (!rawGuestToken) {
-    // An anonymous visitor with no guest token has no cart (0 DB rows created)
     return null;
   }
 
-  // IDOR Protection: cart UUID without matching guest token or user session is rejected
   const guestTokenHash = hashGuestToken(rawGuestToken);
   const guestCart = await findActiveGuestCart(guestTokenHash, surface);
 
   if (!guestCart) {
-    // Stale or invalid guest token
     await dropSurfaceCartCookies(surface);
     return null;
   }
 
-  // IDOR Protection: explicit cart lookup must match the guest cart
   if (explicitCartId && guestCart.id !== explicitCartId) {
     return null;
   }
 
-  const items = await loadCartItems(guestCart.id);
-  return await adaptDbCartToCommerceCart(guestCart, items, surface);
+  return guestCart;
+}
+
+/**
+ * Resolves existing authorized DbCart or creates one in a single pass.
+ * Verifies auth exactly once. Never calls loadCartItems or adaptDbCartToCommerceCart.
+ */
+export async function getOrCreateAuthorizedDbCart(
+  surface: Surface = DEFAULT_SURFACE,
+): Promise<DbCart> {
+  const auth = await verifyAuthSession();
+  const rawGuestToken = await getCartToken(surface);
+
+  if (auth.status === "authenticated") {
+    const verifiedUserId = auth.userId;
+    let userCart: DbCart | null = null;
+
+    if (rawGuestToken) {
+      const guestTokenHash = hashGuestToken(rawGuestToken);
+      userCart = await claimOrMergeGuestCart(
+        verifiedUserId,
+        guestTokenHash,
+        surface,
+      );
+      try {
+        await clearCartToken(surface);
+        await setCartCookies(userCart.id, undefined, surface);
+      } catch {
+        // Best effort
+      }
+    } else {
+      userCart = await findActiveUserCart(verifiedUserId, surface);
+    }
+
+    if (userCart) {
+      return userCart;
+    }
+
+    const newUserCart = await createUserCart(verifiedUserId, surface, "USD");
+    try {
+      await setCartCookies(newUserCart.id, undefined, surface);
+    } catch {
+      // Best effort
+    }
+    return newUserCart;
+  }
+
+  // Anonymous guest flow
+  if (rawGuestToken) {
+    const guestTokenHash = hashGuestToken(rawGuestToken);
+    const guestCart = await findActiveGuestCart(guestTokenHash, surface);
+    if (guestCart) {
+      return guestCart;
+    }
+    await dropSurfaceCartCookies(surface);
+  }
+
+  // Generate secure 256-bit guest token
+  const rawToken = generateGuestBearerToken();
+  const guestTokenHash = hashGuestToken(rawToken);
+  const newGuestCart = await createGuestCart(guestTokenHash, surface, "USD");
+
+  try {
+    await setCartCookies(newGuestCart.id, rawToken, surface);
+  } catch {
+    // Best effort
+  }
+
+  return newGuestCart;
+}
+
+/**
+ * Get the current authorized cart for a surface.
+ * Returns null if no cart exists, or if cart ID does not match the caller's authorization.
+ * Persistent PostgreSQL cart is the sole source of truth; zero legacy cart read fallbacks.
+ */
+export async function getCart(
+  explicitCartId?: string,
+  surface: Surface = DEFAULT_SURFACE,
+): Promise<Cart | null> {
+  const cart = await getAuthorizedDbCart(surface, explicitCartId);
+  if (!cart) {
+    return null;
+  }
+
+  const items = await loadCartItems(cart.id);
+  return await adaptDbCartToCommerceCart(cart, items, surface);
 }
 
 /**
@@ -333,35 +410,9 @@ export async function getOrCreateCart(
   _params?: CreateCartParams,
   surface: Surface = DEFAULT_SURFACE,
 ): Promise<Cart> {
-  const existing = await getCart(undefined, surface);
-  if (existing) {
-    return existing;
-  }
-
-  const verifiedUserId = await getVerifiedUserId();
-
-  if (verifiedUserId) {
-    const userCart = await createUserCart(verifiedUserId, surface, "USD");
-    try {
-      await setCartCookies(userCart.id, undefined, surface);
-    } catch {
-      // Best effort
-    }
-    return await adaptDbCartToCommerceCart(userCart, [], surface);
-  }
-
-  // Generate secure 256-bit guest token
-  const rawToken = generateGuestBearerToken();
-  const guestTokenHash = hashGuestToken(rawToken);
-  const guestCart = await createGuestCart(guestTokenHash, surface, "USD");
-
-  try {
-    await setCartCookies(guestCart.id, rawToken, surface);
-  } catch {
-    // Best effort
-  }
-
-  return await adaptDbCartToCommerceCart(guestCart, [], surface);
+  const cart = await getOrCreateAuthorizedDbCart(surface);
+  const items = await loadCartItems(cart.id);
+  return await adaptDbCartToCommerceCart(cart, items, surface);
 }
 
 /**
@@ -370,7 +421,7 @@ export async function getOrCreateCart(
  */
 export async function clearCart(surface: Surface = DEFAULT_SURFACE) {
   return actionResult(async () => {
-    const cart = await getCart(undefined, surface);
+    const cart = await getAuthorizedDbCart(surface);
     if (cart) {
       await markCartAbandoned(cart.id);
     }
@@ -382,6 +433,7 @@ export async function clearCart(surface: Surface = DEFAULT_SURFACE) {
 /**
  * Adds an item to the current cart.
  * Validates variant against authoritative PostgreSQL catalog.
+ * Executes exactly 4 queries on warm catalog cache (1 variant, 1 find cart, 1 CTE mutate, 1 load items).
  */
 export async function addToCart(
   variantId: string,
@@ -406,16 +458,18 @@ export async function addToCart(
       throw new Error("Quantity must be a positive integer");
     }
 
-    const cart = await getOrCreateCart(undefined, surface);
+    const cart = await getOrCreateAuthorizedDbCart(surface);
     await addOrIncrementCartItem(cart.id, match.id, match.sku, quantity);
 
-    const updatedCart = await getCart(cart.id, surface);
+    const items = await loadCartItems(cart.id);
+    const updatedCart = await adaptDbCartToCommerceCart(cart, items, surface);
     return { cart: updatedCart };
   }, "Failed to add item to cart");
 }
 
 /**
  * Updates quantity of a specific line item in the current authorized cart.
+ * Executes exactly 3 queries on warm catalog cache (1 find cart, 1 CTE mutate, 1 load items).
  */
 export async function updateCartItem(
   lineItemId: string,
@@ -423,7 +477,7 @@ export async function updateCartItem(
   surface: Surface = DEFAULT_SURFACE,
 ) {
   return actionResult(async () => {
-    const cart = await getCart(undefined, surface);
+    const cart = await getAuthorizedDbCart(surface);
     if (!cart) {
       throw new Error("Cart not found");
     }
@@ -433,20 +487,22 @@ export async function updateCartItem(
       throw new Error("Line item not found in cart");
     }
 
-    const updatedCart = await getCart(cart.id, surface);
+    const items = await loadCartItems(cart.id);
+    const updatedCart = await adaptDbCartToCommerceCart(cart, items, surface);
     return { cart: updatedCart };
   }, "Failed to update cart item");
 }
 
 /**
  * Removes a specific line item from the current authorized cart.
+ * Executes exactly 3 queries on warm catalog cache (1 find cart, 1 CTE mutate, 1 load items).
  */
 export async function removeCartItem(
   lineItemId: string,
   surface: Surface = DEFAULT_SURFACE,
 ) {
   return actionResult(async () => {
-    const cart = await getCart(undefined, surface);
+    const cart = await getAuthorizedDbCart(surface);
     if (!cart) {
       throw new Error("Cart not found");
     }
@@ -456,7 +512,8 @@ export async function removeCartItem(
       throw new Error("Line item not found in cart");
     }
 
-    const updatedCart = await getCart(cart.id, surface);
+    const items = await loadCartItems(cart.id);
+    const updatedCart = await adaptDbCartToCommerceCart(cart, items, surface);
     return { cart: updatedCart };
   }, "Failed to remove cart item");
 }

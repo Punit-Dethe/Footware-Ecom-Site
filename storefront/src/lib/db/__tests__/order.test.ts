@@ -413,6 +413,133 @@ describe("Database Order Repository", () => {
       expect(mockQuery).not.toHaveBeenCalled();
     });
 
+    it("proves same-as-shipping produces the correct billing snapshot when billing_address is not set", async () => {
+      const shippingAddress = {
+        first_name: "Rahul",
+        last_name: "Verma",
+        address1: "123 Marine Drive",
+        city: "Mumbai",
+        country_iso: "IN",
+        postal_code: "400001",
+      };
+
+      const mockQueries: any[] = [];
+      mockTransaction.mockImplementation(async (cb) => {
+        const fakeClient = {
+          query: vi.fn(async (sql: string, params: any[]) => {
+            mockQueries.push({ sql, params });
+            if (sql.includes("FROM public.carts") && sql.includes("FOR UPDATE")) {
+              return {
+                rows: [
+                  {
+                    id: "cart-same-shipping",
+                    user_id: "user-1",
+                    guest_token_hash: null,
+                    surface: "dtc",
+                    currency: "USD",
+                    shipping_address: shippingAddress,
+                    billing_address: null, // same-as-shipping selected
+                    checkout_email: "rahul@example.com",
+                    status: "active",
+                  },
+                ],
+              };
+            }
+            if (sql.includes("FROM public.orders WHERE source_cart_id")) {
+              return { rows: [] };
+            }
+            if (sql.includes("FROM public.cart_items")) {
+              return {
+                rows: [
+                  {
+                    cart_item_id: "cart-item-1",
+                    cart_id: "cart-same-shipping",
+                    variant_id: "var-1",
+                    variant_sku: "SKU-1",
+                    quantity: 1,
+                    db_variant_id: "var-1",
+                    db_variant_sku: "SKU-1",
+                    size_option: "9",
+                    price_in_cents: 9900,
+                    variant_active: true,
+                    quantity_on_hand: 5,
+                    backorderable: false,
+                    product_id: "prod-1",
+                    product_name: "Oxford Leather",
+                    product_slug: "oxford-leather",
+                    product_status: "active",
+                  },
+                ],
+              };
+            }
+            if (sql.includes("INSERT INTO public.orders")) {
+              return {
+                rows: [
+                  {
+                    id: "order-1",
+                    order_number: "MRZ-TEST12345",
+                    user_id: "user-1",
+                    email: "rahul@example.com",
+                    status: "placed",
+                    currency: "USD",
+                    subtotal_in_cents: 9900,
+                    tax_in_cents: 0,
+                    shipping_in_cents: 0,
+                    total_in_cents: 9900,
+                    shipping_address_snapshot: shippingAddress,
+                    billing_address_snapshot: shippingAddress,
+                    source_cart_id: "cart-same-shipping",
+                    surface: "dtc",
+                    completed_at: new Date(),
+                    created_at: new Date(),
+                    updated_at: new Date(),
+                  },
+                ],
+              };
+            }
+            if (sql.includes("INSERT INTO public.order_items")) {
+              return {
+                rows: [
+                  {
+                    id: "oi-1",
+                    order_id: "order-1",
+                    variant_id: "var-1",
+                    product_name: "Oxford Leather",
+                    sku: "SKU-1",
+                    size_option: "9",
+                    price_in_cents: 9900,
+                    quantity: 1,
+                    total_in_cents: 9900,
+                    thumbnail_url: null,
+                    created_at: new Date(),
+                  },
+                ],
+              };
+            }
+            if (sql.includes("UPDATE public.carts SET status = 'converted'")) {
+              return { rowCount: 1 };
+            }
+            return { rows: [] };
+          }),
+        };
+        return cb(fakeClient);
+      });
+
+      await placeOrderFromCart({
+        cartId: "cart-same-shipping",
+        surface: "dtc",
+        verifiedUserId: "user-1",
+      });
+
+      const insertOrderCall = mockQueries.find((q) =>
+        q.sql.includes("INSERT INTO public.orders"),
+      );
+      expect(insertOrderCall).toBeDefined();
+      // Parameter $9 is shipping_address_snapshot, parameter $10 is billing_address_snapshot
+      expect(JSON.parse(insertOrderCall.params[8])).toEqual(shippingAddress);
+      expect(JSON.parse(insertOrderCall.params[9])).toEqual(shippingAddress);
+    });
+
     it("snapshots price directly from PostgreSQL variant and never calls global pool", async () => {
       const mockQueries: any[] = [];
       mockTransaction.mockImplementation(async (cb) => {

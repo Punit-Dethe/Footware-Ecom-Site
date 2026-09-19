@@ -4,11 +4,18 @@ const mockQuery = vi.fn();
 const mockTransaction = vi.fn();
 
 vi.mock("../index", () => ({
-  query: (text: string, params?: unknown[]) => mockQuery(text, params),
+  query: (text: string, params?: unknown[], opName?: string) =>
+    mockQuery(text, params, opName),
   transaction: (cb: any) => mockTransaction(cb),
 }));
 
-import { claimOrMergeGuestCart, updateAuthorizedCartCheckoutData } from "../cart";
+import {
+  addOrIncrementCartItem,
+  claimOrMergeGuestCart,
+  removeCartItem,
+  updateAuthorizedCartCheckoutData,
+  updateCartItemQuantity,
+} from "../cart";
 
 describe("Database Cart Repository - updateAuthorizedCartCheckoutData", () => {
   beforeEach(() => {
@@ -315,5 +322,150 @@ describe("Database Cart Repository - claimOrMergeGuestCart", () => {
     );
     expect(abandonCall).toBeDefined();
     expect(abandonCall.params[0]).toBe("guest-cart-1");
+  });
+});
+
+describe("Database Cart Repository - CTE Atomic Mutations", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  describe("updateCartItemQuantity", () => {
+    it("updates existing line item, touches parent cart via CTE, and returns true", async () => {
+      mockQuery.mockResolvedValueOnce({ rowCount: 1, rows: [{ id: "item-1" }] });
+
+      const success = await updateCartItemQuantity(
+        "11111111-1111-1111-1111-111111111111",
+        "22222222-2222-2222-2222-222222222222",
+        3,
+      );
+
+      expect(success).toBe(true);
+      expect(mockQuery).toHaveBeenCalledTimes(1);
+      const [sql, params, op] = mockQuery.mock.calls[0];
+      expect(op).toBe("cart.mutate.update");
+      expect(sql).toContain("WITH mutated AS");
+      expect(sql).toContain("UPDATE public.cart_items");
+      expect(sql).toContain("touched AS");
+      expect(sql).toContain("UPDATE public.carts");
+      expect(sql).toContain("WHERE id = $2");
+      expect(sql).toContain("AND EXISTS (SELECT 1 FROM mutated)");
+      expect(sql).toContain("SELECT id FROM mutated");
+      expect(params).toEqual([
+        "22222222-2222-2222-2222-222222222222",
+        "11111111-1111-1111-1111-111111111111",
+        3,
+      ]);
+    });
+
+    it("returns false and preserves failure semantics when line item does not exist (cart untouched)", async () => {
+      mockQuery.mockResolvedValueOnce({ rowCount: 0, rows: [] });
+
+      const success = await updateCartItemQuantity(
+        "11111111-1111-1111-1111-111111111111",
+        "22222222-2222-2222-2222-222222222222",
+        2,
+      );
+
+      expect(success).toBe(false);
+      expect(mockQuery).toHaveBeenCalledTimes(1);
+    });
+
+    it("delegates to removeCartItem when quantity <= 0", async () => {
+      mockQuery.mockResolvedValueOnce({ rowCount: 1, rows: [{ id: "item-1" }] });
+
+      const success = await updateCartItemQuantity(
+        "11111111-1111-1111-1111-111111111111",
+        "22222222-2222-2222-2222-222222222222",
+        0,
+      );
+
+      expect(success).toBe(true);
+      const [sql, , op] = mockQuery.mock.calls[0];
+      expect(op).toBe("cart.mutate.remove");
+      expect(sql).toContain("DELETE FROM public.cart_items");
+    });
+  });
+
+  describe("removeCartItem", () => {
+    it("deletes existing line item, touches parent cart via CTE, and returns true", async () => {
+      mockQuery.mockResolvedValueOnce({ rowCount: 1, rows: [{ id: "item-1" }] });
+
+      const success = await removeCartItem(
+        "11111111-1111-1111-1111-111111111111",
+        "22222222-2222-2222-2222-222222222222",
+      );
+
+      expect(success).toBe(true);
+      expect(mockQuery).toHaveBeenCalledTimes(1);
+      const [sql, params, op] = mockQuery.mock.calls[0];
+      expect(op).toBe("cart.mutate.remove");
+      expect(sql).toContain("WITH mutated AS");
+      expect(sql).toContain("DELETE FROM public.cart_items");
+      expect(sql).toContain("touched AS");
+      expect(sql).toContain("UPDATE public.carts");
+      expect(sql).toContain("WHERE id = $2");
+      expect(sql).toContain("AND EXISTS (SELECT 1 FROM mutated)");
+      expect(params).toEqual([
+        "22222222-2222-2222-2222-222222222222",
+        "11111111-1111-1111-1111-111111111111",
+      ]);
+    });
+
+    it("returns false when line item does not exist (cart untouched)", async () => {
+      mockQuery.mockResolvedValueOnce({ rowCount: 0, rows: [] });
+
+      const success = await removeCartItem(
+        "11111111-1111-1111-1111-111111111111",
+        "22222222-2222-2222-2222-222222222222",
+      );
+
+      expect(success).toBe(false);
+      expect(mockQuery).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("addOrIncrementCartItem", () => {
+    it("inserts or increments item and touches parent cart in a single CTE statement", async () => {
+      mockQuery.mockResolvedValueOnce({
+        rows: [
+          {
+            id: "item-1",
+            cart_id: "11111111-1111-1111-1111-111111111111",
+            variant_id: "var-1",
+            variant_sku: "SKU-001",
+            quantity: 2,
+            created_at: new Date(),
+            updated_at: new Date(),
+          },
+        ],
+      });
+
+      const item = await addOrIncrementCartItem(
+        "11111111-1111-1111-1111-111111111111",
+        "var-1",
+        "SKU-001",
+        2,
+      );
+
+      expect(item.id).toBe("item-1");
+      expect(item.quantity).toBe(2);
+      expect(mockQuery).toHaveBeenCalledTimes(1);
+      const [sql, params, op] = mockQuery.mock.calls[0];
+      expect(op).toBe("cart.mutate.add");
+      expect(sql).toContain("WITH mutated AS");
+      expect(sql).toContain("INSERT INTO public.cart_items");
+      expect(sql).toContain("ON CONFLICT (cart_id, variant_sku) DO UPDATE");
+      expect(sql).toContain("touched AS");
+      expect(sql).toContain("UPDATE public.carts");
+      expect(sql).toContain("WHERE id = $1");
+      expect(sql).toContain("AND EXISTS (SELECT 1 FROM mutated)");
+      expect(params).toEqual([
+        "11111111-1111-1111-1111-111111111111",
+        "var-1",
+        "SKU-001",
+        2,
+      ]);
+    });
   });
 });

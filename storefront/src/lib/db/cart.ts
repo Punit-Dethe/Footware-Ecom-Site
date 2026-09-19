@@ -199,17 +199,25 @@ export async function addOrIncrementCartItem(
   }
 
   const res = await query<Record<string, unknown>>(
-    `INSERT INTO public.cart_items (cart_id, variant_id, variant_sku, quantity, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, NOW(), NOW())
-     ON CONFLICT (cart_id, variant_sku) DO UPDATE
-     SET variant_id = EXCLUDED.variant_id,
-         quantity = public.cart_items.quantity + EXCLUDED.quantity,
-         updated_at = NOW()
-     RETURNING id, cart_id, variant_id, variant_sku, quantity, created_at, updated_at;`,
+    `WITH mutated AS (
+       INSERT INTO public.cart_items (cart_id, variant_id, variant_sku, quantity, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, NOW(), NOW())
+       ON CONFLICT (cart_id, variant_sku) DO UPDATE
+       SET variant_id = EXCLUDED.variant_id,
+           quantity = public.cart_items.quantity + EXCLUDED.quantity,
+           updated_at = NOW()
+       RETURNING id, cart_id, variant_id, variant_sku, quantity, created_at, updated_at
+     ),
+     touched AS (
+       UPDATE public.carts
+       SET updated_at = NOW()
+       WHERE id = $1
+         AND EXISTS (SELECT 1 FROM mutated)
+     )
+     SELECT * FROM mutated;`,
     [cartId, variantId, sku, quantity],
+    "cart.mutate.add",
   );
-
-  await query(`UPDATE public.carts SET updated_at = NOW() WHERE id = $1;`, [cartId]);
 
   return mapCartItemRow(res.rows[0]);
 }
@@ -228,17 +236,24 @@ export async function updateCartItemQuantity(
   }
 
   const res = await query(
-    `UPDATE public.cart_items
-     SET quantity = $3, updated_at = NOW()
-     WHERE id = $1 AND cart_id = $2;`,
+    `WITH mutated AS (
+       UPDATE public.cart_items
+       SET quantity = $3, updated_at = NOW()
+       WHERE id = $1 AND cart_id = $2
+       RETURNING id, cart_id
+     ),
+     touched AS (
+       UPDATE public.carts
+       SET updated_at = NOW()
+       WHERE id = $2
+         AND EXISTS (SELECT 1 FROM mutated)
+     )
+     SELECT id FROM mutated;`,
     [lineItemId, cartId, quantity],
+    "cart.mutate.update",
   );
 
-  if ((res.rowCount ?? 0) > 0) {
-    await query(`UPDATE public.carts SET updated_at = NOW() WHERE id = $1;`, [cartId]);
-    return true;
-  }
-  return false;
+  return (res.rowCount ?? 0) > 0;
 }
 
 /**
@@ -249,16 +264,23 @@ export async function removeCartItem(
   lineItemId: string,
 ): Promise<boolean> {
   const res = await query(
-    `DELETE FROM public.cart_items
-     WHERE id = $1 AND cart_id = $2;`,
+    `WITH mutated AS (
+       DELETE FROM public.cart_items
+       WHERE id = $1 AND cart_id = $2
+       RETURNING id, cart_id
+     ),
+     touched AS (
+       UPDATE public.carts
+       SET updated_at = NOW()
+       WHERE id = $2
+         AND EXISTS (SELECT 1 FROM mutated)
+     )
+     SELECT id FROM mutated;`,
     [lineItemId, cartId],
+    "cart.mutate.remove",
   );
 
-  if ((res.rowCount ?? 0) > 0) {
-    await query(`UPDATE public.carts SET updated_at = NOW() WHERE id = $1;`, [cartId]);
-    return true;
-  }
-  return false;
+  return (res.rowCount ?? 0) > 0;
 }
 
 /**

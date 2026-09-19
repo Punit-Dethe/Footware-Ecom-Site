@@ -33,6 +33,7 @@ export async function completeCheckoutOrder(
   | { success: true; order: Order }
   | { success: false; error: string }
 > {
+  const tStart = performance.now();
   const surface = knownSurface ?? (await resolveSurfaceForCart(cartId));
   try {
     const authSession = await verifyAuthSession();
@@ -50,6 +51,7 @@ export async function completeCheckoutOrder(
           .digest("hex");
       }
     }
+    const preflightMs = Math.round(performance.now() - tStart);
 
     const { order, items } = await placeOrderFromCart({
       cartId,
@@ -64,6 +66,17 @@ export async function completeCheckoutOrder(
 
     // Fast checkout: schedule order confirmation email in post-response background task
     scheduleOrderConfirmationEmail({ order, items });
+
+    const totalMs = Math.round(performance.now() - tStart);
+    if (process.env.PERF_DIAGNOSTICS === "1") {
+      console.log(
+        JSON.stringify({
+          type: "checkout_timing",
+          preflightMs,
+          totalMs,
+        }),
+      );
+    }
 
     return { success: true as const, order: adaptedOrder as unknown as Order };
   } catch (error: unknown) {
