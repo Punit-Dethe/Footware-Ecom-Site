@@ -105,6 +105,7 @@ export function CartProvider({
         const result = await action();
         if (result.success) {
           setCart(result.cart ?? null);
+          setLoading(false);
           onSuccess?.();
         } else {
           toast.error(result.error || fallbackMessage);
