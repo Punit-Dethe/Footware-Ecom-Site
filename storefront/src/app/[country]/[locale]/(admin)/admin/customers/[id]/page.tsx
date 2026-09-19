@@ -47,7 +47,7 @@ export default async function AdminCustomerDetailPage({
       <div>
         <Link
           href={`${basePath}/customers`}
-          className="text-xs font-mono text-[#706257] hover:text-[#30261f] transition-colors inline-flex items-center gap-1.5"
+          className="text-xs text-[#706257] hover:text-[#30261f] transition-colors inline-flex items-center gap-1.5"
         >
           &larr; Back to Customers
         </Link>
@@ -58,12 +58,12 @@ export default async function AdminCustomerDetailPage({
         <div>
           <div className="flex items-center gap-3">
             <span className="admin-eyebrow">Customer Account</span>
-            <span className="text-[10px] font-mono tracking-wider uppercase text-[#30261f] bg-[#e9e2d6] px-2 py-0.5 rounded-[2px] font-semibold">
+            <span className="text-[10px] tracking-wider uppercase text-[#30261f] bg-[#e9e2d6] px-2 py-0.5 rounded-[2px] font-semibold">
               Member
             </span>
           </div>
           <h1 className="admin-title text-2xl mt-1 tracking-tight">{fullName}</h1>
-          <p className="admin-body font-mono text-xs text-[#706257] mt-1">
+          <p className="admin-body text-xs text-[#706257] mt-1">
             {customer.email}
           </p>
         </div>
@@ -71,26 +71,26 @@ export default async function AdminCustomerDetailPage({
         {/* Quick Stats */}
         <div className="flex items-center gap-6 text-left md:text-right">
           <div>
-            <span className="text-[10px] uppercase font-mono text-[#a39e93] block">
+            <span className="text-[10px] uppercase text-[#a39e93] block">
               Orders
             </span>
-            <span className="font-mono text-sm font-medium text-[#30261f]">
+            <span className="text-sm font-medium text-[#30261f] tabular-nums">
               {customer.totalOrderCount}
             </span>
           </div>
           <div>
-            <span className="text-[10px] uppercase font-mono text-[#a39e93] block">
+            <span className="text-[10px] uppercase text-[#a39e93] block">
               Placed Orders
             </span>
-            <span className="font-mono text-sm font-medium text-[#30261f]">
+            <span className="text-sm font-medium text-[#30261f] tabular-nums">
               {customer.placedOrderCount}
             </span>
           </div>
           <div>
-            <span className="text-[10px] uppercase font-mono text-[#a39e93] block">
+            <span className="text-[10px] uppercase text-[#a39e93] block">
               Placed Order Value
             </span>
-            <div className="font-mono text-sm font-medium text-[#30261f] flex flex-col items-start md:items-end gap-0.5">
+            <div className="text-sm font-medium text-[#30261f] flex flex-col items-start md:items-end gap-0.5 tabular-nums">
               {(customer.placedOrderTotals || []).length === 0 ? (
                 <span>—</span>
               ) : (
@@ -112,21 +112,21 @@ export default async function AdminCustomerDetailPage({
           <h2 className="admin-eyebrow">Account Identity</h2>
           <div className="text-xs space-y-2 text-[#706257]">
             <div>
-              <span className="text-[#a39e93] block text-[10px] uppercase font-mono">
+              <span className="text-[#a39e93] block text-[10px] uppercase">
                 Email Address
               </span>
-              <span className="font-mono text-[#30261f] select-all">{customer.email}</span>
+              <span className="text-[#30261f] select-all">{customer.email}</span>
             </div>
             <div>
-              <span className="text-[#a39e93] block text-[10px] uppercase font-mono">
+              <span className="text-[#a39e93] block text-[10px] uppercase">
                 Phone Number
               </span>
-              <span className="font-mono text-[#30261f]">
+              <span className="text-[#30261f]">
                 {customer.phone || "Not provided"}
               </span>
             </div>
             <div>
-              <span className="text-[#a39e93] block text-[10px] uppercase font-mono">
+              <span className="text-[#a39e93] block text-[10px] uppercase">
                 Member Joined
               </span>
               <span>
@@ -138,10 +138,10 @@ export default async function AdminCustomerDetailPage({
               </span>
             </div>
             <div>
-              <span className="text-[#a39e93] block text-[10px] uppercase font-mono">
+              <span className="text-[#a39e93] block text-[10px] uppercase">
                 User UUID
               </span>
-              <span className="font-mono text-[10px] text-[#a39e93] select-all break-all">
+              <span className="text-[10px] text-[#a39e93] select-all break-all">
                 {customer.id}
               </span>
             </div>
@@ -152,14 +152,14 @@ export default async function AdminCustomerDetailPage({
         <div className="md:col-span-2 border border-[#e5e0d8] bg-[#fffefc] p-5 rounded-[2px] space-y-3">
           <div className="flex items-baseline justify-between">
             <h2 className="admin-eyebrow">Saved Addresses</h2>
-            <span className="text-xs font-mono text-[#a39e93]">
+            <span className="text-xs text-[#a39e93] tabular-nums">
               {customer.addresses.length}{" "}
               {customer.addresses.length === 1 ? "address" : "addresses"}
             </span>
           </div>
 
           {customer.addresses.length === 0 ? (
-            <p className="text-xs text-[#706257] py-4 italic">
+            <p className="text-xs text-[#706257] py-4">
               No saved addresses on file.
             </p>
           ) : (
@@ -171,12 +171,12 @@ export default async function AdminCustomerDetailPage({
                 >
                   <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                     {addr.isDefaultShipping && (
-                      <span className="text-[9px] font-mono uppercase tracking-wider bg-[#e9e2d6] text-[#30261f] px-1.5 py-0.5 rounded-[2px]">
+                      <span className="text-[9px] uppercase tracking-wider bg-[#e9e2d6] text-[#30261f] px-1.5 py-0.5 rounded-[2px]">
                         Default Shipping
                       </span>
                     )}
                     {addr.isDefaultBilling && (
-                      <span className="text-[9px] font-mono uppercase tracking-wider bg-[#f5f2ec] border border-[#cfc4b6] text-[#706257] px-1.5 py-0.5 rounded-[2px]">
+                      <span className="text-[9px] uppercase tracking-wider bg-[#f5f2ec] border border-[#cfc4b6] text-[#706257] px-1.5 py-0.5 rounded-[2px]">
                         Default Billing
                       </span>
                     )}
@@ -195,14 +195,14 @@ export default async function AdminCustomerDetailPage({
                   </p>
                   <p>{addr.countryIso}</p>
                   {addr.phone && (
-                    <p className="font-mono text-[11px] pt-1">Phone: {addr.phone}</p>
+                    <p className="text-[11px] pt-1 tabular-nums">Phone: {addr.phone}</p>
                   )}
                 </div>
               ))}
             </div>
           )}
 
-          <p className="text-[11px] text-[#a39e93] pt-2 italic">
+          <p className="text-[11px] text-[#a39e93] pt-2">
             Customer addresses are managed directly by the account holder in the storefront. Addresses cannot be mutated from this studio view.
           </p>
         </div>
@@ -217,7 +217,7 @@ export default async function AdminCustomerDetailPage({
               Historical checkouts linked strictly to user ID ({customer.id})
             </p>
           </div>
-          <span className="text-xs font-mono text-[#a39e93]">
+          <span className="text-xs text-[#a39e93] tabular-nums">
             {customer.orders.length} {customer.orders.length === 1 ? "order" : "orders"}
           </span>
         </div>
@@ -248,7 +248,7 @@ export default async function AdminCustomerDetailPage({
                   return (
                     <tr key={order.id} className="admin-tr">
                       {/* Order Number */}
-                      <td className="admin-td font-mono font-medium text-xs">
+                      <td className="admin-td font-medium text-xs tabular-nums">
                         <Link
                           href={`${basePath}/orders/${order.id}`}
                           className="text-[#30261f] hover:underline underline-offset-2"
@@ -269,7 +269,7 @@ export default async function AdminCustomerDetailPage({
                       {/* Status */}
                       <td className="admin-td">
                         <span
-                          className={`text-[10px] font-mono tracking-wider uppercase px-2 py-0.5 rounded-[2px] ${
+                          className={`text-[10px] tracking-wider uppercase px-2 py-0.5 rounded-[2px] ${
                             isCancelled
                               ? "bg-[#f5f2ec] text-[#706257] border border-[#cfc4b6]"
                               : "bg-[#e9e2d6] text-[#30261f] font-semibold"
@@ -280,17 +280,17 @@ export default async function AdminCustomerDetailPage({
                       </td>
 
                       {/* Items */}
-                      <td className="admin-td font-mono text-xs text-[#706257]">
+                      <td className="admin-td text-xs text-[#706257] tabular-nums">
                         {order.itemCount} {order.itemCount === 1 ? "item" : "items"}
                       </td>
 
                       {/* Surface */}
-                      <td className="admin-td font-mono text-[10px] uppercase text-[#706257]">
+                      <td className="admin-td text-[10px] uppercase text-[#706257]">
                         {order.surface}
                       </td>
 
                       {/* Total */}
-                      <td className="admin-td font-mono font-medium text-xs text-[#30261f] text-right">
+                      <td className="admin-td font-medium text-xs text-[#30261f] text-right tabular-nums">
                         {formatMoney(order.totalInCents, order.currency)}
                       </td>
 

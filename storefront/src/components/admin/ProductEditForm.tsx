@@ -296,11 +296,11 @@ export function ProductEditForm({
           </div>
           <div className="flex flex-wrap items-center gap-3 mt-2 text-xs text-[#706257]">
             <span>
-              SKU: <span className="font-mono text-[#30261f]">{sku || "—"}</span>
+              SKU: <span className="text-[#30261f] tabular-nums">{sku || "—"}</span>
             </span>
             <span>·</span>
             <span>
-              ID: <span className="font-mono">{initialProduct.id}</span>
+              ID: <span>{initialProduct.id}</span>
             </span>
             {status === "active" && (
               <>
@@ -452,7 +452,7 @@ export function ProductEditForm({
               required
               value={slug}
               onChange={(e) => setSlug(e.target.value.toLowerCase())}
-              className="admin-input w-full font-mono text-xs"
+              className="admin-input w-full text-xs"
               placeholder="e.g. the-sovereign-wholecut-oxford"
             />
             {fieldErrors.slug && <p className="admin-field-error">{fieldErrors.slug}</p>}
@@ -465,7 +465,7 @@ export function ProductEditForm({
               type="text"
               value={sku}
               onChange={(e) => setSku(e.target.value.toUpperCase())}
-              className="admin-input w-full font-mono text-xs"
+              className="admin-input w-full text-xs tabular-nums"
               placeholder="e.g. SHOE-2026-09-001"
             />
             {fieldErrors.sku && <p className="admin-field-error">{fieldErrors.sku}</p>}
@@ -587,7 +587,7 @@ export function ProductEditForm({
                   </td>
                   <td className="admin-td">
                     {v.id && !v.isNew ? (
-                      <span className="font-mono text-xs text-[#706257] px-2 py-0.5 bg-[#ece7de] rounded-[2px]">
+                      <span className="text-xs text-[#706257] px-2 py-0.5 bg-[#ece7de] rounded-[2px] tabular-nums">
                         {v.sku}
                       </span>
                     ) : (
@@ -597,7 +597,7 @@ export function ProductEditForm({
                         onChange={(e) =>
                           handleVariantChange(idx, "sku", e.target.value.toUpperCase())
                         }
-                        className="admin-input !py-1 !px-2 text-xs font-mono w-32"
+                        className="admin-input !py-1 !px-2 text-xs w-32 tabular-nums"
                         placeholder="SKU"
                         aria-label="Variant SKU"
                       />

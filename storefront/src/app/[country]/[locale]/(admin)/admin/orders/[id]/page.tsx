@@ -46,7 +46,7 @@ export default async function AdminOrderDetailPage({
       <div>
         <Link
           href={`${basePath}/orders`}
-          className="text-xs font-mono text-[#706257] hover:text-[#30261f] transition-colors inline-flex items-center gap-1.5"
+          className="text-xs text-[#706257] hover:text-[#30261f] transition-colors inline-flex items-center gap-1.5"
         >
           &larr; Back to Orders
         </Link>
@@ -58,7 +58,7 @@ export default async function AdminOrderDetailPage({
           <div className="flex items-center gap-3">
             <span className="admin-eyebrow">Order Record</span>
             <span
-              className={`text-[10px] font-mono tracking-wider uppercase px-2 py-0.5 rounded-[2px] ${
+              className={`text-[10px] tracking-wider uppercase px-2 py-0.5 rounded-[2px] ${
                 isCancelled
                   ? "bg-[#f5f2ec] text-[#706257] border border-[#cfc4b6]"
                   : "bg-[#e9e2d6] text-[#30261f] font-semibold"
@@ -67,7 +67,7 @@ export default async function AdminOrderDetailPage({
               {order.status}
             </span>
           </div>
-          <h1 className="admin-title font-mono text-2xl mt-1 tracking-tight">
+          <h1 className="admin-title text-2xl mt-1 tracking-tight tabular-nums">
             {order.orderNumber}
           </h1>
           <p className="admin-body text-xs text-[#706257] mt-1">
@@ -87,13 +87,13 @@ export default async function AdminOrderDetailPage({
         <div className="text-left md:text-right">
           {order.isRegisteredCustomer && order.userId ? (
             <div>
-              <span className="text-[10px] font-mono tracking-wider uppercase text-[#30261f] bg-[#e9e2d6]/60 px-2 py-0.5 rounded-[2px]">
+              <span className="text-[10px] tracking-wider uppercase text-[#30261f] bg-[#e9e2d6]/60 px-2 py-0.5 rounded-[2px]">
                 Registered Member
               </span>
               <div className="mt-1">
                 <Link
                   href={`${basePath}/customers/${order.userId}`}
-                  className="font-mono text-xs text-[#30261f] hover:underline"
+                  className="text-xs text-[#30261f] hover:underline"
                 >
                   {order.email}
                 </Link>
@@ -101,10 +101,10 @@ export default async function AdminOrderDetailPage({
             </div>
           ) : (
             <div>
-              <span className="text-[10px] font-mono tracking-wider uppercase text-[#706257] bg-[#f5f2ec] px-2 py-0.5 rounded-[2px]">
+              <span className="text-[10px] tracking-wider uppercase text-[#706257] bg-[#f5f2ec] px-2 py-0.5 rounded-[2px]">
                 Guest Checkout
               </span>
-              <div className="font-mono text-xs text-[#706257] mt-1">{order.email}</div>
+              <div className="text-xs text-[#706257] mt-1">{order.email}</div>
             </div>
           )}
         </div>
@@ -114,7 +114,7 @@ export default async function AdminOrderDetailPage({
       <div className="space-y-3">
         <div className="flex items-baseline justify-between">
           <h2 className="admin-eyebrow">Purchased Items</h2>
-          <span className="text-xs text-[#706257] font-mono">
+          <span className="text-xs text-[#706257] tabular-nums">
             {order.items.length} {order.items.length === 1 ? "line item" : "line items"}
           </span>
         </div>
@@ -147,7 +147,7 @@ export default async function AdminOrderDetailPage({
                           className="object-cover"
                         />
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center text-[9px] font-mono text-[#706257]">
+                        <div className="w-full h-full flex items-center justify-center text-[9px] text-[#706257]">
                           N/A
                         </div>
                       )}
@@ -162,7 +162,7 @@ export default async function AdminOrderDetailPage({
                   </td>
 
                   {/* SKU Snapshot */}
-                  <td className="admin-td font-mono text-xs text-[#706257]">
+                  <td className="admin-td text-xs text-[#706257] tabular-nums">
                     {item.sku}
                   </td>
 
@@ -172,17 +172,17 @@ export default async function AdminOrderDetailPage({
                   </td>
 
                   {/* Unit Price */}
-                  <td className="admin-td font-mono text-xs text-[#706257] text-right">
+                  <td className="admin-td text-xs text-[#706257] text-right tabular-nums">
                     {formatMoney(item.priceInCents, order.currency)}
                   </td>
 
                   {/* Quantity */}
-                  <td className="admin-td font-mono text-xs text-[#30261f] text-right">
+                  <td className="admin-td text-xs text-[#30261f] text-right tabular-nums">
                     {item.quantity}
                   </td>
 
                   {/* Line Total */}
-                  <td className="admin-td font-mono text-xs text-[#30261f] text-right font-medium">
+                  <td className="admin-td text-xs text-[#30261f] text-right font-medium tabular-nums">
                     {formatMoney(item.totalInCents, order.currency)}
                   </td>
                 </tr>
@@ -199,33 +199,33 @@ export default async function AdminOrderDetailPage({
           <h3 className="admin-eyebrow">Customer Identity</h3>
           <div className="text-xs space-y-1.5 text-[#706257]">
             <div>
-              <span className="text-[#a39e93] block text-[10px] uppercase font-mono">
+              <span className="text-[#a39e93] block text-[10px] uppercase">
                 Email
               </span>
-              <span className="font-mono text-[#30261f]">{order.email}</span>
+              <span className="text-[#30261f]">{order.email}</span>
             </div>
             {order.customerName && (
               <div>
-                <span className="text-[#a39e93] block text-[10px] uppercase font-mono">
+                <span className="text-[#a39e93] block text-[10px] uppercase">
                   Name
                 </span>
                 <span className="text-[#30261f]">{order.customerName}</span>
               </div>
             )}
             <div>
-              <span className="text-[#a39e93] block text-[10px] uppercase font-mono">
+              <span className="text-[#a39e93] block text-[10px] uppercase">
                 Surface
               </span>
-              <span className="font-mono text-[#30261f] uppercase">{order.surface}</span>
+              <span className="text-[#30261f] uppercase">{order.surface}</span>
             </div>
             {order.userId && (
               <div>
-                <span className="text-[#a39e93] block text-[10px] uppercase font-mono">
+                <span className="text-[#a39e93] block text-[10px] uppercase">
                   Account ID
                 </span>
                 <Link
                   href={`${basePath}/customers/${order.userId}`}
-                  className="font-mono text-[11px] text-[#706257] hover:text-[#30261f] hover:underline"
+                  className="text-[11px] text-[#706257] hover:text-[#30261f] hover:underline"
                 >
                   {order.userId}
                 </Link>
@@ -266,13 +266,13 @@ export default async function AdminOrderDetailPage({
                   <p>{String(order.shippingAddressSnapshot.country_iso)}</p>
                 ) : null}
                 {order.shippingAddressSnapshot.phone && (
-                  <p className="font-mono text-[11px] mt-1">
+                  <p className="text-[11px] mt-1 tabular-nums">
                     Phone: {String(order.shippingAddressSnapshot.phone)}
                   </p>
                 )}
               </>
             ) : (
-              <p className="italic text-[#a39e93]">No shipping address recorded</p>
+              <p className="text-[#a39e93]">No shipping address recorded</p>
             )}
           </div>
         </div>
@@ -309,13 +309,13 @@ export default async function AdminOrderDetailPage({
                   <p>{String(order.billingAddressSnapshot.country_iso)}</p>
                 ) : null}
                 {order.billingAddressSnapshot.phone && (
-                  <p className="font-mono text-[11px] mt-1">
+                  <p className="text-[11px] mt-1 tabular-nums">
                     Phone: {String(order.billingAddressSnapshot.phone)}
                   </p>
                 )}
               </>
             ) : (
-              <p className="italic text-[#a39e93]">Same as shipping address</p>
+              <p className="text-[#a39e93]">Same as shipping address</p>
             )}
           </div>
         </div>
@@ -326,15 +326,15 @@ export default async function AdminOrderDetailPage({
         <div className="w-full max-w-xs space-y-2 text-xs">
           <div className="flex justify-between text-[#706257]">
             <span>Items Subtotal</span>
-            <span className="font-mono">{formatMoney(order.subtotalInCents, order.currency)}</span>
+            <span className="tabular-nums">{formatMoney(order.subtotalInCents, order.currency)}</span>
           </div>
           <div className="flex justify-between text-[#706257]">
             <span>Estimated Tax</span>
-            <span className="font-mono">{formatMoney(order.taxInCents, order.currency)}</span>
+            <span className="tabular-nums">{formatMoney(order.taxInCents, order.currency)}</span>
           </div>
           <div className="flex justify-between text-[#706257]">
             <span>Shipping</span>
-            <span className="font-mono">
+            <span className="tabular-nums">
               {order.shippingInCents === 0
                 ? "Free"
                 : formatMoney(order.shippingInCents, order.currency)}
@@ -342,7 +342,7 @@ export default async function AdminOrderDetailPage({
           </div>
           <div className="border-t border-[#cfc4b6] pt-2 flex justify-between font-medium text-sm text-[#30261f]">
             <span>Total</span>
-            <span className="font-mono">{formatMoney(order.totalInCents, order.currency)}</span>
+            <span className="tabular-nums">{formatMoney(order.totalInCents, order.currency)}</span>
           </div>
         </div>
       </div>
@@ -354,7 +354,7 @@ export default async function AdminOrderDetailPage({
           Order items and address snapshots are permanently fixed at checkout time.
           Payment capture, fulfillment, shipment management, refunds, and admin cancellation workflows are not implemented in the current Mirza commerce backend.
         </p>
-        <div className="pt-2 font-mono text-[10px] text-[#a39e93] flex flex-wrap gap-x-6 gap-y-1">
+        <div className="pt-2 text-[10px] text-[#a39e93] flex flex-wrap gap-x-6 gap-y-1 tabular-nums">
           <span>Order ID: {order.id}</span>
           <span>Cart ID: {order.sourceCartId}</span>
           <span>Created: {order.createdAt.toISOString()}</span>

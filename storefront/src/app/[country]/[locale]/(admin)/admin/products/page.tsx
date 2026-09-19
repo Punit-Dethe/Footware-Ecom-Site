@@ -169,7 +169,7 @@ export default async function AdminProductsPage({
                             sizes="48px"
                           />
                         ) : (
-                          <span className="text-[9px] text-[#706257] uppercase tracking-wider font-mono">
+                          <span className="text-[9px] text-[#706257] uppercase tracking-wider">
                             None
                           </span>
                         )}
@@ -182,11 +182,11 @@ export default async function AdminProductsPage({
                       >
                         {p.name}
                       </Link>
-                      <div className="text-xs text-[#706257] font-mono mt-0.5">
+                      <div className="text-xs text-[#706257] mt-0.5">
                         {p.slug}
                       </div>
                     </td>
-                    <td className="admin-td font-mono text-xs text-[#706257]">
+                    <td className="admin-td text-xs text-[#706257] tabular-nums">
                       {p.sku || "—"}
                     </td>
                     <td className="admin-td whitespace-nowrap">
@@ -244,7 +244,7 @@ export default async function AdminProductsPage({
             >
               &larr; Previous
             </Link>
-            <span className="text-xs text-[#706257] px-2 font-mono">
+            <span className="text-xs text-[#706257] px-2 tabular-nums">
               Page {page} of {totalPages}
             </span>
             <Link

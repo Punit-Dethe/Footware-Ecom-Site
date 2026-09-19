@@ -108,7 +108,7 @@ export function ProductNewForm({
             required
             value={slug}
             onChange={(e) => setSlug(e.target.value.toLowerCase())}
-            className="admin-input w-full font-mono text-xs"
+            className="admin-input w-full text-xs"
             placeholder="e.g. sovereign-wholecut-oxford"
           />
           {fieldErrors.slug && <p className="admin-field-error">{fieldErrors.slug}</p>}
@@ -121,7 +121,7 @@ export function ProductNewForm({
             type="text"
             value={sku}
             onChange={(e) => setSku(e.target.value.toUpperCase())}
-            className="admin-input w-full font-mono text-xs"
+            className="admin-input w-full text-xs tabular-nums"
             placeholder="e.g. SHOE-2026-09-032"
           />
           {fieldErrors.sku && <p className="admin-field-error">{fieldErrors.sku}</p>}

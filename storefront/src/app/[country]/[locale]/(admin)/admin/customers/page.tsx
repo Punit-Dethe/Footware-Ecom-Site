@@ -71,7 +71,7 @@ export default async function AdminCustomersPage({
           </p>
         </div>
         <div className="text-right">
-          <span className="font-mono text-xs text-[#706257]">
+          <span className="text-xs text-[#706257] tabular-nums">
             {totalCount} {totalCount === 1 ? "Customer" : "Customers"} Registered
           </span>
         </div>
@@ -123,7 +123,7 @@ export default async function AdminCustomersPage({
                     </td>
 
                     {/* Email */}
-                    <td className="admin-td font-mono text-xs text-[#706257]">
+                    <td className="admin-td text-xs text-[#706257]">
                       <Link
                         href={`${basePath}/customers/${customer.id}`}
                         className="text-[#30261f] hover:underline underline-offset-2"
@@ -133,17 +133,17 @@ export default async function AdminCustomersPage({
                     </td>
 
                     {/* Phone */}
-                    <td className="admin-td font-mono text-xs text-[#706257]">
+                    <td className="admin-td text-xs text-[#706257] tabular-nums">
                       {customer.phone || "—"}
                     </td>
 
                     {/* Orders Count */}
-                    <td className="admin-td font-mono text-xs text-[#706257] text-right">
+                    <td className="admin-td text-xs text-[#706257] text-right tabular-nums">
                       {customer.orderCount}
                     </td>
 
                     {/* Placed Order Value */}
-                    <td className="admin-td font-mono font-medium text-xs text-[#30261f] text-right">
+                    <td className="admin-td font-medium text-xs text-[#30261f] text-right tabular-nums">
                       {customer.placedOrderTotals.length === 0 ? (
                         <span className="text-[#706257] font-normal">—</span>
                       ) : (
@@ -216,7 +216,7 @@ export default async function AdminCustomersPage({
                 </span>
               )}
 
-              <span className="font-mono text-[11px] px-2">
+              <span className="text-[11px] px-2 tabular-nums">
                 Page {page} of {totalPages}
               </span>
 

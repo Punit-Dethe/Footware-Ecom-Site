@@ -588,7 +588,7 @@ function AltTextEditor({
           Alt Text
         </label>
         {status === "saving" && (
-          <span className="text-[#706257] italic">Saving...</span>
+          <span className="text-[#706257]">Saving...</span>
         )}
         {status === "saved" && (
           <span className="text-[#24632b] font-medium">Saved</span>

@@ -305,12 +305,12 @@ export function MediaUploadModal({
                   {(selectedFile.size / 1024).toFixed(1)} KB &bull; {selectedFile.type}
                 </p>
                 {status === "uploading" && (
-                  <p className="text-[11px] text-[#706257] mt-1 italic animate-pulse">
+                  <p className="text-[11px] text-[#706257] mt-1 animate-pulse">
                     Uploading directly to Supabase Storage...
                   </p>
                 )}
                 {status === "validating" && (
-                  <p className="text-[11px] text-[#706257] mt-1 italic animate-pulse">
+                  <p className="text-[11px] text-[#706257] mt-1 animate-pulse">
                     Verifying format &amp; computing SHA-256 with Sharp...
                   </p>
                 )}

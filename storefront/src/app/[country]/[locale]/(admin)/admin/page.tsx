@@ -178,7 +178,7 @@ export async function AdminIndexPageContent({ params }: AdminIndexProps) {
                               sizes="44px"
                             />
                           ) : (
-                            <span className="text-[9px] text-[#706257] uppercase tracking-wider font-mono">
+                            <span className="text-[9px] text-[#706257] uppercase tracking-wider">
                               None
                             </span>
                           )}
@@ -191,7 +191,7 @@ export async function AdminIndexPageContent({ params }: AdminIndexProps) {
                         >
                           {product.name}
                         </Link>
-                        <div className="text-xs text-[#706257] font-mono mt-0.5">
+                        <div className="text-xs text-[#706257] tabular-nums mt-0.5">
                           {product.sku || product.slug}
                         </div>
                       </td>

@@ -77,7 +77,7 @@ export default async function AdminOrdersPage({
           </p>
         </div>
         <div className="text-right">
-          <span className="font-mono text-xs text-[#706257]">
+          <span className="text-xs text-[#706257] tabular-nums">
             {totalCount} {totalCount === 1 ? "Order" : "Orders"} Recorded
           </span>
         </div>
@@ -122,7 +122,7 @@ export default async function AdminOrdersPage({
                 return (
                   <tr key={order.id} className="admin-tr">
                     {/* Order Number */}
-                    <td className="admin-td font-mono font-medium text-xs">
+                    <td className="admin-td font-medium text-xs tabular-nums">
                       <Link
                         href={`${basePath}/orders/${order.id}`}
                         className="text-[#30261f] hover:underline underline-offset-2"
@@ -145,13 +145,13 @@ export default async function AdminOrdersPage({
                       {order.userId ? (
                         <Link
                           href={`${basePath}/customers/${order.userId}`}
-                          className="text-[#30261f] hover:underline underline-offset-2 font-mono text-[11px]"
+                          className="text-[#30261f] hover:underline underline-offset-2 text-[11px]"
                           title="View customer profile"
                         >
                           {order.email}
                         </Link>
                       ) : (
-                        <span className="font-mono text-[11px] text-[#706257]">
+                        <span className="text-[11px] text-[#706257]">
                           {order.email}
                         </span>
                       )}
@@ -160,11 +160,11 @@ export default async function AdminOrdersPage({
                     {/* Customer Type */}
                     <td className="admin-td">
                       {order.isRegisteredCustomer ? (
-                        <span className="text-[10px] font-mono tracking-wider uppercase text-[#30261f] bg-[#e9e2d6]/60 px-1.5 py-0.5 rounded-[2px]">
+                        <span className="text-[10px] tracking-wider uppercase text-[#30261f] bg-[#e9e2d6]/60 px-1.5 py-0.5 rounded-[2px]">
                           Member
                         </span>
                       ) : (
-                        <span className="text-[10px] font-mono tracking-wider uppercase text-[#706257] bg-[#f5f2ec] px-1.5 py-0.5 rounded-[2px]">
+                        <span className="text-[10px] tracking-wider uppercase text-[#706257] bg-[#f5f2ec] px-1.5 py-0.5 rounded-[2px]">
                           Guest
                         </span>
                       )}
@@ -173,7 +173,7 @@ export default async function AdminOrdersPage({
                     {/* Status */}
                     <td className="admin-td">
                       <span
-                        className={`text-[10px] font-mono tracking-wider uppercase px-2 py-0.5 rounded-[2px] ${
+                        className={`text-[10px] tracking-wider uppercase px-2 py-0.5 rounded-[2px] ${
                           isCancelled
                             ? "bg-[#f5f2ec] text-[#706257] border border-[#cfc4b6]"
                             : "bg-[#e9e2d6] text-[#30261f] font-semibold"
@@ -184,7 +184,7 @@ export default async function AdminOrdersPage({
                     </td>
 
                     {/* Items */}
-                    <td className="admin-td text-xs text-[#706257] font-mono">
+                    <td className="admin-td text-xs text-[#706257] tabular-nums">
                       {order.itemCount} {order.itemCount === 1 ? "item" : "items"}
                       {order.totalUnits > order.itemCount && (
                         <span className="text-[11px] text-[#a39e93] ml-1">
@@ -194,13 +194,13 @@ export default async function AdminOrdersPage({
                     </td>
 
                     {/* Total */}
-                    <td className="admin-td font-mono font-medium text-xs text-[#30261f]">
+                    <td className="admin-td font-medium text-xs text-[#30261f] tabular-nums">
                       {formatMoney(order.totalInCents, order.currency)}
                     </td>
 
                     {/* Surface */}
                     <td className="admin-td">
-                      <span className="text-[10px] font-mono uppercase text-[#706257]">
+                      <span className="text-[10px] uppercase text-[#706257]">
                         {order.surface}
                       </span>
                     </td>
@@ -209,9 +209,9 @@ export default async function AdminOrdersPage({
                     <td className="admin-td text-right">
                       <Link
                         href={`${basePath}/orders/${order.id}`}
-                        className="text-xs font-medium text-[#706257] hover:text-[#30261f] transition-colors"
+                        className="admin-btn admin-btn-quiet py-1 px-2.5 text-[11px]"
                       >
-                        View &rarr;
+                        Inspect &rarr;
                       </Link>
                     </td>
                   </tr>
@@ -244,7 +244,7 @@ export default async function AdminOrdersPage({
                 </span>
               )}
 
-              <span className="font-mono text-[11px] px-2">
+              <span className="text-[11px] px-2 tabular-nums">
                 Page {page} of {totalPages}
               </span>
 

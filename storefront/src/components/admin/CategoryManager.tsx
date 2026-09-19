@@ -302,7 +302,7 @@ export function CategoryManager({ categories }: CategoryManagerProps) {
                   required
                   value={formSlug}
                   onChange={(e) => setFormSlug(e.target.value.toLowerCase())}
-                  className="admin-input w-full font-mono text-xs"
+                  className="admin-input w-full text-xs"
                   placeholder="e.g. formal-footwear"
                 />
               </div>
