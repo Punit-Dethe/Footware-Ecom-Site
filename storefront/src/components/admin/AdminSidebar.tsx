@@ -166,7 +166,7 @@ export function AdminSidebar({
       {/* ========================================================================= */}
       {/* 2. MOBILE / TABLET HEADER & DRAWER TRIGGER (< lg)                        */}
       {/* ========================================================================= */}
-      <header className="lg:hidden sticky top-0 z-40 h-14 bg-[#f3efe8]/95 backdrop-blur border-b border-[#cfc4b6] px-4 flex items-center justify-between">
+      <header className="lg:hidden admin-mobile-header sticky top-0 z-40 h-14 bg-[#f3efe8]/95 backdrop-blur border-b border-[#cfc4b6] px-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button
             type="button"
