@@ -1,55 +1,25 @@
 "use server";
 
-import { cacheLife, cacheTag } from "next/cache";
 import { COUNTRIES, MARKETS } from "@/lib/catalog/store-config";
 import type { Country, Market } from "@/types/commerce";
 
-async function cachedListMarkets(_options?: {
+export async function getMarkets(_options?: {
   locale?: string;
   country?: string;
-}) {
-  "use cache: remote";
-  cacheLife("hours");
-  cacheTag("markets");
+}): Promise<{ data: Market[] }> {
   return { data: MARKETS as Market[] };
 }
 
-async function cachedResolveMarket(
-  country: string,
-  _options?: { locale?: string; country?: string },
-) {
-  "use cache: remote";
-  cacheLife("hours");
-  cacheTag("resolved-market");
+export async function resolveMarket(country: string): Promise<Market> {
   const found =
     MARKETS.find((m) => m.code === country.toLowerCase()) || MARKETS[0];
   return found as Market;
 }
 
-async function cachedListMarketCountries(
-  _marketId: string,
-  _options?: { locale?: string; country?: string },
-) {
-  "use cache: remote";
-  cacheLife("hours");
-  cacheTag("market-countries");
+export async function getMarketCountries(_marketId?: string): Promise<{ data: Country[] }> {
   return { data: COUNTRIES as Country[] };
 }
 
-export async function getMarkets(options?: {
-  locale?: string;
-  country?: string;
-}): Promise<{ data: Market[] }> {
-  return cachedListMarkets(options);
-}
-
-export async function resolveMarket(country: string) {
-  return cachedResolveMarket(country);
-}
-
-export async function getMarketCountries(marketId: string) {
-  return cachedListMarketCountries(marketId);
-}
 
 /**
  * Resolve the currency for a given country on the server side instantly.

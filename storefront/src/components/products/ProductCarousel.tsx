@@ -163,8 +163,15 @@ export function ProductCarousel({
       animationFrame = 0;
       if (!shouldAnimate()) return;
 
+      const isMobile = typeof window !== "undefined" && window.innerWidth <= 768;
+      const minInterval = isMobile ? 33 : 14;
+      if (motion.lastFrame && time - motion.lastFrame < minInterval) {
+        animationFrame = window.requestAnimationFrame(animate);
+        return;
+      }
+
       const elapsed = motion.lastFrame
-        ? Math.min(Math.max(time - motion.lastFrame, 0), 32)
+        ? Math.min(Math.max(time - motion.lastFrame, 0), 40)
         : 16;
       motion.lastFrame = time;
 
@@ -180,6 +187,7 @@ export function ProductCarousel({
 
       animationFrame = window.requestAnimationFrame(animate);
     };
+
 
     const startAnimation = () => {
       if (animationFrame || !shouldAnimate()) return;

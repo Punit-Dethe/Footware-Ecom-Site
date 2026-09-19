@@ -1,11 +1,8 @@
 "use server";
 
 import type { ProductListParams } from "@/types/commerce";
-import { cacheLife, cacheTag } from "next/cache";
 import {
-  cacheTagSuffix,
   DEFAULT_SURFACE,
-  getLocaleOptions,
   type Surface,
 } from "@/lib/storefront";
 import {
@@ -22,14 +19,10 @@ import {
  * - surface: DTC vs wholesale — distinct catalog segmentation via cache tag and arguments
  */
 export async function cachedListProducts(
-  params: ProductListParams | undefined,
-  _options: { locale?: string; country?: string },
-  surface: Surface,
+  params?: ProductListParams,
+  _options?: { locale?: string; country?: string },
+  _surface: Surface = DEFAULT_SURFACE,
 ) {
-  "use cache: remote";
-  cacheLife("tenMinutes");
-  cacheTag("catalog-public", `products${cacheTagSuffix(surface)}`);
-
   const raw = (params || {}) as Record<string, any>;
   const rawFilter = (raw.filter || {}) as Record<string, any>;
 
@@ -68,7 +61,7 @@ export async function cachedListProducts(
 
   const sort = typeof raw.sort === "string" ? raw.sort : undefined;
 
-  const result = await queryProducts({
+  return await queryProducts({
     page,
     limit,
     offset,
@@ -76,33 +69,24 @@ export async function cachedListProducts(
     in_category,
     sort,
   });
-  return result;
 }
 
 export async function getProducts(
   params?: ProductListParams,
   surface: Surface = DEFAULT_SURFACE,
 ) {
-  const options = await getLocaleOptions();
-  return cachedListProducts(params, options, surface);
+  return cachedListProducts(params, undefined, surface);
 }
 
 /**
- * Cached single product fetch by slug.
+ * Single product fetch by slug or ID. Resolves in-process from authoritative snapshot.
  */
 export async function cachedGetProduct(
   slugOrId: string,
-  _expand: string[],
-  _options: { locale?: string; country?: string },
-  surface: Surface,
+  _expand?: string[],
+  _options?: { locale?: string; country?: string },
+  _surface?: Surface,
 ) {
-  "use cache: remote";
-  cacheLife("tenMinutes");
-  cacheTag(
-    "catalog-public",
-    `products${cacheTagSuffix(surface)}`,
-    `product:${slugOrId}${cacheTagSuffix(surface)}`,
-  );
   const local = await getProductBySlugOrId(slugOrId);
   if (local) {
     return local;
@@ -115,24 +99,19 @@ export async function getProduct(
   params?: { expand?: string[] },
   surface: Surface = DEFAULT_SURFACE,
 ) {
-  const options = await getLocaleOptions();
   return cachedGetProduct(
     slugOrId,
     params?.expand ?? [],
-    options,
+    undefined,
     surface,
   );
 }
 
 export async function cachedGetProductFilters(
-  params: Record<string, unknown> | undefined,
-  _options: { locale?: string; country?: string },
-  surface: Surface,
+  params?: Record<string, unknown>,
+  _options?: { locale?: string; country?: string },
+  _surface?: Surface,
 ) {
-  "use cache: remote";
-  cacheLife("tenMinutes");
-  cacheTag("catalog-public", `product-filters${cacheTagSuffix(surface)}`);
-
   const in_category =
     typeof params?.in_category === "string"
       ? params.in_category
@@ -151,6 +130,6 @@ export async function getProductFilters(
   params?: Record<string, unknown>,
   surface: Surface = DEFAULT_SURFACE,
 ) {
-  const options = await getLocaleOptions();
-  return cachedGetProductFilters(params, options, surface);
+  return cachedGetProductFilters(params, undefined, surface);
 }
+
