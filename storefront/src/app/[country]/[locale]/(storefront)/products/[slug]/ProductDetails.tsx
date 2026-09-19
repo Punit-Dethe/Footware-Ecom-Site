@@ -64,6 +64,11 @@ export function ProductDetails({
   });
   const [quantity, setQuantity] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    setHydrated(true);
+  }, []);
 
   useEffect(() => {
     trackViewItem(product, currency);
@@ -138,7 +143,10 @@ export function ProductDetails({
   };
 
   return (
-    <div className={`pdp-product${editorial ? " pdp-product--editorial" : ""}`}>
+    <div
+      className={`pdp-product${editorial ? " pdp-product--editorial" : ""}`}
+      data-hydrated={hydrated ? "true" : undefined}
+    >
       <section className="pdp-overview" aria-label={product.name}>
         <MediaGallery
           images={galleryImages}

@@ -49,25 +49,46 @@ async function runTrial(browser, trialIndex, isCold = false) {
     });
     console.log(`Product page loaded in ${Math.round(performance.now() - navStart)}ms`);
 
-    // Wait for Add to Cart button
+    // Wait for Add to Cart button and client hydration
     const addBtn = page.locator('.pdp-add-button, button:has-text("Add to Cart")').first();
     await addBtn.waitFor({ state: "visible", timeout: 15000 });
+    await page.waitForSelector('.pdp-product[data-hydrated="true"]', { timeout: 15000 });
 
     // 2. Measure Add to Cart
     console.log(`Executing Add to Cart...`);
     serverActionTimings = [];
     const t0_add = performance.now();
-    await addBtn.click();
+    let t_drawer_ack = null;
+    let t_item_visible = null;
+    let t_count_updated = null;
 
-    // Wait for cart drawer to open and line item to be visible
-    await page.waitForSelector(".cart-drawer__item", { timeout: 25000 });
-    const t1_add = performance.now();
+    const drawerPromise = page.waitForSelector('[role="dialog"]', { timeout: 10000 }).then(() => {
+      t_drawer_ack = performance.now();
+    }).catch(() => {});
+
+    const itemPromise = page.waitForSelector(".cart-drawer__item", { timeout: 25000 }).then(() => {
+      t_item_visible = performance.now();
+    }).catch(() => {});
+
+    const countPromise = page.waitForFunction(() => {
+      const el = document.querySelector('.cart-drawer__title span, header [data-slot="cart-count"]');
+      return el && (el.textContent.includes("1") || el.textContent.includes("item"));
+    }, { timeout: 25000 }).then(() => {
+      t_count_updated = performance.now();
+    }).catch(() => {});
+
+    await addBtn.click();
+    await Promise.all([drawerPromise, itemPromise, countPromise]);
+
     const addActionDuration = serverActionTimings[0]?.durationMs || null;
     results.add = {
-      totalMs: Math.round(t1_add - t0_add),
+      drawerAckMs: t_drawer_ack ? Math.round(t_drawer_ack - t0_add) : null,
       serverActionMs: addActionDuration,
+      itemVisibleMs: t_item_visible ? Math.round(t_item_visible - t0_add) : null,
+      countUpdatedMs: t_count_updated ? Math.round(t_count_updated - t0_add) : null,
+      totalMs: Math.round((t_item_visible || performance.now()) - t0_add),
     };
-    console.log(`Add to Cart: Total ${results.add.totalMs}ms (Server Action: ${addActionDuration}ms)`);
+    console.log(`Add to Cart: Drawer Ack: ${results.add.drawerAckMs}ms | Server Action: ${addActionDuration}ms | Item Visible: ${results.add.itemVisibleMs}ms | Count Updated: ${results.add.countUpdatedMs}ms`);
 
     await sleep(600);
 
@@ -247,13 +268,35 @@ async function main() {
     return { median, worst, all: values };
   }
 
+  function getSubMetricStats(key, subKey) {
+    const values = trials
+      .slice(1) // warm only
+      .map((t) => t[key]?.[subKey])
+      .filter((v) => typeof v === "number")
+      .sort((a, b) => a - b);
+
+    if (values.length === 0) return { median: "N/A", worst: "N/A", all: [] };
+    const median = values[Math.floor(values.length / 2)];
+    const worst = values[values.length - 1];
+    return { median, worst, all: values };
+  }
+
   const addStats = getMetricStats("add");
+  const addDrawerAck = getSubMetricStats("add", "drawerAckMs");
+  const addServerAction = getSubMetricStats("add", "serverActionMs");
+  const addItemVisible = getSubMetricStats("add", "itemVisibleMs");
+  const addCountUpdated = getSubMetricStats("add", "countUpdatedMs");
+
   const updateStats = getMetricStats("update");
   const removeStats = getMetricStats("remove");
   const checkoutStats = getMetricStats("cartToCheckout");
   const orderStats = getMetricStats("placeOrder");
 
-  console.log(`Add to Cart (warm median): ${addStats.median}ms, worst: ${addStats.worst}ms`);
+  console.log(`Add to Cart (warm visible median): ${addStats.median}ms, worst: ${addStats.worst}ms`);
+  console.log(`  - Drawer Ack median: ${addDrawerAck.median}ms, worst: ${addDrawerAck.worst}ms`);
+  console.log(`  - Server Action median: ${addServerAction.median}ms, worst: ${addServerAction.worst}ms`);
+  console.log(`  - Item Visible median: ${addItemVisible.median}ms, worst: ${addItemVisible.worst}ms`);
+  console.log(`  - Count Updated median: ${addCountUpdated.median}ms, worst: ${addCountUpdated.worst}ms`);
   console.log(`Update Quantity (warm median): ${updateStats.median}ms, worst: ${updateStats.worst}ms`);
   console.log(`Remove Item (warm median): ${removeStats.median}ms, worst: ${removeStats.worst}ms`);
   console.log(`Cart -> Checkout (warm median): ${checkoutStats.median}ms, worst: ${checkoutStats.worst}ms`);
