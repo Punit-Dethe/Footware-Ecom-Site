@@ -105,7 +105,6 @@ const VALID_PROD_ID = "11111111-1111-4111-8111-111111111111";
 const VALID_ASSET_ID = "22222222-2222-4222-8222-222222222222";
 const VALID_ASSET_ID_2 = "33333333-3333-4333-8333-333333333333";
 const VALID_ASSET_ID_3 = "44444444-4444-4444-8444-444444444444";
-const VALID_LEGACY_ID = "55555555-5555-4555-8555-555555555555";
 
 describe("Admin Media Library Server Actions (Phase 5)", () => {
   beforeEach(() => {
@@ -515,7 +514,7 @@ describe("Admin Media Library Server Actions (Phase 5)", () => {
         expect(mockUpdateTag).not.toHaveBeenCalled();
       });
 
-      it("causes zero attachments when a legacy asset is included in batch", async () => {
+      it("rejects batch attachment when an asset does not exist in media_assets", async () => {
         mockTxClient.query.mockImplementation(async (sql: string) => {
           if (sql.includes("SELECT id FROM public.products")) {
             return { rows: [{ id: VALID_PROD_ID }] };
@@ -524,7 +523,6 @@ describe("Admin Media Library Server Actions (Phase 5)", () => {
             return {
               rows: [
                 { id: VALID_ASSET_ID, storage_provider: "supabase" },
-                { id: VALID_LEGACY_ID, storage_provider: "legacy_public" },
               ],
             };
           }
@@ -533,11 +531,11 @@ describe("Admin Media Library Server Actions (Phase 5)", () => {
 
         const res = await attachMediaAssetsToProductAction(VALID_PROD_ID, [
           VALID_ASSET_ID,
-          VALID_LEGACY_ID,
+          "00000000-0000-4000-8000-000000000000",
         ]);
 
         expect(res.success).toBe(false);
-        expect(res.error).toContain("Legacy rollback assets cannot be newly attached to products");
+        expect(res.error).toContain("Media asset(s) not found");
         expect(mockAttachMediaToProduct).not.toHaveBeenCalled();
         expect(mockUpdateTag).not.toHaveBeenCalled();
       });
@@ -607,8 +605,7 @@ describe("Admin Media Library Server Actions (Phase 5)", () => {
         expect(mockUpdateTag).toHaveBeenCalledWith("catalog-public");
       });
 
-      it("Case B: legacy rollback hero only + attach A -> A becomes managed hero, legacy demoted", async () => {
-        // Query filters storage_provider != 'legacy_public', so managed count is 0
+      it("Case B: no media + attach A -> A becomes hero", async () => {
         mockQuery.mockResolvedValueOnce({
           rows: [{ count: "0" }],
         });
@@ -625,7 +622,7 @@ describe("Admin Media Library Server Actions (Phase 5)", () => {
         expect(mockUpdateTag).toHaveBeenCalledWith("catalog-public");
       });
 
-      it("Case C: legacy rollback hero only + batch attach [A, B, C] -> A becomes hero, B/C gallery", async () => {
+      it("Case C: no media + batch attach [A, B, C] -> A becomes hero, B/C gallery", async () => {
         mockTxClient.query.mockImplementation(async (sql: string) => {
           if (sql.includes("SELECT id FROM public.products")) {
             return { rows: [{ id: VALID_PROD_ID }] };
@@ -639,8 +636,8 @@ describe("Admin Media Library Server Actions (Phase 5)", () => {
               ],
             };
           }
-          if (sql.includes("FROM public.product_media pm") && sql.includes("storage_provider != 'legacy_public'")) {
-            return { rows: [{ count: "0" }] }; // only legacy rollback exists, so 0 managed
+          if (sql.includes("FROM public.product_media pm")) {
+            return { rows: [{ count: "0" }] }; // 0 existing media
           }
           return { rows: [] };
         });
@@ -701,8 +698,8 @@ describe("Admin Media Library Server Actions (Phase 5)", () => {
               ],
             };
           }
-          if (sql.includes("FROM public.product_media pm") && sql.includes("storage_provider != 'legacy_public'")) {
-            return { rows: [{ count: "1" }] }; // managed hero already exists
+          if (sql.includes("FROM public.product_media pm")) {
+            return { rows: [{ count: "1" }] }; // hero already exists
           }
           return { rows: [] };
         });
@@ -739,20 +736,7 @@ describe("Admin Media Library Server Actions (Phase 5)", () => {
         expect(mockUpdateTag).toHaveBeenCalledWith("catalog-public");
       });
 
-      it("guards legacy_public assets from being detached (read-only during rollback window)", async () => {
-        mockGetMediaAsset.mockResolvedValueOnce({
-          id: VALID_ASSET_ID,
-          storage_provider: "legacy_public",
-          storage_path: "/catalog-shoes/shoe-01.webp",
-        });
 
-        const res = await detachMediaAssetFromProductAction(VALID_PROD_ID, VALID_ASSET_ID);
-
-        expect(res.success).toBe(false);
-        expect(res.error).toBe("Legacy rollback assets are read-only during the rollback window.");
-        expect(mockDetachMediaFromProduct).not.toHaveBeenCalled();
-        expect(mockUpdateTag).not.toHaveBeenCalled();
-      });
     });
 
     describe("setProductMediaHeroAction", () => {
@@ -766,20 +750,7 @@ describe("Admin Media Library Server Actions (Phase 5)", () => {
         expect(mockUpdateTag).toHaveBeenCalledWith("catalog-public");
       });
 
-      it("rejects legacy_public rollback assets from being set as hero", async () => {
-        mockGetMediaAsset.mockResolvedValueOnce({
-          id: VALID_ASSET_ID,
-          storage_provider: "legacy_public",
-          storage_path: "/catalog-shoes/shoe-01.webp",
-        });
 
-        const res = await setProductMediaHeroAction(VALID_PROD_ID, VALID_ASSET_ID);
-
-        expect(res.success).toBe(false);
-        expect(res.error).toBe("Legacy rollback assets cannot be set as hero.");
-        expect(mockSetProductHeroMedia).not.toHaveBeenCalled();
-        expect(mockUpdateTag).not.toHaveBeenCalled();
-      });
     });
 
     describe("reorderProductMediaActionV1 (strictly managed-only)", () => {
@@ -795,38 +766,20 @@ describe("Admin Media Library Server Actions (Phase 5)", () => {
         expect(mockUpdateTag).not.toHaveBeenCalled();
       });
 
-      it("rejects legacy ID injection", async () => {
+
+
+      it("rejects omitted media ID", async () => {
         mockQuery.mockResolvedValueOnce({
           rows: [
-            { media_asset_id: VALID_ASSET_ID, storage_provider: "supabase" },
-            { media_asset_id: VALID_ASSET_ID_2, storage_provider: "supabase" },
-            { media_asset_id: VALID_LEGACY_ID, storage_provider: "legacy_public" },
-          ],
-        });
-
-        const res = await reorderProductMediaActionV1(VALID_PROD_ID, [
-          VALID_ASSET_ID,
-          VALID_LEGACY_ID,
-        ]);
-
-        expect(res.success).toBe(false);
-        expect(res.error).toContain("Legacy rollback assets cannot be reordered");
-        expect(mockReorderProductMediaV1).not.toHaveBeenCalled();
-        expect(mockUpdateTag).not.toHaveBeenCalled();
-      });
-
-      it("rejects omitted managed ID", async () => {
-        mockQuery.mockResolvedValueOnce({
-          rows: [
-            { media_asset_id: VALID_ASSET_ID, storage_provider: "supabase" },
-            { media_asset_id: VALID_ASSET_ID_2, storage_provider: "supabase" },
+            { media_asset_id: VALID_ASSET_ID },
+            { media_asset_id: VALID_ASSET_ID_2 },
           ],
         });
 
         const res = await reorderProductMediaActionV1(VALID_PROD_ID, [VALID_ASSET_ID]);
 
         expect(res.success).toBe(false);
-        expect(res.error).toContain("Submitted media IDs must contain all current managed media assets");
+        expect(res.error).toContain("Submitted media IDs must contain all current product media assets");
         expect(mockReorderProductMediaV1).not.toHaveBeenCalled();
         expect(mockUpdateTag).not.toHaveBeenCalled();
       });
@@ -849,13 +802,11 @@ describe("Admin Media Library Server Actions (Phase 5)", () => {
         expect(mockUpdateTag).not.toHaveBeenCalled();
       });
 
-      it("valid managed reorder preserves legacy IDs in their existing relative order after managed media", async () => {
+      it("valid reorder updates product media positions", async () => {
         mockQuery.mockResolvedValueOnce({
           rows: [
-            { media_asset_id: VALID_ASSET_ID, storage_provider: "supabase" },
-            { media_asset_id: VALID_ASSET_ID_2, storage_provider: "supabase" },
-            { media_asset_id: VALID_LEGACY_ID, storage_provider: "legacy_public" },
-            { media_asset_id: "66666666-6666-4666-8666-666666666666", storage_provider: "legacy_public" },
+            { media_asset_id: VALID_ASSET_ID },
+            { media_asset_id: VALID_ASSET_ID_2 },
           ],
         });
         mockReorderProductMediaV1.mockResolvedValueOnce(undefined);
@@ -869,8 +820,6 @@ describe("Admin Media Library Server Actions (Phase 5)", () => {
         expect(mockReorderProductMediaV1).toHaveBeenCalledWith(VALID_PROD_ID, [
           VALID_ASSET_ID_2,
           VALID_ASSET_ID,
-          VALID_LEGACY_ID,
-          "66666666-6666-4666-8666-666666666666",
         ]);
         expect(mockUpdateTag).toHaveBeenCalledWith("catalog-public");
       });
@@ -895,24 +844,7 @@ describe("Admin Media Library Server Actions (Phase 5)", () => {
         expect(mockUpdateTag).toHaveBeenCalledWith("catalog-public");
       });
 
-      it("guards legacy_public assets from having alt text modified (read-only during rollback window)", async () => {
-        mockGetMediaAsset.mockResolvedValueOnce({
-          id: VALID_ASSET_ID,
-          storage_provider: "legacy_public",
-          storage_path: "/catalog-shoes/shoe-01.webp",
-        });
 
-        const res = await updateProductMediaAltTextActionV1(
-          VALID_PROD_ID,
-          VALID_ASSET_ID,
-          "Attempted legacy alt text edit",
-        );
-
-        expect(res.success).toBe(false);
-        expect(res.error).toBe("Legacy rollback assets are read-only during the rollback window.");
-        expect(mockUpdateProductMediaAltTextV1).not.toHaveBeenCalled();
-        expect(mockUpdateTag).not.toHaveBeenCalled();
-      });
     });
   });
 
@@ -942,17 +874,7 @@ describe("Admin Media Library Server Actions (Phase 5)", () => {
       expect(res.error).toContain("Media asset not found");
     });
 
-    it("guards legacy_public assets from deletion during rollback period", async () => {
-      mockGetMediaAsset.mockResolvedValueOnce({
-        id: VALID_ASSET_ID,
-        storage_provider: "legacy_public",
-        storage_path: "/catalog-shoes/shoe-01.webp",
-      });
 
-      const res = await deleteMediaLibraryAssetAction(VALID_ASSET_ID);
-      expect(res.success).toBe(false);
-      expect(res.error).toBe("Legacy assets are read-only during the rollback window and cannot be deleted.");
-    });
 
     it("guards assets currently in use by products and rejects deletion with product titles", async () => {
       mockGetMediaAsset.mockResolvedValueOnce({

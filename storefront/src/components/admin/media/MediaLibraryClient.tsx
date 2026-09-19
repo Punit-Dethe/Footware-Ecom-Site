@@ -14,7 +14,6 @@ interface MediaLibraryClientProps {
   limit: number;
   searchParamsState: {
     q: string;
-    provider: string;
     sort: string;
   };
   country: string;
@@ -117,10 +116,10 @@ export function MediaLibraryClient({
         </button>
       </div>
 
-      {/* Controls Bar: Search, Provider Filter, Sort */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-[#fffefc] border border-[#cfc4b6] p-3 sm:p-4 rounded-[2px]">
+      {/* Controls Bar: Search & Sort */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#fffefc] border border-[#cfc4b6] p-3 sm:p-4 rounded-[2px]">
         {/* Left: Search input */}
-        <div className="relative w-full lg:max-w-xs">
+        <div className="relative w-full sm:max-w-xs">
           <input
             type="text"
             value={searchQuery}
@@ -143,32 +142,8 @@ export function MediaLibraryClient({
           )}
         </div>
 
-        {/* Center: Provider Filter Tabs */}
-        <div className="flex items-center gap-1 sm:gap-2 overflow-x-auto pb-1 lg:pb-0">
-          {[
-            { label: "Supabase", value: "supabase" },
-            { label: "All Media", value: "all" },
-          ].map((tab) => {
-            const isCurrent = searchParamsState.provider === tab.value;
-            return (
-              <button
-                key={tab.value}
-                type="button"
-                onClick={() => updateUrl({ provider: tab.value, page: null })}
-                className={`admin-btn text-[10px] py-1.5 px-3 whitespace-nowrap ${
-                  isCurrent
-                    ? "admin-btn-secondary font-semibold"
-                    : "admin-btn-quiet text-[#706257]"
-                }`}
-              >
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
-
         {/* Right: Sort selector & Asset Count */}
-        <div className="flex items-center justify-between lg:justify-end gap-3 text-xs">
+        <div className="flex items-center justify-between sm:justify-end gap-3 text-xs">
           <div className="flex items-center gap-2">
             <span className="text-[#706257] hidden sm:inline text-[11px]">Sort:</span>
             <select
@@ -183,7 +158,7 @@ export function MediaLibraryClient({
             </select>
           </div>
 
-          <span className="admin-mono text-[#706257] text-[11px] whitespace-nowrap">
+          <span className="tabular-nums text-[#706257] text-[11px] whitespace-nowrap">
             {totalCount} {totalCount === 1 ? "asset" : "assets"}
           </span>
         </div>
@@ -196,7 +171,6 @@ export function MediaLibraryClient({
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-6">
             {initialAssets.map((asset) => {
               const isSelected = selectedAsset?.id === asset.id;
-              const isLegacy = asset.storage_provider === "legacy_public";
 
               return (
                 <button
@@ -232,7 +206,7 @@ export function MediaLibraryClient({
                       <p className="text-xs font-medium text-[#30261f] truncate" title={asset.original_filename || asset.id}>
                         {asset.original_filename || "Untitled Asset"}
                       </p>
-                      <p className="admin-mono text-[10px] text-[#706257] mt-0.5">
+                      <p className="tabular-nums text-[10px] text-[#706257] mt-0.5">
                         {asset.width && asset.height ? `${asset.width} × ${asset.height}` : "—"}
                       </p>
                     </div>
@@ -247,17 +221,10 @@ export function MediaLibraryClient({
                           Unused
                         </span>
                       )}
-
-                      {isLegacy && (
-                        <span className="admin-badge admin-badge--legacy text-[8px] py-0 px-1" title="Legacy static rollback copy">
-                          Rollback
-                        </span>
-                      )}
                     </div>
                   </div>
                 </button>
               );
-
             })}
           </div>
         ) : (
@@ -267,8 +234,8 @@ export function MediaLibraryClient({
             <h3 className="admin-title text-2xl mt-1 mb-2">No media found</h3>
             <p className="admin-subtitle text-sm max-w-md mx-auto mb-6">
               {searchQuery
-                ? `No media assets match "${searchQuery}". Try adjusting your search or provider filter.`
-                : "The selected library filter contains no media assets."}
+                ? `No media assets match "${searchQuery}". Try adjusting your search query.`
+                : "The media library contains no uploaded assets."}
             </p>
             {searchQuery && (
               <button
@@ -303,7 +270,7 @@ export function MediaLibraryClient({
                 &larr; Previous
               </button>
 
-              <span className="admin-mono text-xs px-2 text-[#706257]">
+              <span className="tabular-nums text-xs px-2 text-[#706257]">
                 Page {page} of {totalPages}
               </span>
 
@@ -338,7 +305,7 @@ export function MediaLibraryClient({
       <MediaUploadModal
         isOpen={isUploadModalOpen}
         onClose={() => setIsUploadModalOpen(false)}
-        onUploadSuccess={(newAssetId) => {
+        onUploadSuccess={() => {
           router.refresh();
         }}
         triggerRef={activeTriggerRef}

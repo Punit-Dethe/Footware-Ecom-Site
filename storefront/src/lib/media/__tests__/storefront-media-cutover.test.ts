@@ -181,22 +181,13 @@ describe("Media Contract v1 Storefront Cutover (Phase 4)", () => {
       expect(product.media).toHaveLength(1);
     });
 
-    it("excludes legacy_public rollback copy in SQL query when non-legacy media exists", () => {
-      // Test the SQL filter clause directly
-      const filterClause = `
-        (
-          ma.storage_provider != 'legacy_public'
-          OR NOT EXISTS (
-            SELECT 1
-            FROM public.product_media pm_sub
-            JOIN public.media_assets ma_sub ON ma_sub.id = pm_sub.media_asset_id
-            WHERE pm_sub.product_id = p.id
-              AND ma_sub.storage_provider != 'legacy_public'
-          )
-        )
-      `;
-      expect(filterClause).toContain("ma.storage_provider != 'legacy_public'");
-      expect(filterClause).toContain("NOT EXISTS");
+    it("ensures public catalog query has zero legacy_public fallback or filtering", () => {
+      const catalogTs = fs.readFileSync(
+        path.resolve(__dirname, "../../db/catalog.ts"),
+        "utf8",
+      );
+      expect(catalogTs).not.toContain("legacy_public");
+      expect(catalogTs).not.toContain("storage_provider !=");
     });
   });
 

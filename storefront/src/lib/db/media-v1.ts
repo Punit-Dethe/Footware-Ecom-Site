@@ -10,7 +10,7 @@ import { MediaDomainError } from "@/lib/media/errors";
 
 export { MediaDomainError };
 
-export type StorageProvider = "legacy_public" | "supabase" | string;
+export type StorageProvider = "supabase" | string;
 
 export interface DbMediaAsset {
   id: string;
@@ -122,9 +122,7 @@ export async function createMediaAsset(
   client?: PoolClient,
 ): Promise<DbMediaAsset> {
   const runner = client ? client.query.bind(client) : query;
-  const provider =
-    input.storageProvider ||
-    (input.storagePath.startsWith("/catalog-shoes/") ? "legacy_public" : "supabase");
+  const provider = input.storageProvider || "supabase";
 
   try {
     const res = await runner<DbMediaAsset>(
@@ -522,7 +520,7 @@ export async function detachMediaFromProduct(
       const remaining = await c.query<{ id: string }>(
         `SELECT pm.id FROM public.product_media pm
          JOIN public.media_assets ma ON ma.id = pm.media_asset_id
-         WHERE pm.product_id = $1 AND ma.storage_provider != 'legacy_public'
+         WHERE pm.product_id = $1
          ORDER BY pm.position ASC, pm.created_at ASC
          LIMIT 1;`,
         [productId],

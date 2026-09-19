@@ -93,7 +93,7 @@ describe("Phase 6A: Media Library Keyboard Accessibility & Dialog Behavior", () 
           totalCount={1}
           page={1}
           limit={24}
-          searchParamsState={{ q: "", provider: "supabase", sort: "created_desc" }}
+          searchParamsState={{ q: "", sort: "created_desc" }}
           country="us"
           locale="en"
         />,
@@ -115,7 +115,7 @@ describe("Phase 6A: Media Library Keyboard Accessibility & Dialog Behavior", () 
           totalCount={1}
           page={1}
           limit={24}
-          searchParamsState={{ q: "", provider: "supabase", sort: "created_desc" }}
+          searchParamsState={{ q: "", sort: "created_desc" }}
           country="us"
           locale="en"
         />,
@@ -139,7 +139,7 @@ describe("Phase 6A: Media Library Keyboard Accessibility & Dialog Behavior", () 
           totalCount={1}
           page={1}
           limit={24}
-          searchParamsState={{ q: "", provider: "supabase", sort: "created_desc" }}
+          searchParamsState={{ q: "", sort: "created_desc" }}
           country="us"
           locale="en"
         />,
@@ -168,7 +168,7 @@ describe("Phase 6A: Media Library Keyboard Accessibility & Dialog Behavior", () 
           totalCount={1}
           page={1}
           limit={24}
-          searchParamsState={{ q: "", provider: "supabase", sort: "created_desc" }}
+          searchParamsState={{ q: "", sort: "created_desc" }}
           country="us"
           locale="en"
         />,
@@ -340,7 +340,7 @@ describe("Phase 6A: Media Library Keyboard Accessibility & Dialog Behavior", () 
           totalCount={1}
           page={1}
           limit={24}
-          searchParamsState={{ q: "", provider: "supabase", sort: "created_desc" }}
+          searchParamsState={{ q: "", sort: "created_desc" }}
           country="us"
           locale="en"
         />,
@@ -377,7 +377,7 @@ describe("Phase 6A: Media Library Keyboard Accessibility & Dialog Behavior", () 
           totalCount={1}
           page={1}
           limit={24}
-          searchParamsState={{ q: "", provider: "supabase", sort: "created_desc" }}
+          searchParamsState={{ q: "", sort: "created_desc" }}
           country="us"
           locale="en"
         />,

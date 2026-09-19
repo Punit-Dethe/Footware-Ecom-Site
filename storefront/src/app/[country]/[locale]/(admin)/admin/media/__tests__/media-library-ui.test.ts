@@ -78,7 +78,7 @@ describe("Media Library Admin UI (Phase 6A)", () => {
       expect(mockDb.listMediaLibraryAssets).not.toHaveBeenCalled();
     });
 
-    it("defaults provider to 'supabase' to prioritize managed assets over legacy rollback copies", async () => {
+    it("queries media assets with default created_desc sort and 24-item limit", async () => {
       await AdminMediaPageContent({
         params: TEST_PARAMS,
         searchParams: Promise.resolve({}),
@@ -86,37 +86,10 @@ describe("Media Library Admin UI (Phase 6A)", () => {
 
       expect(mockDb.listMediaLibraryAssets).toHaveBeenCalledWith({
         query: undefined,
-        provider: "supabase",
         sort: "created_desc",
         limit: 24,
         offset: 0,
       });
-    });
-
-    it("maps provider='all' to undefined so all media providers are queried", async () => {
-      await AdminMediaPageContent({
-        params: TEST_PARAMS,
-        searchParams: Promise.resolve({ provider: "all" }),
-      });
-
-      expect(mockDb.listMediaLibraryAssets).toHaveBeenCalledWith(
-        expect.objectContaining({
-          provider: undefined,
-        }),
-      );
-    });
-
-    it("passes provider='legacy_public' when admin explicitly filters for rollback assets", async () => {
-      await AdminMediaPageContent({
-        params: TEST_PARAMS,
-        searchParams: Promise.resolve({ provider: "legacy_public" }),
-      });
-
-      expect(mockDb.listMediaLibraryAssets).toHaveBeenCalledWith(
-        expect.objectContaining({
-          provider: "legacy_public",
-        }),
-      );
     });
   });
 

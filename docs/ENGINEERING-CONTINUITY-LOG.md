@@ -27,25 +27,18 @@
 * **Phase 6A (Editorial Admin Foundation & Global Media Library UI)**: MERGED into `main` at `5c0edbf6ce94bd09d563a5b93fcc45cbe2c90fbe`.
 * **Phase 6B (Product ↔ Media Library Integration)**: MERGED into `main` at `22144864d96c5828619d1df626eef2311e6e571c`.
 * **Phase 7 (Complete Editorial Catalog Admin Redesign)**: MERGED into `main` at `769a96382b14ca7fced02207070988c657299098`.
-* **Phase 8 (Orders + Customers Operations)**: **COMPLETE / VERIFIED** on branch `feat/editorial-admin-commerce`.
-  - Added read-only Commerce operations: Orders Index (`/admin/orders`), Order Detail (`/admin/orders/[id]`), Customers Directory (`/admin/customers`), Customer Detail (`/admin/customers/[id]`).
-  - Studio top navigation (`AdminTopNav.tsx`) grouped into Overview, Catalog (Products, Categories, Media), and Commerce (Orders, Customers) with responsive horizontal scrolling (`scrollbar-none`).
-  - Dedicated server-only DAL (`src/lib/db/admin-commerce.ts`) with bounded queries, 0 N+1 (list orders/customers: normal = 1 query, worst case out-of-range = 2 queries; order detail = 2 queries; customer detail = exactly 3 queries: profile/aggregates, bounded addresses LIMIT 100, bounded orders LIMIT 50).
-  - Snapshot authority for orders: immutable `order_items` schema columns (`product_name`, `sku`, `size_option`, `price_in_cents`, `quantity`, `total_in_cents`, `thumbnail_url`), `shipping_address_snapshot`, `billing_address_snapshot`, and stored cent totals (never recomputing or linking dynamically to mutated catalog).
-  - Identity authority for customers: direct server join of `public.profiles` (`role = 'customer'`) and `auth.users` (`u.email`), order aggregates (`orders.user_id = customer.id` strictly, never merging by email).
-  - Customer monetary & currency semantics: Placed Order Value calculated strictly from `orders.status = 'placed'` and grouped by currency (`placedOrderTotals`); cancelled orders excluded from value; currencies never summed across or converted; invalid `highest_order_total` cross-currency sort removed.
-  - Order sorting: `newest`, `oldest`; invalid cross-currency `total_desc` / `total_asc` sorts removed.
-  - Currency & Country fidelity: removed all fabricated `"USD"` fallbacks (authoritative stored currency passed through; malformed aggregate records skipped rather than defaulting to USD); removed fabricated `"US"` country fallback from address snapshots (rendered only when present).
-  - Customer address query bounded to `LIMIT 100`.
-  - Full-history customer aggregates computed in SQL independent of bounded 50-order history rows.
-  - Zero operational mutation buttons for payment capture, fulfillment, shipment creation, carrier tracking, refunds, or cancellations (strictly read-only).
-  - Studio Overview (`/admin`) extended with commerce metrics (`total_orders`, `orders_today`, `guest_orders`, `registered_customers`) inside `getAdminCatalogOverview()` within the strict 2-query budget.
-  - Full test suite: 77 test files passing (100% pass).
-  - TypeScript `tsc --noEmit`: 0 errors. Biome lint: 0 errors, 0 warnings across 372 files.
-  - Next.js production build: 111/111 static pages generated cleanly.
-  - Visual QA verified at 1920, 1440, 768, and 390 viewports for Overview, Orders Default, Orders Filtered, Order Detail, Customers Default, Customer Detail.
-  - Zero customer storefront JS impact (0 bytes). Zero database schema migrations.
-  - Ready for supervisor review. Do NOT merge to main.
+* **Phase 8 (Orders + Customers Operations)**: MERGED into `main` at `eaf33d8`.
+* **Phase 9 (Final Cleanup, Admin Shell & Production Hardening)**: **COMPLETE / VERIFIED** on branch `feat/final-production-cleanup` (Commit `b2cfc67bf48a26e1e2c74e8d98f3de069e55814c`).
+  - **Dead Legacy Catalog Cleanup**: Pruned 36 unreferenced legacy products and 148 variants. Intentionally preserved 2 archived legacy products (`office-footwear-01` [`8489a205-800d-44a6-9bf2-dd0126925f7c`] and `office-footwear-03` [`fe296065-fe31-4552-ac7b-3f00c3452e7a`]) and 4 variants because 13 active guest carts (14 items) hold foreign key references.
+  - **Safe Cart Policy**: Prohibited automatic abandonment and cart item deletion. If any active cart references a legacy product/variant, destructive action is blocked and the entities are preserved as `archived`.
+  - **Fail-Safe Migration**: Dropped obsolete `public.product_images` via `20260919000000_drop_legacy_product_images.sql` without `CASCADE`. Verified 0 view/FK dependencies. Full 10-migration sequence replayed from scratch in disposable schema: 10/10 PASS.
+  - **Media Contract v1 Sole Authority**: `legacy_public` rollback window concluded (0 `legacy_public` DB rows). All active runtime fallback queries and guards eliminated.
+  - **Storage Reconciliation**: Exactly 31 managed assets in `product-media/media/` matching 31 DB `media_assets` rows 1:1. 2 test upload orphans and 468 dead render files safely removed. Exactly 26 files under `products/` retained for historical orders and active carts.
+  - **Historical Order Snapshot Fidelity**: Retained 3 static images (`shoe-01.webp`, `shoe-02.webp`, `shoe-05.webp`) in `storefront/public/catalog-shoes/` for 3 immutable historical orders.
+  - **Admin Navigation**: Persistent 240px left sidebar on desktop + accessible Radix mobile drawer (< 1024px) with focus trap and Escape key dismiss. Unused top-nav CSS removed.
+  - **Typography Hard Rule**: Cormorant Garamond strictly restricted to `.admin-brand` MIRZA wordmark logo. All other admin text, headers, and dialogs use Geist sans-serif. Numbers/IDs use `tabular-nums`. Monospace (`admin-mono`, `font-mono`) and decorative italics: 0 across admin.
+  - **Verification**: `tsc --noEmit`, `biome lint`, `vitest`, Next.js build (111 pages), and Vercel Preview green.
+  - Branch held for supervisor review. Do NOT merge to main. Do NOT begin Phase 10 commerce pricing.
 
 ### Current working head
 

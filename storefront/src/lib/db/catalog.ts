@@ -132,16 +132,6 @@ export async function loadPublicCatalogRows(
                   FROM public.product_media pm
                   JOIN public.media_assets ma ON ma.id = pm.media_asset_id
                   WHERE pm.product_id = p.id
-                    AND (
-                      ma.storage_provider != 'legacy_public'
-                      OR NOT EXISTS (
-                        SELECT 1
-                        FROM public.product_media pm_sub
-                        JOIN public.media_assets ma_sub ON ma_sub.id = pm_sub.media_asset_id
-                        WHERE pm_sub.product_id = p.id
-                          AND ma_sub.storage_provider != 'legacy_public'
-                      )
-                    )
                 ),
                 '[]'::json
               ) AS images

@@ -369,7 +369,7 @@ export async function getAdminCatalogOverview(): Promise<AdminCatalogOverview> {
       COUNT(*) FILTER (WHERE p.status = 'draft')::int AS draft_products,
       COUNT(*) FILTER (WHERE p.status = 'archived')::int AS archived_products,
       (SELECT COUNT(*)::int FROM public.categories) AS total_categories,
-      (SELECT COUNT(*)::int FROM public.media_assets WHERE storage_provider != 'legacy_public') AS managed_media_count,
+      (SELECT COUNT(*)::int FROM public.media_assets) AS managed_media_count,
       (SELECT COUNT(*)::int FROM public.variants) AS total_variants,
       (SELECT COALESCE(SUM(quantity_on_hand), 0)::int FROM public.variants) AS total_stock,
       (
@@ -412,7 +412,6 @@ export async function getAdminCatalogOverview(): Promise<AdminCatalogOverview> {
       FROM public.product_media pm
       JOIN recent r ON r.id = pm.product_id
       JOIN public.media_assets ma ON ma.id = pm.media_asset_id
-      WHERE ma.storage_provider != 'legacy_public'
       ORDER BY pm.product_id, pm.is_hero DESC, pm.position ASC
     )
     SELECT
@@ -614,7 +613,6 @@ export async function listAdminProductsPage(
       FROM public.product_media pm
       JOIN ranked_products rp ON rp.id = pm.product_id
       JOIN public.media_assets ma ON ma.id = pm.media_asset_id
-      WHERE ma.storage_provider != 'legacy_public'
       ORDER BY pm.product_id, pm.is_hero DESC, pm.position ASC
     )
     SELECT
@@ -1261,7 +1259,7 @@ async function validatePublishInvariants(
        COUNT(*) FILTER (WHERE pm.is_hero = true)::int AS hero_count
      FROM public.product_media pm
      JOIN public.media_assets ma ON ma.id = pm.media_asset_id
-     WHERE pm.product_id = $1 AND ma.storage_provider != 'legacy_public';`,
+     WHERE pm.product_id = $1;`,
     [productId],
   );
 

@@ -460,7 +460,7 @@ describe("Admin Catalog DAL Unit Tests", () => {
               ],
             });
           }
-          if (sql.includes("FROM public.product_media pm") && sql.includes("storage_provider != 'legacy_public'")) {
+          if (sql.includes("FROM public.product_media pm") && sql.includes("JOIN public.media_assets ma")) {
             return Promise.resolve({ rows: [{ count: 0 }] }); // 0 managed media
           }
           return Promise.resolve({ rows: [] });
@@ -516,7 +516,7 @@ describe("Admin Catalog DAL Unit Tests", () => {
               ],
             });
           }
-          if (sql.includes("FROM public.product_media pm") && sql.includes("storage_provider != 'legacy_public'")) {
+          if (sql.includes("FROM public.product_media pm") && sql.includes("JOIN public.media_assets ma")) {
             return Promise.resolve({ rows: [{ count: 1, hero_count: 1 }] }); // 1 managed media, 1 managed hero
           }
           if (sql.includes("FROM public.products") && sql.includes("WHERE id = $1")) {
@@ -599,7 +599,7 @@ describe("Admin Catalog DAL Unit Tests", () => {
               ],
             });
           }
-          if (sql.includes("FROM public.product_media pm") && sql.includes("storage_provider != 'legacy_public'")) {
+          if (sql.includes("FROM public.product_media pm") && sql.includes("JOIN public.media_assets ma")) {
             return Promise.resolve({ rows: [{ count: 1, hero_count: 0 }] }); // 1 managed media, 0 managed heroes
           }
           return Promise.resolve({ rows: [] });
@@ -655,8 +655,8 @@ describe("Admin Catalog DAL Unit Tests", () => {
               ],
             });
           }
-          // The query filters out legacy_public so legacy hero is not counted as managed hero
-          if (sql.includes("FROM public.product_media pm") && sql.includes("storage_provider != 'legacy_public'")) {
+          // When media exists but none is hero
+          if (sql.includes("FROM public.product_media pm") && sql.includes("JOIN public.media_assets ma")) {
             return Promise.resolve({ rows: [{ count: 1, hero_count: 0 }] });
           }
           return Promise.resolve({ rows: [] });
@@ -712,7 +712,7 @@ describe("Admin Catalog DAL Unit Tests", () => {
               ],
             });
           }
-          if (sql.includes("FROM public.product_media pm") && sql.includes("storage_provider != 'legacy_public'")) {
+          if (sql.includes("FROM public.product_media pm") && sql.includes("JOIN public.media_assets ma")) {
             return Promise.resolve({ rows: [{ count: 2, hero_count: 2 }] });
           }
           return Promise.resolve({ rows: [] });

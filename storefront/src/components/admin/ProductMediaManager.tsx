@@ -322,7 +322,7 @@ export function ProductMediaManager({
                       {heroMedia.asset.filename || "Untitled"}
                     </h5>
                     <div className="flex items-center gap-3 text-xs text-[#706257] mt-1">
-                      <span className="admin-mono">
+                      <span className="tabular-nums">
                         {heroMedia.asset.width && heroMedia.asset.height
                           ? `${heroMedia.asset.width} × ${heroMedia.asset.height} px`
                           : "Dimensions unknown"}
@@ -404,7 +404,7 @@ export function ProductMediaManager({
                       >
                         {item.asset.filename || "Untitled"}
                       </p>
-                      <p className="admin-mono text-[10px] text-[#706257] mt-0.5">
+                      <p className="tabular-nums text-[10px] text-[#706257] mt-0.5">
                         {item.asset.width && item.asset.height
                           ? `${item.asset.width} × ${item.asset.height}`
                           : "—"}

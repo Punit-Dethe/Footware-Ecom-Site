@@ -14,12 +14,16 @@ The Mirza Admin Studio shares the editorial design system established by the cus
   * `--admin-secondary`: `#e9e2d6` (secondary structural stone fields)
   * `--admin-stone`: `#ece7de` (image frames and muted input backgrounds)
   * `--admin-border`: `#cfc4b6` (subtle hairline dividers and field borders)
-* **Typography Tokens**:
+* **Typography Tokens & Hard Rules**:
   * `--admin-ink`: `#30261f` (primary text and button backgrounds)
   * `--admin-muted`: `#706257` (secondary labels, metadata, and timestamps)
-  * `--font-editorial-display`: Cormorant Garamond
-  * `--font-editorial-text`: EB Garamond
-  * `--font-geist`: Geist
+  * `--font-editorial-display`: Cormorant Garamond (Strictly reserved for the `.admin-brand` MIRZA wordmark logo ONLY)
+  * `--font-geist`: Geist (Used for 100% of all admin titles, subtitles, dialogs, forms, table headers, and content)
+  * `tabular-nums`: Applied to Geist for all numeric, financial, SKU, and ID displays (0 monospace in admin UI).
+  * Decorative italics: 0 in admin UI.
+* **Navigation Shell**:
+  * Persistent left sidebar on desktop (240px fixed width, sticky, grouped into Studio, Catalog, and Commerce domains).
+  * Radix Dialog-based slide-over drawer on mobile/tablet (< 1024px) with focus trap, backdrop blur, Escape key dismissal, and active route highlights.
 * **Aesthetic Principles**:
   * Flat surfaces, thin warm rules, deliberate whitespace, and restrained geometry.
   * Replaced generic SaaS patterns (gray cards, shadow-sm, giant green/amber badges, browser alerts/confirms).
@@ -88,8 +92,9 @@ All admin routes reside under `src/app/[country]/[locale]/(admin)/admin` and req
 
 ### Media Library (`/admin/media`)
 * **Endpoint**: `src/app/[country]/[locale]/(admin)/admin/media/page.tsx`
-* **Components**: Phase 6A Global Media Library UI (`MediaDetailDrawer`, `MediaUploadModal`).
-* Fully integrated within the updated top navigation shell (Overview, Catalog, Commerce).
+* **Components**: Global Media Library UI (`MediaDetailDrawer`, `MediaUploadModal`).
+* Integrated directly into the Admin Sidebar under the Catalog domain.
+* Current-state only: Supabase Storage is the sole active media provider. Obsolete `product_images` table has been dropped via migration `20260919000000_drop_legacy_product_images.sql`. Legacy public rollback window has ended (0 `legacy_public` assets).
 
 ### Orders Index (`/admin/orders`)
 * **Endpoint**: `src/app/[country]/[locale]/(admin)/admin/orders/page.tsx`

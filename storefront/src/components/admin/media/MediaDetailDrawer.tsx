@@ -71,7 +71,6 @@ export function MediaDetailDrawer({
   }, [isOpen, asset]);
 
   const currentAsset = detail || asset;
-  const isLegacy = currentAsset?.storage_provider === "legacy_public";
   const usageCount = detail ? detail.usage.usageCount : (asset ? asset.usageCount : 0);
   const isInUse = usageCount > 0;
 
@@ -208,7 +207,7 @@ export function MediaDetailDrawer({
                   <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
                     <div>
                       <span className="text-[#706257] block text-[11px]">Dimensions</span>
-                      <span className="admin-mono text-[#30261f]">
+                      <span className="tabular-nums text-[#30261f]">
                         {currentAsset.width && currentAsset.height
                           ? `${currentAsset.width} × ${currentAsset.height} px`
                           : "—"}
@@ -216,13 +215,13 @@ export function MediaDetailDrawer({
                     </div>
                     <div>
                       <span className="text-[#706257] block text-[11px]">Format</span>
-                      <span className="admin-mono text-[#30261f]">
+                      <span className="text-[#30261f]">
                         {currentAsset.mime_type || "image/webp"}
                       </span>
                     </div>
                     <div>
                       <span className="text-[#706257] block text-[11px]">File Size</span>
-                      <span className="admin-mono text-[#30261f]">
+                      <span className="tabular-nums text-[#30261f]">
                         {formatBytes(currentAsset.file_size_bytes)}
                       </span>
                     </div>
@@ -235,17 +234,15 @@ export function MediaDetailDrawer({
                             style={{ backgroundColor: currentAsset.dominant_color }}
                           />
                         )}
-                        <span className="admin-mono text-[#30261f]">
+                        <span className="text-[#30261f]">
                           {currentAsset.dominant_color || "—"}
                         </span>
                       </div>
                     </div>
                     <div>
                       <span className="text-[#706257] block text-[11px]">Provider</span>
-                      <span className="text-[#30261f] capitalize">
-                        {currentAsset.storage_provider === "supabase"
-                          ? "Supabase Storage"
-                          : "Legacy Public Static"}
+                      <span className="text-[#30261f]">
+                        Supabase Storage
                       </span>
                     </div>
                     <div>
@@ -263,7 +260,7 @@ export function MediaDetailDrawer({
                     <div className="mt-3 pt-3 border-t border-[#f3efe8]">
                       <span className="text-[#706257] block text-[11px] mb-1">SHA-256 Digest</span>
                       <div className="flex items-center justify-between gap-2 p-2 bg-[#fffefc] border border-[#d8d0c5] rounded-[2px]">
-                        <span className="admin-mono text-[10px] text-[#30261f] truncate">
+                        <span className="tabular-nums text-[10px] text-[#30261f] truncate">
                           {currentAsset.content_sha256}
                         </span>
                         <button
@@ -314,8 +311,8 @@ export function MediaDetailDrawer({
                             >
                               {prod.productName}
                             </Link>
-                            <span className="admin-mono text-[10px] text-[#706257]">
-                              Position {prod.position} {prod.altText ? `• "${prod.altText}"` : ""}
+                            <span className="tabular-nums text-[10px] text-[#706257]">
+                              Position {prod.position} · {prod.isHero ? "Hero" : "Gallery"}
                             </span>
                           </div>
                           {prod.isHero && (
@@ -348,11 +345,7 @@ export function MediaDetailDrawer({
 
               {/* Drawer Actions Footer */}
               <div className="p-6 border-t border-[#cfc4b6] flex-shrink-0 bg-[#fffefc]">
-                {isLegacy ? (
-                  <div className="text-center p-2.5 bg-[#ece7de] border border-[#cfc4b6] rounded-[2px] text-xs text-[#706257]">
-                    Read-only rollback asset. Preserved for rollback safety.
-                  </div>
-                ) : isInUse ? (
+                {isInUse ? (
                   <div className="space-y-2">
                     <button
                       type="button"

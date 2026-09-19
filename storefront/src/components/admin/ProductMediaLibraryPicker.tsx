@@ -313,7 +313,7 @@ export function ProductMediaLibraryPicker({
                           {asset.original_filename || "Untitled"}
                         </p>
                         <div className="flex items-center justify-between text-[10px] text-[#706257] mt-1">
-                          <span className="admin-mono">
+                          <span className="tabular-nums">
                             {asset.width && asset.height
                               ? `${asset.width}×${asset.height}`
                               : "—"}
@@ -344,7 +344,7 @@ export function ProductMediaLibraryPicker({
                   >
                     &larr; Prev
                   </button>
-                  <span className="admin-mono text-[11px]">
+                  <span className="tabular-nums text-[11px]">
                     Page {page} of {totalPages}
                   </span>
                   <button

@@ -48,10 +48,10 @@ All admin styling is strictly scoped to administrative routes and components via
 | `--admin-border` | `#cfc4b6` | Delicate warm structural borders & dividers |
 | `--admin-border-subtle` | `#e5ddd0` | Subtle internal dividers |
 
-### Typography
-- **Headings & Brand**: Cormorant Garamond / EB Garamond (`var(--font-editorial)` / serif), high-contrast uppercase brand headers.
-- **Body & UI Controls**: Geist Sans (`var(--font-geist)`), legible proportions, balanced tracking (`tracking-wide`, `tracking-widest`).
-- **Technical Specs**: Geist Mono (`var(--font-geist-mono)` / monospace) for dimensions, hashes, byte counts, and UUIDs.
+### Typography Hard Rule
+- **Brand Wordmark**: Cormorant Garamond (`var(--font-editorial-display)`), strictly reserved for the `.admin-brand` MIRZA logo.
+- **Headings, Body & UI Controls**: Geist Sans (`var(--font-geist)`), legible proportions, balanced tracking (`tracking-wide`, `tracking-widest`).
+- **Technical Specs & Metrics**: Geist Sans with `tabular-nums` for dimensions, hashes, byte counts, and UUIDs. All monospace fonts (`admin-mono`, `font-mono`) and decorative italics are eliminated (0 across admin UI).
 
 ---
 
@@ -62,16 +62,17 @@ The Media Library listing at `/[country]/[locale]/admin/media` supports deep-lin
 | Parameter | Type | Default | Behavior |
 |---|---|---|---|
 | `q` | `string` | `""` | Case-insensitive search on `original_filename` or `storage_path`. Debounced at 350ms on client. |
-| `provider` | `supabase \| all \| legacy_public` | `"supabase"` | Defaults to managed Supabase assets. Prevents 31 legacy rollback copies from dominating view while retaining explicit access via "Legacy Rollback" tab. |
 | `sort` | `created_desc \| created_asc \| size_desc \| size_asc` | `"created_desc"` | Sorts assets chronologically or by file size. |
 | `page` | `number` | `1` | 1-indexed pagination (bounded at 24 assets per page). |
+
+*Note on Storage Authority:* Supabase Storage `product-media` is the sole active media provider. The rollback window has concluded and historical provider filtering tabs have been retired.
 
 ### Visual Layout & States
 - **Grid Layout**: Responsive grid transitioning from 2 columns on mobile (390px), 3 on tablet (768px), 4 on small desktop (1280px), to 5 columns on wide desktop (1920px).
 - **Asset Cards**:
   - Baked `#ece7de` stone frame displaying WebP thumbnail with progressive LQIP blur-up.
   - Truncated filename and dimensions (`WIDTH × HEIGHT`).
-  - Status badges: `Used Nx` (charcoal), `Unused` (muted amber/neutral), `Rollback` (terracotta).
+  - Status badges: `Used Nx` (charcoal), `Unused` (muted amber/neutral). Rollback badges retired.
 - **Empty State**: Editorial card explaining zero results with quick action to clear search/filters.
 
 ---

@@ -157,7 +157,8 @@ describe("Admin Catalog Phase 7 DAL Tests", () => {
       expect(params).toContain(0);  // offset
 
       // Check SQL structure
-      expect(sql).toContain("storage_provider != 'legacy_public'");
+      expect(sql).not.toContain("storage_provider != 'legacy_public'");
+      expect(sql).toContain("FROM public.product_media pm");
       expect(sql).not.toContain("product_images");
 
       // Check mapped result

@@ -65,7 +65,7 @@ WHERE content_sha256 IS NOT NULL;
 
 ### Asset Schema Summary (`public.media_assets`):
 - `id` (UUID, Primary Key)
-- `storage_provider` (`'supabase'` or `'legacy_public'`)
+- `storage_provider` (`'supabase'`; legacy_public retired)
 - `storage_path` (`media/{assetId}/original.{ext}`)
 - `original_filename` (Source filename at time of upload)
 - `mime_type` (`image/webp`, `image/avif`, `image/jpeg`, `image/png`)
@@ -83,8 +83,8 @@ WHERE content_sha256 IS NOT NULL;
 | Namespace | Status | Pattern | Description |
 | :--- | :--- | :--- | :--- |
 | `media/{assetId}/original.{ext}` | **Active (Canonical)** | Global Media Library | Product-agnostic master original asset in Supabase bucket `product-media`. |
-| `products/{productId}/{mediaId}/original.{ext}` | **Deprecated** | Legacy Product Media | Product-owned path created in earlier phases. Retained for existing items. |
-| `/catalog-shoes/shoe-NN.webp` | **Rollback Only** | Legacy Static Public | Static files in `storefront/public/catalog-shoes/`. Read-only during rollback window. |
+| `products/{productId}/...` | **Retained (Historical)** | Legacy Product Media | 26 objects retained for 2 archived products referenced by historical orders and active carts. |
+| `/catalog-shoes/shoe-NN.webp` | **Historical Snapshots** | Order Snapshot Fidelity | Exactly 3 static files retained in `storefront/public/catalog-shoes/` for historical order thumbnails. |
 
 ---
 

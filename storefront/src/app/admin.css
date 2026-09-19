@@ -36,15 +36,7 @@
   flex-direction: column;
 }
 
-/* Header & Navigation */
-.admin-header {
-  background: rgba(243, 239, 232, 0.94);
-  border-bottom: 1px solid var(--admin-border);
-  backdrop-filter: blur(12px);
-  position: sticky;
-  top: 0;
-  z-index: 40;
-}
+/* Brand Header */
 
 .admin-brand {
   font-family: var(--font-editorial-display), Georgia, serif;
@@ -64,37 +56,7 @@
   color: var(--admin-muted);
 }
 
-.admin-nav-item {
-  font-family: var(--font-geist), sans-serif;
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--admin-muted);
-  text-decoration: none;
-  padding: 6px 0;
-  position: relative;
-  transition: color 0.18s ease;
-}
 
-.admin-nav-item:hover {
-  color: var(--admin-ink);
-}
-
-.admin-nav-item--active {
-  color: var(--admin-ink);
-  font-weight: 600;
-}
-
-.admin-nav-item--active::after {
-  content: "";
-  position: absolute;
-  bottom: -1px;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background-color: var(--admin-ink);
-}
 
 /* Persistent Left Sidebar Styles */
 .admin-sidebar {
@@ -188,9 +150,7 @@
   color: var(--admin-muted);
 }
 
-.admin-mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-}
+
 
 /* Buttons */
 .admin-btn {
@@ -305,11 +265,7 @@
   border: 1px solid var(--admin-border-subtle);
 }
 
-.admin-badge--legacy {
-  background-color: var(--admin-stone);
-  color: var(--admin-muted);
-  border: 1px solid var(--admin-border);
-}
+
 
 .admin-badge--hero {
   background-color: var(--admin-ink);

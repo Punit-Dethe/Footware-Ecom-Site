@@ -433,18 +433,12 @@ export async function attachMediaAssetToProductAction(
     if (!asset) {
       throw new MediaValidationError("Media asset not found.");
     }
-    if (asset.storage_provider === "legacy_public") {
-      throw new MediaDomainError(
-        "Legacy rollback assets cannot be newly attached to products.",
-      );
-    }
 
     // Determine whether product currently has any managed placements
     const managedCountRes = await query<{ count: string }>(
       `SELECT COUNT(*)::int AS count
        FROM public.product_media pm
-       JOIN public.media_assets ma ON ma.id = pm.media_asset_id
-       WHERE pm.product_id = $1 AND ma.storage_provider != 'legacy_public';`,
+       WHERE pm.product_id = $1;`,
       [productId],
     );
     const managedCount = Number(managedCountRes.rows[0]?.count || 0);
@@ -527,21 +521,11 @@ export async function attachMediaAssetsToProductAction(
         );
       }
 
-      const legacyAssets = assetRes.rows.filter(
-        (r) => r.storage_provider === "legacy_public",
-      );
-      if (legacyAssets.length > 0) {
-        throw new MediaDomainError(
-          "Legacy rollback assets cannot be newly attached to products.",
-        );
-      }
-
-      // 3. Determine existing managed media count for the product
+      // 3. Determine existing media count for the product
       const managedRes = await client.query<{ count: string }>(
         `SELECT COUNT(*)::int AS count
          FROM public.product_media pm
-         JOIN public.media_assets ma ON ma.id = pm.media_asset_id
-         WHERE pm.product_id = $1 AND ma.storage_provider != 'legacy_public';`,
+         WHERE pm.product_id = $1;`,
         [productId],
       );
       const existingManagedCount = Number(managedRes.rows[0]?.count || 0);
@@ -609,19 +593,13 @@ export async function detachMediaAssetFromProductAction(
     if (!asset) {
       throw new MediaValidationError("Media asset not found.");
     }
-    if (asset.storage_provider === "legacy_public") {
-      throw new MediaDomainError(
-        "Legacy rollback assets are read-only during the rollback window.",
-      );
-    }
 
     // Active product last-media safety invariant
     if (productStatus === "active") {
       const managedCountRes = await query<{ count: string }>(
         `SELECT COUNT(*)::int AS count
          FROM public.product_media pm
-         JOIN public.media_assets ma ON ma.id = pm.media_asset_id
-         WHERE pm.product_id = $1 AND ma.storage_provider != 'legacy_public';`,
+         WHERE pm.product_id = $1;`,
         [productId],
       );
       const managedCount = Number(managedCountRes.rows[0]?.count || 0);
@@ -665,9 +643,6 @@ export async function setProductMediaHeroAction(
     const asset = await getMediaAsset(mediaAssetId);
     if (!asset) {
       throw new MediaValidationError("Media asset not found.");
-    }
-    if (asset.storage_provider === "legacy_public") {
-      throw new MediaDomainError("Legacy rollback assets cannot be set as hero.");
     }
 
     await setProductHeroMedia(productId, mediaAssetId);
@@ -713,56 +688,34 @@ export async function reorderProductMediaActionV1(
       );
     }
 
-    // Fetch existing product_media associations with storage providers
-    const existingRes = await query<{ media_asset_id: string; storage_provider: string }>(
-      `SELECT pm.media_asset_id, ma.storage_provider
+    // Fetch existing product_media associations
+    const existingRes = await query<{ media_asset_id: string }>(
+      `SELECT pm.media_asset_id
        FROM public.product_media pm
-       JOIN public.media_assets ma ON ma.id = pm.media_asset_id
        WHERE pm.product_id = $1
        ORDER BY pm.position ASC, pm.created_at ASC;`,
       [productId],
     );
 
-    const managedIds = existingRes.rows
-      .filter((r) => r.storage_provider !== "legacy_public")
-      .map((r) => r.media_asset_id);
-    const legacyIds = existingRes.rows
-      .filter((r) => r.storage_provider === "legacy_public")
-      .map((r) => r.media_asset_id);
+    const existingIds = existingRes.rows.map((r) => r.media_asset_id);
+    const existingIdSet = new Set(existingIds);
 
-    // Reject any legacy_public ID supplied by caller
-    const legacyIdSet = new Set(legacyIds);
+    // Verify submitted set == existing set exactly
     for (const id of mediaAssetIds) {
-      if (legacyIdSet.has(id)) {
-        throw new MediaDomainError(
-          "Legacy rollback assets cannot be reordered.",
-        );
-      }
-    }
-
-    const managedIdSet = new Set(managedIds);
-
-    // Verify submitted set == managed set exactly
-    // Reject unknown extra IDs
-    for (const id of mediaAssetIds) {
-      if (!managedIdSet.has(id)) {
+      if (!existingIdSet.has(id)) {
         throw new MediaValidationError(
-          `Extra media asset ID '${id}' is not a managed asset of this product.`,
+          `Extra media asset ID '${id}' is not an attached asset of this product.`,
         );
       }
     }
 
-    // Reject missing / omitted managed IDs
-    if (mediaAssetIds.length !== managedIds.length) {
+    if (mediaAssetIds.length !== existingIds.length) {
       throw new MediaValidationError(
-        "Submitted media IDs must contain all current managed media assets.",
+        "Submitted media IDs must contain all current product media assets.",
       );
     }
 
-    // Full persisted order = submitted managed IDs + existing legacy IDs in their existing relative order
-    const fullOrder = [...mediaAssetIds, ...legacyIds];
-
-    await reorderProductMediaV1(productId, fullOrder);
+    await reorderProductMediaV1(productId, mediaAssetIds);
 
     updateTag("catalog-public");
     return { success: true };
@@ -773,7 +726,6 @@ export async function reorderProductMediaActionV1(
 
 /**
  * Updates placement-level alt text on product_media.
- * Legacy rollback assets are read-only and cannot be mutated.
  * Invalidates public catalog cache on success.
  */
 export async function updateProductMediaAltTextActionV1(
@@ -796,11 +748,6 @@ export async function updateProductMediaAltTextActionV1(
     const asset = await getMediaAsset(mediaAssetId);
     if (!asset) {
       throw new MediaValidationError("Media asset not found.");
-    }
-    if (asset.storage_provider === "legacy_public") {
-      throw new MediaDomainError(
-        "Legacy rollback assets are read-only during the rollback window.",
-      );
     }
 
     await updateProductMediaAltTextV1(productId, mediaAssetId, altText);
@@ -910,7 +857,6 @@ export interface DeleteMediaLibraryAssetResult {
 /**
  * Deletes an unattached global Media Library asset.
  * Rejects deletion if asset is attached to any products (usage_count > 0).
- * Rejects deletion of legacy_public assets (read-only during rollback window).
  * Executes DB delete first (FK protected), then cleans up Supabase Storage.
  * Returns structured warning if Storage cleanup fails after DB removal.
  */
@@ -930,14 +876,7 @@ export async function deleteMediaLibraryAssetAction(
       throw new MediaValidationError("Media asset not found.");
     }
 
-    // 2. Guard legacy assets
-    if (asset.storage_provider === "legacy_public") {
-      throw new MediaDomainError(
-        "Legacy assets are read-only during the rollback window and cannot be deleted.",
-      );
-    }
-
-    // 3. Guard in-use assets
+    // 2. Guard in-use assets
     const usage = await getMediaAssetUsage(assetId);
     if (usage.usageCount > 0) {
       throw new MediaDomainError(

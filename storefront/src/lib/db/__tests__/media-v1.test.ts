@@ -160,24 +160,24 @@ describe("Media Contract v1 Tests", () => {
       );
     });
 
-    it("automatically classifies /catalog-shoes/ paths as legacy_public when unspecified", async () => {
+    it("defaults to supabase storage provider when unspecified", async () => {
       mockDb.query.mockResolvedValueOnce({
         rows: [
           {
             id: TEST_ASSET_1,
-            storage_provider: "legacy_public",
-            storage_path: "/catalog-shoes/shoe-01.webp",
+            storage_provider: "supabase",
+            storage_path: "media/asset-1/original.webp",
           },
         ],
       });
 
       await createMediaAsset({
-        storagePath: "/catalog-shoes/shoe-01.webp",
+        storagePath: "media/asset-1/original.webp",
       });
 
       expect(mockDb.query).toHaveBeenCalledWith(
         expect.anything(),
-        expect.arrayContaining(["legacy_public", "/catalog-shoes/shoe-01.webp"]),
+        expect.arrayContaining(["supabase", "media/asset-1/original.webp"]),
       );
     });
 

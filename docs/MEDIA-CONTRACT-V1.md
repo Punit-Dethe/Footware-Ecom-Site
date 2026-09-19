@@ -175,4 +175,16 @@ As of Phase 6B (`feat/product-media-library-integration`):
 - **Atomic Hero & Reorder**: Reordering managed media assigns positions `0..N-1` while transparently preserving any retained legacy rollback copies at subsequent positions without exposing them to browser state.
 - **Storefront Cache Sync**: All product media mutations (`attach`, `setHero`, `reorder`, `updateAltText`, `detach`) call `updateTag("catalog-public")` for immediate consistency across public storefront routes.
 
+---
+
+## 9. Final Production Hardening & Cleanup (Phase 9 Complete)
+
+As of Phase 9 (`feat/final-production-cleanup`):
+- **Obsolete Table Dropped**: `public.product_images` has been permanently dropped via forward migration `20260919000000_drop_legacy_product_images.sql` (fail-safe non-CASCADE).
+- **Sole Media Authority**: Media Contract v1 (`public.media_assets` and `public.product_media`) is the sole active media authority across both storefront and admin runtimes.
+- **Rollback Window Concluded**: `legacy_public` media assets and placements have been completely retired (0 `legacy_public` DB rows). All active-runtime checks (`storage_provider != 'legacy_public'`, rollback guards, and fallback branches) have been removed.
+- **Storage Consistency**: 31 canonical products hold 31 hero assets in `product-media` storage under `media/{assetId}/original.webp`, all verified HTTP 200 OK.
+- **Historical Order Fidelity**: 3 static shoe images (`shoe-01.webp`, `shoe-02.webp`, `shoe-05.webp`) are retained in `storefront/public/catalog-shoes/` exclusively to preserve immutable visual snapshots for 3 historical orders. All 28 unused static shoe files were safely removed.
+
+
 

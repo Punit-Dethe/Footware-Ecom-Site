@@ -1,14 +1,13 @@
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { requireAdmin } from "@/lib/auth/admin";
-import { listMediaLibraryAssets, type StorageProvider } from "@/lib/db/media-v1";
+import { listMediaLibraryAssets } from "@/lib/db/media-v1";
 import { MediaLibraryClient } from "@/components/admin/media/MediaLibraryClient";
 
 interface AdminMediaPageProps {
   params: Promise<{ country: string; locale: string }>;
   searchParams: Promise<{
     q?: string;
-    provider?: string;
     sort?: string;
     page?: string;
   }>;
@@ -33,8 +32,6 @@ export async function AdminMediaPageContent({
   const queryParams = await searchParams;
 
   const q = queryParams.q?.trim() || "";
-  // Default provider filter to "supabase" to prioritize managed assets
-  const rawProvider = queryParams.provider?.trim() || "supabase";
   const sort = (queryParams.sort?.trim() || "created_desc") as
     | "created_desc"
     | "created_asc"
@@ -45,13 +42,8 @@ export async function AdminMediaPageContent({
   const limit = 24;
   const offset = (page - 1) * limit;
 
-  // Map provider filter: "all" queries both providers; "supabase" or "legacy_public" filters specifically
-  const providerFilter: StorageProvider | undefined =
-    rawProvider === "all" ? undefined : (rawProvider as StorageProvider);
-
   const result = await listMediaLibraryAssets({
     query: q || undefined,
-    provider: providerFilter,
     sort,
     limit,
     offset,
@@ -65,7 +57,6 @@ export async function AdminMediaPageContent({
       limit={limit}
       searchParamsState={{
         q,
-        provider: rawProvider,
         sort,
       }}
       country={country}

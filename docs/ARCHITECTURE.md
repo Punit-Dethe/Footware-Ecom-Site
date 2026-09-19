@@ -123,9 +123,9 @@ orders          → PostgreSQL public.orders / order_items
 catalog         → PostgreSQL public.products / variants / categories
                   + cached public read model (tag: catalog-public)
 catalog admin   → first-party Next.js admin
-media metadata  → PostgreSQL public.product_images
-media bytes     → Supabase Storage `product-media`  (admin uploads)
-                  …and static /catalog-shoes/*.webp  (current catalog; see §6)
+media metadata  → PostgreSQL public.media_assets / product_media (Media Contract v1; public.product_images dropped)
+media bytes     → Supabase Storage `product-media` (all 31 canonical products; 0 legacy_public rows)
+                  …and 3 static /catalog-shoes/*.webp (strictly retained for historical order snapshots)
 ```
 
 Authorization is always:
