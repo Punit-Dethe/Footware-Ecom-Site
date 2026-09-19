@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { updateTag, revalidatePath } from "next/cache";
+import { revalidateTag, revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth/admin";
 
 export async function POST(request: Request) {
@@ -22,7 +22,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    updateTag("catalog-public");
+    revalidateTag("catalog-public", "max");
     revalidatePath("/", "layout");
 
     return NextResponse.json({

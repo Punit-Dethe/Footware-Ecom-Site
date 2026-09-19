@@ -5,7 +5,7 @@ const mockAuth = vi.hoisted(() => ({
 }));
 
 const mockCache = vi.hoisted(() => ({
-  updateTag: vi.fn(),
+  revalidateTag: vi.fn(),
   revalidatePath: vi.fn(),
 }));
 
@@ -14,7 +14,7 @@ vi.mock("@/lib/auth/admin", () => ({
 }));
 
 vi.mock("next/cache", () => ({
-  updateTag: mockCache.updateTag,
+  revalidateTag: mockCache.revalidateTag,
   revalidatePath: mockCache.revalidatePath,
 }));
 
@@ -46,7 +46,7 @@ describe("POST /api/admin/revalidate-catalog", () => {
     expect(res.status).toBe(401);
     const body = await res.json();
     expect(body.error).toBe("Unauthorized");
-    expect(mockCache.updateTag).not.toHaveBeenCalled();
+    expect(mockCache.revalidateTag).not.toHaveBeenCalled();
     expect(mockCache.revalidatePath).not.toHaveBeenCalled();
   });
 
@@ -63,7 +63,7 @@ describe("POST /api/admin/revalidate-catalog", () => {
     const body = await res.json();
     expect(body.success).toBe(true);
     expect(body.invalidated).toBe("catalog-public");
-    expect(mockCache.updateTag).toHaveBeenCalledWith("catalog-public");
+    expect(mockCache.revalidateTag).toHaveBeenCalledWith("catalog-public", "max");
     expect(mockCache.revalidatePath).toHaveBeenCalledWith("/", "layout");
   });
 
@@ -78,13 +78,13 @@ describe("POST /api/admin/revalidate-catalog", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.success).toBe(true);
-    expect(mockCache.updateTag).toHaveBeenCalledWith("catalog-public");
+    expect(mockCache.revalidateTag).toHaveBeenCalledWith("catalog-public", "max");
     expect(mockCache.revalidatePath).toHaveBeenCalledWith("/", "layout");
   });
 
   it("returns 500 when cache invalidation fails", async () => {
     mockAuth.requireAdmin.mockResolvedValue({ id: "admin-1" });
-    mockCache.updateTag.mockImplementation(() => {
+    mockCache.revalidateTag.mockImplementation(() => {
       throw new Error("Cache backend connection failed");
     });
 
