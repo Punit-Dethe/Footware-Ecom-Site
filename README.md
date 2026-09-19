@@ -10,21 +10,18 @@ Designed for instant page loads, sub-second edge responses, zero root-layout bla
 
 ## Current state
 
-> Reconciled 2026-09-14 · `main` head `6c504be`
+> Reconciled 2026-09-19 · `main` head `f52bee9`
 
 | Area | Status |
 |---|---|
 | Backend migration (B1–B10) | **Complete**, merged, deployed, production-verified |
 | Legacy Spree / Rails / Render dependency | **Zero** |
-| Final UI implementation | **In progress** (12 commits past the backend baseline) |
-| Media Contract v1 | Not started |
-| Image / data optimization pass | Not started |
-| Final UX performance pass | Not started |
+| Editorial storefront UI | **Complete** (homepage, PDP, carousel, catalog layout) |
+| Media Modernization (Phases 1–9) | **Complete** — media contract v1, stone pipeline, Supabase migration, storefront cutover, media library backend + UI, product ↔ media integration, editorial catalog admin, orders + customers ops, final cleanup & production hardening |
+| Cart performance (P1) | **Complete** — DB latency consolidated, hydration race guard, region diagnostic gating |
+| Commerce pricing pass | Not started |
 
-The 12 commits past the backend baseline are all storefront UI work: an
-editorial homepage, an editorial PDP, a reworked carousel and catalog layout,
-and typographic/layout refinements. See
-`docs/ENGINEERING-CONTINUITY-LOG.md` for phase detail.
+See `docs/ENGINEERING-CONTINUITY-LOG.md` for phase detail.
 
 ---
 
@@ -84,6 +81,7 @@ Warm renders cost **0** database queries.
 | i18n | `next-intl` — `de`, `en`, `es`, `fr`, `pl` |
 | Email | Resend + `react-email` |
 | Observability | Sentry, Vercel Analytics, Speed Insights |
+| Deployment | Vercel (Mumbai `bom1` colocated), serverless functions |
 | Tooling | pnpm, Biome, Vitest, Playwright, TypeScript |
 
 ---
@@ -98,7 +96,7 @@ Ecom For Footwear/
 │   │   │   ├── [country]/[locale]/
 │   │   │   │   ├── (storefront)/   # catalog, PDP, cart, account, policies
 │   │   │   │   ├── (checkout)/     # checkout + order confirmation
-│   │   │   │   ├── (admin)/        # role-gated catalog administration
+│   │   │   │   ├── (admin)/        # editorial catalog admin (products, categories, media, orders, customers)
 │   │   │   │   └── (wholesale)/    # gated B2B portal + quick order
 │   │   │   ├── dev/emails/         # email template previewer (dev only)
 │   │   │   ├── robots.ts
@@ -123,8 +121,9 @@ Ecom For Footwear/
 │   ├── public/
 │   │   ├── catalog-shoes/       # 31 catalog images
 │   │   └── editorial/           # editorial imagery (some temporary)
+│   ├── scripts/                 # benchmark-hosted.mjs, email test, etc.
 │   ├── e2e/                     # Playwright smoke tests
-│   └── supabase/migrations/     # SQL migrations
+│   └── supabase/migrations/     # SQL migrations (10 migrations)
 ├── media/                       # source product photography
 ├── Shoes/                       # source shoe images (untracked)
 ├── scripts/
@@ -175,7 +174,7 @@ http://localhost:3001/us/en
 | `pnpm dev` | Next.js dev server on `http://localhost:3001` |
 | `pnpm build` | Production build; validates static pre-rendering |
 | `pnpm start` | Serve the production build on port 3001 |
-| `pnpm test` | Vitest suite (62 suites / 662 tests) |
+| `pnpm test` | Vitest suite (77 suites / 856 tests) |
 | `pnpm lint` | Biome lint |
 | `pnpm analyze` | Build with bundle analysis |
 | `pnpm image:ingest` | Image ingest pipeline (`scripts/images/ingest.mjs`) |
@@ -212,9 +211,12 @@ catalog     warm snapshot = 0 DB queries · cold = 4 bounded · N+1 = 0
 PLP         12 products initial + exactly one deferred remainder request
 anonymous   no auth call · no profile/address/order query · no cart row
             created by a read · no Set-Cookie on warm visitors
+cart        Add to Cart server action < 200ms warm · consolidated to 4/3/3 statements
+            hydration race guard (requestSeqRef) prevents stale refresh overwrite
 admin       verified claims.sub → profiles.role = 'admin' only
 orders      historical snapshots never mutate when catalog changes
 TLS         strict (rejectUnauthorized: true)
+region      /api/perf/region gated behind PERF_DIAGNOSTICS=1 (404 otherwise)
 ```
 
 ---
@@ -226,6 +228,12 @@ TLS         strict (rejectUnauthorized: true)
 | `docs/ENGINEERING-CONTINUITY-LOG.md` | **Canonical** | Phase state, invariants, next action |
 | `docs/PERFORMANCE-RESEARCH-LEDGER.md` | **Canonical** (perf) | R001–R012 measured experiments |
 | `docs/ARCHITECTURE.md` | Current | Runtime topology, route groups, data ownership |
+| `docs/ADMIN-STUDIO.md` | Current | Admin catalog studio architecture |
+| `docs/MEDIA-CONTRACT-V1.md` | Current | Media contract v1 specification |
+| `docs/MEDIA-LIBRARY-BACKEND.md` | Current | Media library backend architecture |
+| `docs/MEDIA-LIBRARY-UI.md` | Current | Media library UI specification |
+| `docs/STONE-MEDIA-PIPELINE.md` | Current | Stone master image pipeline |
+| `docs/STONE-MEDIA-MIGRATION.md` | Current | Stone → Supabase migration record |
 | `infra/README.md` | Current | Deployment topology and Vercel configuration |
 | `storefront/README.md` | Current | App-level setup and invariants |
 | `storefront/CLAUDE.md` | Current | Coding conventions |
@@ -242,10 +250,8 @@ tried. Do not execute them.
 
 ## Production Deployment
 
-Hosted on **Vercel**:
+Hosted on **Vercel** (Mumbai `bom1` colocated with Supabase `ap-south-1`):
 
 - **Live URL**: [https://mirzafootwear.vercel.app](https://mirzafootwear.vercel.app)
-- **Last verified backend deployment**: `dpl_9vTuvjoiNtThD93xSSDpMb4aZxGB` at `3367ea2` (B10 merge)
-
-`main` has since advanced 12 commits with editorial UI work that had not yet
-been re-verified in production when this README was updated.
+- **Serverless region**: `bom1` (configured via `storefront/vercel.json`)
+- **Current `main`**: `f52bee9` — includes all media modernization phases, editorial admin, and cart performance P1
