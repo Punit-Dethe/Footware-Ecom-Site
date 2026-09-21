@@ -482,34 +482,118 @@ export async function updateAuthorizedCartCheckoutData(params: {
   return (res.rowCount ?? 0) > 0;
 }
 
+export async function switchAuthorizedCartCurrency(params: {
+  cartId: string;
+  surface: CartSurface;
+  auth: { userId?: string | null; guestTokenHash?: string | null };
+  currency: string;
+}): Promise<DbCart | null> {
+  const { cartId, surface, auth } = params;
+  const currency = params.currency?.toUpperCase();
+
+  if (!UUID_REGEX.test(cartId)) return null;
+  if (!auth.userId && !auth.guestTokenHash) return null;
+  if (currency !== "USD" && currency !== "INR") {
+    throw new Error(`Unsupported cart currency '${params.currency}'`);
+  }
+
+  return await transaction(async (client) => {
+    const authValues: unknown[] = [cartId, surface];
+    let authClause: string;
+    if (auth.userId) {
+      authValues.push(auth.userId);
+      authClause = `user_id = $${authValues.length}`;
+    } else {
+      authValues.push(auth.guestTokenHash);
+      authClause = `guest_token_hash = $${authValues.length}`;
+    }
+
+    const cartRes = await client.query<Record<string, unknown>>(
+      `SELECT id, user_id, guest_token_hash, surface, currency,
+              shipping_address, billing_address, checkout_email,
+              status, created_at, updated_at
+       FROM public.carts
+       WHERE id = $1
+         AND surface = $2
+         AND status = 'active'
+         AND ${authClause}
+       FOR UPDATE;`,
+      authValues,
+    );
+
+    if (!cartRes.rows[0]) return null;
+    const cart = mapCartRow(cartRes.rows[0]);
+    if (cart.currency.toUpperCase() === currency) return cart;
+
+    const itemRes = await client.query<Record<string, unknown>>(
+      `SELECT
+         ci.id,
+         ci.variant_id AS cart_variant_id,
+         ci.variant_sku,
+         v.id AS variant_id,
+         v.active AS variant_active,
+         v.quantity_on_hand,
+         v.backorderable,
+         p.id AS product_id,
+         p.status AS product_status,
+         vp.price_in_cents AS target_price_in_cents
+       FROM public.cart_items ci
+       LEFT JOIN public.variants v ON v.id = ci.variant_id
+       LEFT JOIN public.products p ON p.id = v.product_id
+       LEFT JOIN public.variant_prices vp
+         ON vp.variant_id = v.id
+        AND vp.currency = $2
+       WHERE ci.cart_id = $1
+       FOR UPDATE OF ci;`,
+      [cartId, currency],
+    );
+
+    for (const row of itemRes.rows) {
+      const sku = String(row.variant_sku || row.cart_variant_id || "unknown");
+      if (!row.variant_id || !row.product_id) {
+        throw new Error(`Cannot switch cart market: variant '${sku}' is unavailable`);
+      }
+      if (row.product_status !== "active" || row.variant_active !== true) {
+        throw new Error(`Cannot switch cart market: variant '${sku}' is inactive`);
+      }
+      const qoh = Number(row.quantity_on_hand || 0);
+      if (qoh <= 0 && !Boolean(row.backorderable)) {
+        throw new Error(`Cannot switch cart market: variant '${sku}' is out of stock`);
+      }
+      if (
+        row.target_price_in_cents == null ||
+        Number(row.target_price_in_cents) <= 0
+      ) {
+        throw new Error(
+          `Cannot switch cart market: variant '${sku}' has no valid ${currency} price`,
+        );
+      }
+    }
+
+    const updateRes = await client.query<Record<string, unknown>>(
+      `UPDATE public.carts
+       SET currency = $2, updated_at = NOW()
+       WHERE id = $1
+         AND status = 'active'
+       RETURNING id, user_id, guest_token_hash, surface, currency,
+                 shipping_address, billing_address, checkout_email,
+                 status, created_at, updated_at;`,
+      [cartId, currency],
+    );
+
+    return updateRes.rows[0] ? mapCartRow(updateRes.rows[0]) : null;
+  });
+}
+
+/**
+ * Compatibility wrapper. All cart currency mutations now use the same
+ * transactional market-switch authority.
+ */
 export async function updateAuthorizedCartCurrency(params: {
   cartId: string;
   surface: CartSurface;
   auth: { userId?: string | null; guestTokenHash?: string | null };
   currency: string;
 }): Promise<boolean> {
-  const { cartId, surface, auth, currency } = params;
-  if (!auth.userId && !auth.guestTokenHash) return false;
-
-  const values: unknown[] = [currency, cartId, surface];
-  let authClause: string;
-  if (auth.userId) {
-    values.push(auth.userId);
-    authClause = `user_id = $${values.length}`;
-  } else {
-    values.push(auth.guestTokenHash);
-    authClause = `guest_token_hash = $${values.length}`;
-  }
-
-  const res = await query(
-    `UPDATE public.carts
-     SET currency = $1, updated_at = NOW()
-     WHERE id = $2
-       AND surface = $3
-       AND status = 'active'
-       AND ${authClause};`,
-    values,
-  );
-
-  return (res.rowCount ?? 0) > 0;
+  return (await switchAuthorizedCartCurrency(params)) !== null;
 }

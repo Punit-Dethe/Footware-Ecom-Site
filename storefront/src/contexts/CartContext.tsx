@@ -67,7 +67,7 @@ export function CartProvider({
   const refreshCart = useCallback(async () => {
     const seq = ++requestSeqRef.current;
     try {
-      const cartData = await getCartAction(undefined, surface);
+      const cartData = await getCartAction(undefined, surface, currency);
       if (seq < requestSeqRef.current) {
         // Stale response: a newer mutation or refresh has already started
         return;
@@ -83,7 +83,7 @@ export function CartProvider({
         setLoading(false);
       }
     }
-  }, [surface]);
+  }, [surface, currency]);
 
   // Monitor auth transitions:
   // - Anonymous -> Authenticated: trigger refreshCart() exactly once to claim/merge

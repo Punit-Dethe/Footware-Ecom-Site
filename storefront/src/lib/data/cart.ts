@@ -8,7 +8,12 @@ import {
   type CatalogProduct,
   type CatalogVariant,
 } from "@/lib/catalog/catalog-repository";
-import { formatMoney, formatZeroMoney } from "@/lib/data/pricing";
+import {
+  formatMoney,
+  formatZeroMoney,
+  isSupportedCurrency,
+  resolveVariantPrice,
+} from "@/lib/data/pricing";
 import { getVariantByIdOrSku } from "@/lib/db/catalog";
 import {
   addOrIncrementCartItem,
@@ -20,6 +25,7 @@ import {
   loadCartItems,
   markCartAbandoned,
   removeCartItem as removeCartItemFromDb,
+  switchAuthorizedCartCurrency,
   updateCartItemQuantity,
   type DbCart,
   type DbCartItem,
@@ -253,6 +259,31 @@ async function dropSurfaceCartCookies(surface: Surface): Promise<void> {
   }
 }
 
+async function reconcileAuthorizedCartCurrency(
+  cart: DbCart,
+  surface: Surface,
+  expectedCurrency: string | undefined,
+  auth: { userId?: string | null; guestTokenHash?: string | null },
+): Promise<DbCart> {
+  if (!expectedCurrency) return cart;
+  const currency = expectedCurrency.toUpperCase();
+  if (!isSupportedCurrency(currency)) {
+    throw new Error(`Unsupported cart currency '${expectedCurrency}'`);
+  }
+  if (cart.currency.toUpperCase() === currency) return cart;
+
+  const switched = await switchAuthorizedCartCurrency({
+    cartId: cart.id,
+    surface,
+    auth,
+    currency,
+  });
+  if (!switched) {
+    throw new Error("Failed to reconcile cart with selected market");
+  }
+  return switched;
+}
+
 /**
  * Resolves the raw authorized PostgreSQL DbCart without loading line items or adapting catalog.
  * Solves single-resolution auth invariant for cart mutations.
@@ -261,6 +292,7 @@ async function dropSurfaceCartCookies(surface: Surface): Promise<void> {
 export async function getAuthorizedDbCart(
   surface: Surface = DEFAULT_SURFACE,
   explicitCartId?: string,
+  expectedCurrency?: string,
 ): Promise<DbCart | null> {
   const auth = await verifyAuthSession();
   const rawGuestToken = await getCartToken(surface);
@@ -295,7 +327,12 @@ export async function getAuthorizedDbCart(
       return null;
     }
 
-    return userCart;
+    return await reconcileAuthorizedCartCurrency(
+      userCart,
+      surface,
+      expectedCurrency,
+      { userId: verifiedUserId },
+    );
   }
 
   // Anonymous guest flow
@@ -315,7 +352,12 @@ export async function getAuthorizedDbCart(
     return null;
   }
 
-  return guestCart;
+  return await reconcileAuthorizedCartCurrency(
+    guestCart,
+    surface,
+    expectedCurrency,
+    { guestTokenHash },
+  );
 }
 
 /**
@@ -327,6 +369,9 @@ export async function getOrCreateAuthorizedDbCart(
   currency = "USD",
 ): Promise<DbCart> {
   const normCurrency = (currency || "USD").toUpperCase();
+  if (!isSupportedCurrency(normCurrency)) {
+    throw new Error(`Unsupported cart currency '${currency}'`);
+  }
   const auth = await verifyAuthSession();
   const rawGuestToken = await getCartToken(surface);
 
@@ -353,7 +398,12 @@ export async function getOrCreateAuthorizedDbCart(
     }
 
     if (userCart) {
-      return userCart;
+      return await reconcileAuthorizedCartCurrency(
+        userCart,
+        surface,
+        normCurrency,
+        { userId: verifiedUserId },
+      );
     }
 
     const newUserCart = await createUserCart(verifiedUserId, surface, normCurrency);
@@ -370,7 +420,12 @@ export async function getOrCreateAuthorizedDbCart(
     const guestTokenHash = hashGuestToken(rawGuestToken);
     const guestCart = await findActiveGuestCart(guestTokenHash, surface);
     if (guestCart) {
-      return guestCart;
+      return await reconcileAuthorizedCartCurrency(
+        guestCart,
+        surface,
+        normCurrency,
+        { guestTokenHash },
+      );
     }
     await dropSurfaceCartCookies(surface);
   }
@@ -397,8 +452,9 @@ export async function getOrCreateAuthorizedDbCart(
 export async function getCart(
   explicitCartId?: string,
   surface: Surface = DEFAULT_SURFACE,
+  expectedCurrency?: string,
 ): Promise<Cart | null> {
-  const cart = await getAuthorizedDbCart(surface, explicitCartId);
+  const cart = await getAuthorizedDbCart(surface, explicitCartId, expectedCurrency);
   if (!cart) {
     return null;
   }
@@ -465,7 +521,18 @@ export async function addToCart(
       throw new Error("Quantity must be a positive integer");
     }
 
-    const cart = await getOrCreateAuthorizedDbCart(surface, currency);
+    const targetCurrency = (currency || "USD").toUpperCase();
+    if (!isSupportedCurrency(targetCurrency)) {
+      throw new Error(`Unsupported cart currency '${currency}'`);
+    }
+    const targetPrice = resolveVariantPrice(match.prices, targetCurrency);
+    if (!targetPrice || targetPrice.price_in_cents <= 0) {
+      throw new Error(
+        `Variant is not priced for the selected market (${targetCurrency})`,
+      );
+    }
+
+    const cart = await getOrCreateAuthorizedDbCart(surface, targetCurrency);
     await addOrIncrementCartItem(cart.id, match.id, match.sku, quantity);
 
     const items = await loadCartItems(cart.id);
