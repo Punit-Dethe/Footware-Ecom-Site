@@ -245,16 +245,11 @@ export function adaptRawCatalogToPublicSnapshot(
           hasPrice = false;
         }
       } else {
-        // Fallback for tests or fixtures without variant_prices table populated
-        if (normCurrency === "USD" || !v.currency || v.currency === normCurrency) {
-          cents = v.price_in_cents;
-          compareCents = v.compare_at_price_in_cents ?? undefined;
-          hasPrice = true;
-        } else {
-          cents = 0;
-          compareCents = undefined;
-          hasPrice = false;
-        }
+        // Fail closed in every environment. Legacy public.variants price columns
+        // are compatibility fields only and are never a storefront price source.
+        cents = 0;
+        compareCents = undefined;
+        hasPrice = false;
       }
 
       const amountStr = (cents / 100).toFixed(2);

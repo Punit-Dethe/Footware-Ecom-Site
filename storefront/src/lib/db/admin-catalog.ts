@@ -77,7 +77,7 @@ export interface AdminVariantRecord {
   productId: string;
   sku: string;
   sizeOption: string | null;
-  priceInCents: number;
+  priceInCents: number | null;
   compareAtPriceInCents: number | null;
   priceInInrPaise?: number | null;
   compareAtPriceInInrPaise?: number | null;
@@ -740,8 +740,6 @@ export async function getAdminProduct(
       product_id: string;
       sku: string;
       size_option: string | null;
-      price_in_cents: number;
-      compare_at_price_in_cents: number | null;
       currency: string;
       quantity_on_hand: number;
       backorderable: boolean;
@@ -750,15 +748,20 @@ export async function getAdminProduct(
       active: boolean;
       created_at: Date;
       updated_at: Date;
+      usd_price_in_cents: number | null;
+      usd_compare_at_price_in_cents: number | null;
       inr_price_in_cents: number | null;
       inr_compare_at_price_in_cents: number | null;
     }>(
-      `SELECT v.id, v.product_id, v.sku, v.size_option, v.price_in_cents, v.compare_at_price_in_cents,
+      `SELECT v.id, v.product_id, v.sku, v.size_option,
               v.currency, v.quantity_on_hand, v.backorderable, v.position, v.is_default, v.active,
               v.created_at, v.updated_at,
+              vp_usd.price_in_cents AS usd_price_in_cents,
+              vp_usd.compare_at_price_in_cents AS usd_compare_at_price_in_cents,
               vp_inr.price_in_cents AS inr_price_in_cents,
               vp_inr.compare_at_price_in_cents AS inr_compare_at_price_in_cents
        FROM public.variants v
+       LEFT JOIN public.variant_prices vp_usd ON vp_usd.variant_id = v.id AND vp_usd.currency = 'USD'
        LEFT JOIN public.variant_prices vp_inr ON vp_inr.variant_id = v.id AND vp_inr.currency = 'INR'
        WHERE v.product_id = $1
        ORDER BY v.position ASC, v.created_at ASC;`,
@@ -807,8 +810,11 @@ export async function getAdminProduct(
       productId: v.product_id,
       sku: v.sku,
       sizeOption: v.size_option,
-      priceInCents: v.price_in_cents,
-      compareAtPriceInCents: v.compare_at_price_in_cents,
+      priceInCents: v.usd_price_in_cents != null ? Number(v.usd_price_in_cents) : null,
+      compareAtPriceInCents:
+        v.usd_compare_at_price_in_cents != null
+          ? Number(v.usd_compare_at_price_in_cents)
+          : null,
       priceInInrPaise: v.inr_price_in_cents != null ? Number(v.inr_price_in_cents) : null,
       compareAtPriceInInrPaise: v.inr_compare_at_price_in_cents != null ? Number(v.inr_compare_at_price_in_cents) : null,
       currency: v.currency,
@@ -989,7 +995,7 @@ export async function saveAdminProduct(
     }
 
     // 5. If publishing / activating, enforce strict transactional publish invariants
-    if (targetStatus === "active") {
+    if (finalStatus === "active") {
       await validatePublishInvariants(client, productId, name, slug, input.sku);
     }
 
@@ -1147,20 +1153,19 @@ async function syncVariants(
       }
     }
 
-    // Sync authoritative multi-currency variant_prices (USD and INR)
+    // Sync authoritative multi-currency variant_prices. USD remains mirrored
+    // into the legacy variants columns for compatibility, but storefront reads
+    // only variant_prices. INR is never synthesized during ordinary admin saves.
     const inrPrice =
       v.priceInInrPaise != null
-        ? validateInteger(v.priceInInrPaise, `variants[${i}].priceInInrPaise`, { min: 0 })!
-        : Math.round(priceInCents * 0.88) * 100;
-
+        ? validateInteger(v.priceInInrPaise, `variants[${i}].priceInInrPaise`, { min: 0 })
+        : null;
     const inrCompareAt =
       v.compareAtPriceInInrPaise != null
         ? validateInteger(v.compareAtPriceInInrPaise, `variants[${i}].compareAtPriceInInrPaise`, {
             min: 0,
             allowNull: true,
           })
-        : compareAtPriceInCents != null
-        ? Math.round(compareAtPriceInCents * 0.88) * 100
         : null;
 
     try {
@@ -1174,15 +1179,17 @@ async function syncVariants(
         [targetVariantId, priceInCents, compareAtPriceInCents],
       );
 
-      await client.query(
-        `INSERT INTO public.variant_prices (variant_id, currency, price_in_cents, compare_at_price_in_cents, created_at, updated_at)
-         VALUES ($1, 'INR', $2, $3, NOW(), NOW())
-         ON CONFLICT (variant_id, currency) DO UPDATE
-         SET price_in_cents = EXCLUDED.price_in_cents,
-             compare_at_price_in_cents = EXCLUDED.compare_at_price_in_cents,
-             updated_at = NOW();`,
-        [targetVariantId, inrPrice, inrCompareAt],
-      );
+      if (inrPrice != null) {
+        await client.query(
+          `INSERT INTO public.variant_prices (variant_id, currency, price_in_cents, compare_at_price_in_cents, created_at, updated_at)
+           VALUES ($1, 'INR', $2, $3, NOW(), NOW())
+           ON CONFLICT (variant_id, currency) DO UPDATE
+           SET price_in_cents = EXCLUDED.price_in_cents,
+               compare_at_price_in_cents = EXCLUDED.compare_at_price_in_cents,
+               updated_at = NOW();`,
+          [targetVariantId, inrPrice, inrCompareAt],
+        );
+      }
     } catch (err: any) {
       handleConstraintViolation(err);
     }
@@ -1223,22 +1230,36 @@ async function validatePublishInvariants(
     );
   }
 
-  // 2. Fetch all variants
+  // 2. Fetch all variants with authoritative USD and INR price rows.
   const varRes = await client.query<{
     id: string;
     sku: string;
     size_option: string | null;
-    price_in_cents: number;
-    compare_at_price_in_cents: number | null;
-    currency: string;
     quantity_on_hand: number;
     is_default: boolean;
     active: boolean;
+    usd_price_in_cents: number | null;
+    usd_compare_at_price_in_cents: number | null;
+    inr_price_in_cents: number | null;
+    inr_compare_at_price_in_cents: number | null;
   }>(
-    `SELECT id, sku, size_option, price_in_cents, compare_at_price_in_cents,
-            currency, quantity_on_hand, is_default, active
-     FROM public.variants
-     WHERE product_id = $1;`,
+    `SELECT
+       v.id,
+       v.sku,
+       v.size_option,
+       v.quantity_on_hand,
+       v.is_default,
+       v.active,
+       vp_usd.price_in_cents AS usd_price_in_cents,
+       vp_usd.compare_at_price_in_cents AS usd_compare_at_price_in_cents,
+       vp_inr.price_in_cents AS inr_price_in_cents,
+       vp_inr.compare_at_price_in_cents AS inr_compare_at_price_in_cents
+     FROM public.variants v
+     LEFT JOIN public.variant_prices vp_usd
+       ON vp_usd.variant_id = v.id AND vp_usd.currency = 'USD'
+     LEFT JOIN public.variant_prices vp_inr
+       ON vp_inr.variant_id = v.id AND vp_inr.currency = 'INR'
+     WHERE v.product_id = $1;`,
     [productId],
   );
 
@@ -1265,7 +1286,7 @@ async function validatePublishInvariants(
     );
   }
 
-  // 4. Validate every active variant details
+  // 4. Every active variant must have explicit, valid prices for every storefront market.
   for (const v of activeVariants) {
     if (!v.sku?.trim()) {
       throw new CatalogValidationError(
@@ -1277,9 +1298,16 @@ async function validatePublishInvariants(
         `Active variant ${v.sku} must have a non-empty size option`,
       );
     }
-    if (v.price_in_cents <= 0) {
+    if (v.usd_price_in_cents == null || Number(v.usd_price_in_cents) <= 0) {
       throw new CatalogValidationError(
-        `Active variant ${v.sku} must have a price greater than 0`,
+        `Active variant ${v.sku} must have a valid USD price greater than 0`,
+        "variants",
+      );
+    }
+    if (v.inr_price_in_cents == null || Number(v.inr_price_in_cents) <= 0) {
+      throw new CatalogValidationError(
+        `Active variant ${v.sku} must have a valid INR price greater than 0`,
+        "variants",
       );
     }
     if (v.quantity_on_hand < 0) {
@@ -1287,17 +1315,20 @@ async function validatePublishInvariants(
         `Active variant ${v.sku} cannot have a negative quantity on hand`,
       );
     }
-    if (v.currency !== "USD") {
+    if (
+      v.usd_compare_at_price_in_cents != null &&
+      Number(v.usd_compare_at_price_in_cents) < Number(v.usd_price_in_cents)
+    ) {
       throw new CatalogValidationError(
-        `Active variant ${v.sku} must use USD currency`,
+        `Active variant ${v.sku} USD compare-at price cannot be less than actual price`,
       );
     }
     if (
-      v.compare_at_price_in_cents != null &&
-      v.compare_at_price_in_cents < v.price_in_cents
+      v.inr_compare_at_price_in_cents != null &&
+      Number(v.inr_compare_at_price_in_cents) < Number(v.inr_price_in_cents)
     ) {
       throw new CatalogValidationError(
-        `Active variant ${v.sku} compare-at price cannot be less than actual price`,
+        `Active variant ${v.sku} INR compare-at price cannot be less than actual price`,
       );
     }
   }
@@ -1707,8 +1738,6 @@ async function getAdminProductWithClient(
       product_id: string;
       sku: string;
       size_option: string | null;
-      price_in_cents: number;
-      compare_at_price_in_cents: number | null;
       currency: string;
       quantity_on_hand: number;
       backorderable: boolean;
@@ -1717,13 +1746,23 @@ async function getAdminProductWithClient(
       active: boolean;
       created_at: Date;
       updated_at: Date;
+      usd_price_in_cents: number | null;
+      usd_compare_at_price_in_cents: number | null;
+      inr_price_in_cents: number | null;
+      inr_compare_at_price_in_cents: number | null;
     }>(
-      `SELECT id, product_id, sku, size_option, price_in_cents, compare_at_price_in_cents,
-              currency, quantity_on_hand, backorderable, position, is_default, active,
-              created_at, updated_at
-       FROM public.variants
-       WHERE product_id = $1
-       ORDER BY position ASC, created_at ASC;`,
+      `SELECT v.id, v.product_id, v.sku, v.size_option,
+              v.currency, v.quantity_on_hand, v.backorderable, v.position, v.is_default, v.active,
+              v.created_at, v.updated_at,
+              vp_usd.price_in_cents AS usd_price_in_cents,
+              vp_usd.compare_at_price_in_cents AS usd_compare_at_price_in_cents,
+              vp_inr.price_in_cents AS inr_price_in_cents,
+              vp_inr.compare_at_price_in_cents AS inr_compare_at_price_in_cents
+       FROM public.variants v
+       LEFT JOIN public.variant_prices vp_usd ON vp_usd.variant_id = v.id AND vp_usd.currency = 'USD'
+       LEFT JOIN public.variant_prices vp_inr ON vp_inr.variant_id = v.id AND vp_inr.currency = 'INR'
+       WHERE v.product_id = $1
+       ORDER BY v.position ASC, v.created_at ASC;`,
       [id],
     ),
     listProductMediaV1(id, client),
@@ -1769,8 +1808,16 @@ async function getAdminProductWithClient(
       productId: v.product_id,
       sku: v.sku,
       sizeOption: v.size_option,
-      priceInCents: v.price_in_cents,
-      compareAtPriceInCents: v.compare_at_price_in_cents,
+      priceInCents: v.usd_price_in_cents != null ? Number(v.usd_price_in_cents) : null,
+      compareAtPriceInCents:
+        v.usd_compare_at_price_in_cents != null
+          ? Number(v.usd_compare_at_price_in_cents)
+          : null,
+      priceInInrPaise: v.inr_price_in_cents != null ? Number(v.inr_price_in_cents) : null,
+      compareAtPriceInInrPaise:
+        v.inr_compare_at_price_in_cents != null
+          ? Number(v.inr_compare_at_price_in_cents)
+          : null,
       currency: v.currency,
       quantityOnHand: v.quantity_on_hand,
       backorderable: v.backorderable,

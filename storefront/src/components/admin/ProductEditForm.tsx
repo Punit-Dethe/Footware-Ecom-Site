@@ -68,18 +68,17 @@ export function ProductEditForm({
       id: v.id,
       sku: v.sku,
       sizeOption: v.sizeOption || "",
-      priceDollars: (v.priceInCents / 100).toFixed(2),
+      priceDollars:
+        v.priceInCents != null ? (v.priceInCents / 100).toFixed(2) : "",
       compareAtDollars:
         v.compareAtPriceInCents != null ? (v.compareAtPriceInCents / 100).toFixed(2) : "",
       priceInr:
         v.priceInInrPaise != null
           ? (v.priceInInrPaise / 100).toFixed(2)
-          : (Math.round((v.priceInCents / 100) * 88)).toFixed(2),
+          : "",
       compareAtInr:
         v.compareAtPriceInInrPaise != null
           ? (v.compareAtPriceInInrPaise / 100).toFixed(2)
-          : v.compareAtPriceInCents != null
-          ? (Math.round((v.compareAtPriceInCents / 100) * 88)).toFixed(2)
           : "",
       quantityOnHand: v.quantityOnHand,
       backorderable: v.backorderable,
@@ -120,7 +119,9 @@ export function ProductEditForm({
       if (!initV) return true;
       if (v.sku !== initV.sku) return true;
       if (v.sizeOption !== (initV.sizeOption || "")) return true;
-      if (v.priceDollars !== (initV.priceInCents / 100).toFixed(2)) return true;
+      const initPriceUsd =
+        initV.priceInCents != null ? (initV.priceInCents / 100).toFixed(2) : "";
+      if (v.priceDollars !== initPriceUsd) return true;
       const initCompare =
         initV.compareAtPriceInCents != null
           ? (initV.compareAtPriceInCents / 100).toFixed(2)
@@ -129,13 +130,11 @@ export function ProductEditForm({
       const initPriceInr =
         initV.priceInInrPaise != null
           ? (initV.priceInInrPaise / 100).toFixed(2)
-          : (Math.round((initV.priceInCents / 100) * 88)).toFixed(2);
+          : "";
       if (v.priceInr !== initPriceInr) return true;
       const initCompareInr =
         initV.compareAtPriceInInrPaise != null
           ? (initV.compareAtPriceInInrPaise / 100).toFixed(2)
-          : initV.compareAtPriceInCents != null
-          ? (Math.round((initV.compareAtPriceInCents / 100) * 88)).toFixed(2)
           : "";
       if (v.compareAtInr !== initCompareInr) return true;
       if (v.quantityOnHand !== initV.quantityOnHand) return true;
@@ -174,9 +173,9 @@ export function ProductEditForm({
       {
         sku: newSku,
         sizeOption: `${7 + nextIndex}`,
-        priceDollars: variants[0]?.priceDollars || "285.00",
+        priceDollars: variants[0]?.priceDollars || "",
         compareAtDollars: "",
-        priceInr: variants[0]?.priceInr || "25080.00",
+        priceInr: variants[0]?.priceInr || "",
         compareAtInr: "",
         quantityOnHand: 10,
         backorderable: true,
@@ -223,11 +222,9 @@ export function ProductEditForm({
         : null;
       const priceInrPaise = v.priceInr?.trim()
         ? Math.round(parseFloat(v.priceInr) * 100)
-        : Math.round(priceCents * 0.88) * 100;
+        : null;
       const compareAtInrPaise = v.compareAtInr?.trim()
         ? Math.round(parseFloat(v.compareAtInr) * 100)
-        : compareCents != null
-        ? Math.round(compareCents * 0.88) * 100
         : null;
 
       return {

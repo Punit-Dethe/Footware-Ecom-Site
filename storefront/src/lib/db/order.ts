@@ -319,7 +319,7 @@ export async function placeOrderFromCart(params: {
          v.id AS db_variant_id,
          v.sku AS db_variant_sku,
          v.size_option,
-         COALESCE(vp.price_in_cents, (CASE WHEN $2 = 'USD' THEN v.price_in_cents ELSE NULL END)) AS authoritative_price_in_cents,
+         vp.price_in_cents AS authoritative_price_in_cents,
          v.active AS variant_active,
          v.quantity_on_hand,
          v.backorderable,
@@ -396,7 +396,7 @@ export async function placeOrderFromCart(params: {
         throw new Error(`Cannot place order: variant '${sku}' is out of stock`);
       }
 
-      const priceRaw = row.authoritative_price_in_cents ?? row.price_in_cents;
+      const priceRaw = row.authoritative_price_in_cents;
       if (priceRaw == null) {
         throw new Error(
           `Cannot place order: variant '${sku}' has no configured price for market currency '${cartCurrency}'`,
