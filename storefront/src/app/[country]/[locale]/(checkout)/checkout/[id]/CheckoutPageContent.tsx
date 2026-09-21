@@ -29,9 +29,8 @@ import { getCheckoutOrder, updateOrderAddresses } from "@/lib/data/checkout";
 import { isAuthenticated as checkAuth } from "@/lib/data/cookies";
 import { getCountry } from "@/lib/data/countries";
 import { getMarketCountries, resolveMarket } from "@/lib/data/markets";
-import { completeCheckoutOrder } from "@/lib/data/payment";
 import { extractBasePath } from "@/lib/utils/path";
-import type { Address, AddressParams, Cart, Country } from "@/types/commerce";
+import type { Address, AddressParams, Cart, Country, Order } from "@/types/commerce";
 import { CheckoutSidebar } from "./CheckoutSidebar";
 import type { CheckoutInitialData } from "./page";
 
@@ -317,41 +316,37 @@ function CheckoutPageContentInner({
     [],
   );
 
-  // Handle payment completion (called by PaymentSection after payment is confirmed)
-  const handlePaymentComplete = useCallback(async () => {
-    const currentOrder = cartRef.current;
-    if (!currentOrder) return;
+  // Handle payment completion (called by PaymentSection after payment is verified by server)
+  const handlePaymentComplete = useCallback(
+    async (completedOrder?: Order) => {
+      const currentOrder = cartRef.current;
+      if (!currentOrder) return;
 
-    setError(null);
+      setError(null);
 
-    try {
       try {
-        trackAddPaymentInfo(currentOrder);
+        try {
+          trackAddPaymentInfo(currentOrder);
+        } catch {
+          // Analytics should never break checkout flow
+        }
+
+        // Cache the completed order for the thank-you page
+        if (completedOrder) {
+          const { cacheCompletedOrder } = await import(
+            "@/lib/utils/completed-order-cache"
+          );
+          cacheCompletedOrder(currentOrder.id, completedOrder);
+        }
+
+        routerRef.current.push(`${basePath}/order-placed/${currentOrder.id}`);
       } catch {
-        // Analytics should never break checkout flow
-      }
-
-      const completeResult = await completeCheckoutOrder(currentOrder.id);
-      if (!completeResult.success) {
-        setError(completeResult.error || tRef.current("failedToCompleteOrder"));
+        setError(tRef.current("generalError"));
         setProcessing(false);
-        return;
       }
-
-      // Cache the completed order for the thank-you page
-      if (completeResult.order) {
-        const { cacheCompletedOrder } = await import(
-          "@/lib/utils/completed-order-cache"
-        );
-        cacheCompletedOrder(currentOrder.id, completeResult.order);
-      }
-
-      routerRef.current.push(`${basePath}/order-placed/${currentOrder.id}`);
-    } catch {
-      setError(tRef.current("generalError"));
-      setProcessing(false);
-    }
-  }, [basePath]);
+    },
+    [basePath],
+  );
 
   // Fetch states for a country
   const fetchStates = useCallback(async (countryIso: string) => {
@@ -448,8 +443,11 @@ function CheckoutPageContentInner({
     }
 
     setProcessing(true);
-    await paymentRef.current.submit();
-    // PaymentSection handles setProcessing(false) on error internally
+    const result = await paymentRef.current.submit();
+    if (result?.error) {
+      setError(result.error);
+      setProcessing(false);
+    }
   };
 
   // Loading state — only shown when no initial data (client-side navigation).
@@ -575,7 +573,7 @@ function CheckoutPageContentInner({
           </div>
         )}
 
-        {/* Place order button */}
+        {/* Pay button */}
         <button
           type="button"
           onClick={validateAndPay}
@@ -588,7 +586,7 @@ function CheckoutPageContentInner({
               {tc("processing")}
             </>
           ) : (
-            t("placeOrder")
+            t("payNow")
           )}
         </button>
       </div>

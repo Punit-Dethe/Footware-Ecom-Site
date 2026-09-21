@@ -252,8 +252,8 @@ describe("Storefront locale & auth middleware", () => {
     const response = await middleware(request);
 
     expect(response.headers.get("location")).toBeNull();
-    expect(response.headers.get("Cache-Control")).not.toBe(
-      CACHE_POLICIES.PRIVATE_SESSION,
+    expect(response.headers.get("Cache-Control")).toBe(
+      CACHE_POLICIES.CATALOG_CONTENT,
     );
   });
 

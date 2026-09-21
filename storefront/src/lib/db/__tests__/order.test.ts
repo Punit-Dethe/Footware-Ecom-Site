@@ -34,6 +34,37 @@ describe("Database Order Repository", () => {
   });
 
   describe("placeOrderFromCart", () => {
+    const defaultPayment = {
+      provider: "razorpay" as const,
+      status: "paid" as const,
+      providerOrderId: "order_test_123",
+      providerPaymentId: "pay_test_456",
+      paymentMethod: "upi",
+      paidAt: new Date("2026-09-22T00:00:00Z"),
+      expectedAmountInCents: 8500,
+      expectedCurrency: "USD",
+    };
+
+    it("throws error if payment details are missing or invalid", async () => {
+      await expect(
+        placeOrderFromCart({
+          cartId: "11111111-1111-1111-1111-111111111111",
+          surface: "dtc",
+          verifiedUserId: "user-1",
+          payment: null as any,
+        }),
+      ).rejects.toThrow("Cannot place order without verified captured payment");
+
+      await expect(
+        placeOrderFromCart({
+          cartId: "11111111-1111-1111-1111-111111111111",
+          surface: "dtc",
+          verifiedUserId: "user-1",
+          payment: { ...defaultPayment, status: "failed" as any },
+        }),
+      ).rejects.toThrow("Cannot place order without verified captured payment");
+    });
+
     it("throws error if cart does not exist", async () => {
       mockTransaction.mockImplementation(async (cb) => {
         const fakeClient = {
@@ -47,6 +78,7 @@ describe("Database Order Repository", () => {
           cartId: "11111111-1111-1111-1111-111111111111",
           surface: "dtc",
           verifiedUserId: "user-1",
+          payment: defaultPayment,
         }),
       ).rejects.toThrow("Cart not found");
     });
@@ -74,6 +106,7 @@ describe("Database Order Repository", () => {
           cartId: "11111111-1111-1111-1111-111111111111",
           surface: "dtc",
           verifiedUserId: "user-attacker",
+          payment: defaultPayment,
         }),
       ).rejects.toThrow("Unauthorized to convert this cart");
     });
@@ -101,6 +134,7 @@ describe("Database Order Repository", () => {
           cartId: "11111111-1111-1111-1111-111111111111",
           surface: "wholesale",
           verifiedUserId: "user-1",
+          payment: defaultPayment,
         }),
       ).rejects.toThrow("Cart surface mismatch: cart belongs to 'dtc', requested 'wholesale'");
     });
@@ -131,6 +165,7 @@ describe("Database Order Repository", () => {
           cartId: "11111111-1111-1111-1111-111111111111",
           surface: "dtc",
           verifiedUserId: "user-1",
+          payment: defaultPayment,
         }),
       ).rejects.toThrow("Cannot place order: cart status is 'abandoned', must be 'active'");
     });
@@ -161,6 +196,7 @@ describe("Database Order Repository", () => {
           cartId: "11111111-1111-1111-1111-111111111111",
           surface: "dtc",
           verifiedUserId: "user-1",
+          payment: defaultPayment,
         }),
       ).rejects.toThrow("Cannot place order: cart status is 'converted', must be 'active'");
     });
@@ -215,6 +251,7 @@ describe("Database Order Repository", () => {
         cartId: "11111111-1111-1111-1111-111111111111",
         surface: "dtc",
         verifiedUserId: "user-1",
+        payment: defaultPayment,
       });
 
       expect(res.order.order_number).toBe("MRZ-ALREADYPLACED");
@@ -246,6 +283,7 @@ describe("Database Order Repository", () => {
           cartId: "11111111-1111-1111-1111-111111111111",
           surface: "dtc",
           verifiedUserId: "user-1",
+          payment: defaultPayment,
         }),
       ).rejects.toThrow("Cannot place order for an empty cart");
     });
@@ -287,6 +325,7 @@ describe("Database Order Repository", () => {
           cartId: "11111111-1111-1111-1111-111111111111",
           surface: "dtc",
           verifiedUserId: "user-1",
+          payment: defaultPayment,
         }),
       ).rejects.toThrow("Cannot place order: unknown catalog variant SKU 'NON-EXISTENT-SKU'");
     });
@@ -394,6 +433,7 @@ describe("Database Order Repository", () => {
         cartId: "11111111-1111-1111-1111-111111111111",
         surface: "dtc",
         guestTokenHash: "hash123",
+        payment: { ...defaultPayment, expectedAmountInCents: 8500 },
       });
 
       expect(res.order.id).toBe("22222222-2222-2222-2222-222222222222");
@@ -529,6 +569,7 @@ describe("Database Order Repository", () => {
         cartId: "cart-same-shipping",
         surface: "dtc",
         verifiedUserId: "user-1",
+        payment: { ...defaultPayment, expectedAmountInCents: 9900 },
       });
 
       const insertOrderCall = mockQueries.find((q) =>
@@ -538,6 +579,12 @@ describe("Database Order Repository", () => {
       // Parameter $9 is shipping_address_snapshot, parameter $10 is billing_address_snapshot
       expect(JSON.parse(insertOrderCall.params[8])).toEqual(shippingAddress);
       expect(JSON.parse(insertOrderCall.params[9])).toEqual(shippingAddress);
+      // Payment metadata columns
+      expect(insertOrderCall.params[12]).toBe("razorpay");
+      expect(insertOrderCall.params[13]).toBe("paid");
+      expect(insertOrderCall.params[14]).toBe("order_test_123");
+      expect(insertOrderCall.params[15]).toBe("pay_test_456");
+      expect(insertOrderCall.params[16]).toBe("upi");
     });
 
     it("snapshots price directly from PostgreSQL variant and never calls global pool", async () => {
@@ -630,6 +677,7 @@ describe("Database Order Repository", () => {
         cartId: "cart-999",
         surface: "dtc",
         verifiedUserId: "user-1",
+        payment: { ...defaultPayment, expectedAmountInCents: 29000 },
       });
 
       // Verify global pool was never invoked
@@ -690,6 +738,7 @@ describe("Database Order Repository", () => {
           cartId: "cart-1",
           surface: "dtc",
           verifiedUserId: "user-1",
+          payment: { ...defaultPayment, expectedAmountInCents: 8000 },
         }),
       ).rejects.toThrow("Cannot place order: variant 'SKU-INACTIVE' is no longer active");
     });
@@ -738,6 +787,7 @@ describe("Database Order Repository", () => {
           cartId: "cart-1",
           surface: "dtc",
           verifiedUserId: "user-1",
+          payment: { ...defaultPayment, expectedAmountInCents: 8000 },
         }),
       ).rejects.toThrow("Cannot place order: variant 'SKU-DRAFT' is no longer active");
     });
@@ -786,6 +836,7 @@ describe("Database Order Repository", () => {
           cartId: "cart-1",
           surface: "dtc",
           verifiedUserId: "user-1",
+          payment: { ...defaultPayment, expectedAmountInCents: 8000 },
         }),
       ).rejects.toThrow("Cannot place order: variant 'SKU-OOS' is out of stock");
     });
@@ -836,8 +887,111 @@ describe("Database Order Repository", () => {
           cartId: "cart-1",
           surface: "dtc",
           verifiedUserId: "user-1",
+          payment: { ...defaultPayment, expectedAmountInCents: 8000 },
         }),
       ).rejects.toThrow("recorded SKU 'SKU-WRONG'");
+    });
+
+    it("rejects order placement if payment amount does not match authoritative cart total", async () => {
+      mockTransaction.mockImplementation(async (cb) => {
+        const fakeClient = {
+          query: vi.fn(async (sql: string) => {
+            if (sql.includes("FROM public.carts")) {
+              return {
+                rows: [{ id: "cart-1", user_id: "user-1", surface: "dtc", currency: "USD", status: "active" }],
+              };
+            }
+            if (sql.includes("FROM public.orders WHERE source_cart_id")) {
+              return { rows: [] };
+            }
+            if (sql.includes("FROM public.cart_items")) {
+              return {
+                rows: [
+                  {
+                    cart_item_id: "ci-1",
+                    cart_id: "cart-1",
+                    variant_id: "var-1",
+                    variant_sku: "SKU-1",
+                    quantity: 1,
+                    db_variant_id: "var-1",
+                    db_variant_sku: "SKU-1",
+                    price_in_cents: 8500,
+                    variant_active: true,
+                    quantity_on_hand: 10,
+                    backorderable: true,
+                    product_id: "prod-1",
+                    product_name: "Derby",
+                    product_slug: "derby",
+                    product_status: "active",
+                  },
+                ],
+              };
+            }
+            return { rows: [] };
+          }),
+        };
+        return cb(fakeClient);
+      });
+
+      await expect(
+        placeOrderFromCart({
+          cartId: "cart-1",
+          surface: "dtc",
+          verifiedUserId: "user-1",
+          payment: { ...defaultPayment, expectedAmountInCents: 9999 },
+        }),
+      ).rejects.toThrow("Payment amount mismatch: cart total is 8500, verified payment was 9999");
+    });
+
+    it("rejects order placement if payment currency does not match authoritative cart currency", async () => {
+      mockTransaction.mockImplementation(async (cb) => {
+        const fakeClient = {
+          query: vi.fn(async (sql: string) => {
+            if (sql.includes("FROM public.carts")) {
+              return {
+                rows: [{ id: "cart-1", user_id: "user-1", surface: "dtc", currency: "INR", status: "active" }],
+              };
+            }
+            if (sql.includes("FROM public.orders WHERE source_cart_id")) {
+              return { rows: [] };
+            }
+            if (sql.includes("FROM public.cart_items")) {
+              return {
+                rows: [
+                  {
+                    cart_item_id: "ci-1",
+                    cart_id: "cart-1",
+                    variant_id: "var-1",
+                    variant_sku: "SKU-1",
+                    quantity: 1,
+                    db_variant_id: "var-1",
+                    db_variant_sku: "SKU-1",
+                    price_in_cents: 8500,
+                    variant_active: true,
+                    quantity_on_hand: 10,
+                    backorderable: true,
+                    product_id: "prod-1",
+                    product_name: "Derby",
+                    product_slug: "derby",
+                    product_status: "active",
+                  },
+                ],
+              };
+            }
+            return { rows: [] };
+          }),
+        };
+        return cb(fakeClient);
+      });
+
+      await expect(
+        placeOrderFromCart({
+          cartId: "cart-1",
+          surface: "dtc",
+          verifiedUserId: "user-1",
+          payment: { ...defaultPayment, expectedAmountInCents: 8500, expectedCurrency: "USD" },
+        }),
+      ).rejects.toThrow("Payment currency mismatch: cart currency is 'INR', verified payment was 'USD'");
     });
   });
 

@@ -25,6 +25,12 @@ export interface DbOrder {
   billing_address_snapshot: Record<string, unknown>;
   source_cart_id: string;
   surface: CartSurface;
+  payment_provider?: string | null;
+  payment_status?: string | null;
+  payment_provider_order_id?: string | null;
+  payment_provider_payment_id?: string | null;
+  payment_method?: string | null;
+  paid_at?: Date | null;
   completed_at: Date;
   created_at: Date;
   updated_at: Date;
@@ -69,6 +75,12 @@ function mapOrderRow(row: Record<string, unknown>): DbOrder {
         : (row.billing_address_snapshot as Record<string, unknown>) || {},
     source_cart_id: row.source_cart_id as string,
     surface: (row.surface as CartSurface) || "dtc",
+    payment_provider: (row.payment_provider as string) ?? null,
+    payment_status: (row.payment_status as string) ?? null,
+    payment_provider_order_id: (row.payment_provider_order_id as string) ?? null,
+    payment_provider_payment_id: (row.payment_provider_payment_id as string) ?? null,
+    payment_method: (row.payment_method as string) ?? null,
+    paid_at: row.paid_at ? new Date(row.paid_at as string | number | Date) : null,
     completed_at: new Date(row.completed_at as string | number | Date),
     created_at: new Date(row.created_at as string | number | Date),
     updated_at: new Date(row.updated_at as string | number | Date),
@@ -112,7 +124,24 @@ export function generateOrderNumber(): string {
  * - Row locking on source cart prevents concurrent race conditions.
  * - Idempotent: returns existing order if source_cart_id was already converted.
  * - Validates non-empty cart and resolves every line item against the authoritative catalog.
+ */
+export interface VerifiedPaymentDetails {
+  provider: "razorpay";
+  status: "paid";
+  providerOrderId: string;
+  providerPaymentId: string;
+  paymentMethod?: string | null;
+  paidAt: Date;
+  expectedAmountInCents: number;
+  expectedCurrency: string;
+}
+
+/**
+ * Places an order from an active cart in a single atomic transaction.
+ * - Cartesian products avoided by batching and single-row operations.
+ * - Idempotent: returns existing order if source_cart_id was already converted.
  * - Subtotal and totals computed server-side in cents.
+ * - Requires verified captured payment matching authoritative cart amount/currency.
  * - Source cart marked 'converted' while preserving guest_token_hash for confirmation read.
  */
 export async function placeOrderFromCart(params: {
@@ -120,8 +149,13 @@ export async function placeOrderFromCart(params: {
   surface: CartSurface;
   verifiedUserId?: string | null;
   guestTokenHash?: string | null;
+  payment: VerifiedPaymentDetails;
 }): Promise<{ order: DbOrder; items: DbOrderItem[] }> {
-  const { cartId, surface, verifiedUserId, guestTokenHash } = params;
+  const { cartId, surface, verifiedUserId, guestTokenHash, payment } = params;
+
+  if (payment?.status !== "paid" || !payment.providerPaymentId || !payment.providerOrderId) {
+    throw new Error("Cannot place order without verified captured payment");
+  }
 
   return await transaction(async (client) => {
     // 1. Lock source cart
@@ -293,6 +327,19 @@ export async function placeOrderFromCart(params: {
     const shippingInCents = 0;
     const totalInCents = subtotalInCents + taxInCents + shippingInCents;
 
+    // Verify authoritative cart amount & currency match verified payment
+    if (totalInCents !== payment.expectedAmountInCents) {
+      throw new Error(
+        `Payment amount mismatch: cart total is ${totalInCents}, verified payment was ${payment.expectedAmountInCents}`,
+      );
+    }
+    const currency = (cart.currency as string) || "USD";
+    if (currency.toUpperCase() !== payment.expectedCurrency.toUpperCase()) {
+      throw new Error(
+        `Payment currency mismatch: cart currency is '${currency}', verified payment was '${payment.expectedCurrency}'`,
+      );
+    }
+
     // 6. Resolve checkout email
     let email: string | null = (cart.checkout_email as string) || null;
     if (!email) {
@@ -321,15 +368,16 @@ export async function placeOrderFromCart(params: {
 
     // 8. Generate order number & insert order
     const orderNumber = generateOrderNumber();
-    const currency = (cart.currency as string) || "USD";
 
     const insertOrderRes = await client.query<Record<string, unknown>>(
       `INSERT INTO public.orders (
          order_number, user_id, email, status, currency,
          subtotal_in_cents, tax_in_cents, shipping_in_cents, total_in_cents,
          shipping_address_snapshot, billing_address_snapshot,
-         source_cart_id, surface, completed_at, created_at, updated_at
-       ) VALUES ($1, $2, $3, 'placed', $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), NOW(), NOW())
+         source_cart_id, surface,
+         payment_provider, payment_status, payment_provider_order_id, payment_provider_payment_id, payment_method, paid_at,
+         completed_at, created_at, updated_at
+       ) VALUES ($1, $2, $3, 'placed', $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, NOW(), NOW(), NOW())
        ON CONFLICT (source_cart_id) DO NOTHING
        RETURNING *;`,
       [
@@ -345,6 +393,12 @@ export async function placeOrderFromCart(params: {
         JSON.stringify(billingSnapshot),
         cartId,
         surface,
+        payment.provider,
+        payment.status,
+        payment.providerOrderId,
+        payment.providerPaymentId,
+        payment.paymentMethod || null,
+        payment.paidAt,
       ],
     );
 

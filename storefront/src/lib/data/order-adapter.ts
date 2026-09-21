@@ -137,6 +137,26 @@ export function adaptDbOrderToCommerceOrder(
   const shippingAddress = adaptAddressSnapshot(order.shipping_address_snapshot);
   const billingAddress = adaptAddressSnapshot(order.billing_address_snapshot);
 
+  const payments =
+    order.payment_provider_payment_id || order.payment_provider
+      ? [
+          {
+            id: order.payment_provider_payment_id || `pay_${order.id}`,
+            source_type: order.payment_provider || "razorpay",
+            amount: (totalCents / 100).toFixed(2),
+            display_amount: displayTotal,
+            status: order.payment_status || "paid",
+            payment_method: {
+              name:
+                order.payment_method ||
+                (order.payment_provider === "razorpay"
+                  ? "Razorpay (Standard Checkout)"
+                  : "Online Payment"),
+            },
+          },
+        ]
+      : [];
+
   return {
     id: order.id,
     number: order.order_number,
@@ -144,7 +164,7 @@ export function adaptDbOrderToCommerceOrder(
     email: order.email,
     currency: order.currency,
     status: order.status,
-    payment_status: null,
+    payment_status: order.payment_status ?? null,
     fulfillment_status: null,
     item_total: (subtotalCents / 100).toFixed(2),
     display_item_total: displayItemTotal,
@@ -162,7 +182,7 @@ export function adaptDbOrderToCommerceOrder(
     items: adaptedItems,
     shipping_address: shippingAddress,
     billing_address: billingAddress,
-    payments: [],
+    payments,
     fulfillments: [],
   } as unknown as Order;
 }
