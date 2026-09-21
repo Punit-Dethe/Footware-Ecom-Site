@@ -45,12 +45,27 @@ describe("Database Order Repository", () => {
       expectedCurrency: "USD",
     };
 
-    it("throws error if payment details are missing or invalid", async () => {
+    const defaultPaymentAttemptId = "attempt-1";
+    const defaultPaymentAttempt = {
+      id: "attempt-1",
+      cart_id: "11111111-1111-1111-1111-111111111111",
+      surface: "dtc",
+      provider: "razorpay",
+      provider_order_id: "order_test_123",
+      provider_payment_id: null,
+      amount_in_cents: 8500,
+      currency: "USD",
+      status: "created",
+      consumed_at: null,
+    };
+
+    it("throws error if payment details or paymentAttemptId are missing or invalid", async () => {
       await expect(
         placeOrderFromCart({
           cartId: "11111111-1111-1111-1111-111111111111",
           surface: "dtc",
           verifiedUserId: "user-1",
+          paymentAttemptId: defaultPaymentAttemptId,
           payment: null as any,
         }),
       ).rejects.toThrow("Cannot place order without verified captured payment");
@@ -60,6 +75,17 @@ describe("Database Order Repository", () => {
           cartId: "11111111-1111-1111-1111-111111111111",
           surface: "dtc",
           verifiedUserId: "user-1",
+          paymentAttemptId: "",
+          payment: defaultPayment,
+        }),
+      ).rejects.toThrow("Cannot place order without trusted paymentAttemptId");
+
+      await expect(
+        placeOrderFromCart({
+          cartId: "11111111-1111-1111-1111-111111111111",
+          surface: "dtc",
+          verifiedUserId: "user-1",
+          paymentAttemptId: defaultPaymentAttemptId,
           payment: { ...defaultPayment, status: "failed" as any },
         }),
       ).rejects.toThrow("Cannot place order without verified captured payment");
@@ -78,6 +104,7 @@ describe("Database Order Repository", () => {
           cartId: "11111111-1111-1111-1111-111111111111",
           surface: "dtc",
           verifiedUserId: "user-1",
+          paymentAttemptId: defaultPaymentAttemptId,
           payment: defaultPayment,
         }),
       ).rejects.toThrow("Cart not found");
@@ -106,6 +133,7 @@ describe("Database Order Repository", () => {
           cartId: "11111111-1111-1111-1111-111111111111",
           surface: "dtc",
           verifiedUserId: "user-attacker",
+          paymentAttemptId: defaultPaymentAttemptId,
           payment: defaultPayment,
         }),
       ).rejects.toThrow("Unauthorized to convert this cart");
@@ -134,6 +162,7 @@ describe("Database Order Repository", () => {
           cartId: "11111111-1111-1111-1111-111111111111",
           surface: "wholesale",
           verifiedUserId: "user-1",
+          paymentAttemptId: defaultPaymentAttemptId,
           payment: defaultPayment,
         }),
       ).rejects.toThrow("Cart surface mismatch: cart belongs to 'dtc', requested 'wholesale'");
@@ -155,6 +184,7 @@ describe("Database Order Repository", () => {
                 },
               ],
             })
+            .mockResolvedValueOnce({ rows: [defaultPaymentAttempt] }) // payment_attempts
             .mockResolvedValueOnce({ rows: [] }), // existing order lookup returns empty
         };
         return cb(fakeClient);
@@ -165,6 +195,7 @@ describe("Database Order Repository", () => {
           cartId: "11111111-1111-1111-1111-111111111111",
           surface: "dtc",
           verifiedUserId: "user-1",
+          paymentAttemptId: defaultPaymentAttemptId,
           payment: defaultPayment,
         }),
       ).rejects.toThrow("Cannot place order: cart status is 'abandoned', must be 'active'");
@@ -186,6 +217,7 @@ describe("Database Order Repository", () => {
                 },
               ],
             })
+            .mockResolvedValueOnce({ rows: [defaultPaymentAttempt] }) // payment_attempts
             .mockResolvedValueOnce({ rows: [] }), // existing order lookup returns empty
         };
         return cb(fakeClient);
@@ -196,6 +228,7 @@ describe("Database Order Repository", () => {
           cartId: "11111111-1111-1111-1111-111111111111",
           surface: "dtc",
           verifiedUserId: "user-1",
+          paymentAttemptId: defaultPaymentAttemptId,
           payment: defaultPayment,
         }),
       ).rejects.toThrow("Cannot place order: cart status is 'converted', must be 'active'");
@@ -243,11 +276,18 @@ describe("Database Order Repository", () => {
               ],
             }) // 1. Lock cart
             .mockResolvedValueOnce({
+              rows: [defaultPaymentAttempt],
+            }) // 2. Lock payment_attempt
+            .mockResolvedValueOnce({
               rows: [existingOrderRow],
             }) // 3. Existing order check
             .mockResolvedValueOnce({
+              rows: [{ id: "attempt-1" }],
+              rowCount: 1,
+            }) // 4. Consume attempt
+            .mockResolvedValueOnce({
               rows: [],
-            }), // Existing items check
+            }), // 5. Existing items check
         };
         return cb(fakeClient);
       });
@@ -256,6 +296,7 @@ describe("Database Order Repository", () => {
         cartId: "11111111-1111-1111-1111-111111111111",
         surface: "dtc",
         verifiedUserId: "user-1",
+        paymentAttemptId: defaultPaymentAttemptId,
         payment: defaultPayment,
       });
 
@@ -302,6 +343,9 @@ describe("Database Order Repository", () => {
               ],
             })
             .mockResolvedValueOnce({
+              rows: [defaultPaymentAttempt],
+            })
+            .mockResolvedValueOnce({
               rows: [existingOrderRowWithDifferentPayment],
             }),
         };
@@ -313,6 +357,7 @@ describe("Database Order Repository", () => {
           cartId: "11111111-1111-1111-1111-111111111111",
           surface: "dtc",
           verifiedUserId: "user-1",
+          paymentAttemptId: defaultPaymentAttemptId,
           payment: defaultPayment,
         }),
       ).rejects.toThrow(
@@ -335,6 +380,7 @@ describe("Database Order Repository", () => {
                 },
               ],
             }) // 1. Lock cart
+            .mockResolvedValueOnce({ rows: [defaultPaymentAttempt] }) // 2. Lock payment_attempt
             .mockResolvedValueOnce({ rows: [] }) // 3. Existing order
             .mockResolvedValueOnce({ rows: [] }), // 4. Cart items (empty!)
         };
@@ -346,6 +392,7 @@ describe("Database Order Repository", () => {
           cartId: "11111111-1111-1111-1111-111111111111",
           surface: "dtc",
           verifiedUserId: "user-1",
+          paymentAttemptId: defaultPaymentAttemptId,
           payment: defaultPayment,
         }),
       ).rejects.toThrow("Cannot place order for an empty cart");
@@ -366,6 +413,7 @@ describe("Database Order Repository", () => {
                 },
               ],
             }) // 1. Lock cart
+            .mockResolvedValueOnce({ rows: [defaultPaymentAttempt] }) // 2. Lock payment_attempt
             .mockResolvedValueOnce({ rows: [] }) // 3. Existing order
             .mockResolvedValueOnce({
               rows: [
@@ -388,6 +436,7 @@ describe("Database Order Repository", () => {
           cartId: "11111111-1111-1111-1111-111111111111",
           surface: "dtc",
           verifiedUserId: "user-1",
+          paymentAttemptId: defaultPaymentAttemptId,
           payment: defaultPayment,
         }),
       ).rejects.toThrow("Cannot place order: unknown catalog variant SKU 'NON-EXISTENT-SKU'");
@@ -450,6 +499,9 @@ describe("Database Order Repository", () => {
                 ],
               };
             }
+            if (sql.includes("FROM public.payment_attempts") && sql.includes("FOR UPDATE")) {
+              return { rows: [defaultPaymentAttempt] };
+            }
             if (sql.includes("FROM public.orders WHERE source_cart_id")) {
               return { rows: [] };
             }
@@ -486,6 +538,9 @@ describe("Database Order Repository", () => {
             if (sql.includes("UPDATE public.carts SET status = 'converted'")) {
               return { rowCount: 1 };
             }
+            if (sql.includes("UPDATE public.payment_attempts")) {
+              return { rows: [{ id: "attempt-1" }], rowCount: 1 };
+            }
             return { rows: [] };
           }),
         };
@@ -496,6 +551,7 @@ describe("Database Order Repository", () => {
         cartId: "11111111-1111-1111-1111-111111111111",
         surface: "dtc",
         guestTokenHash: "hash123",
+        paymentAttemptId: defaultPaymentAttemptId,
         payment: { ...defaultPayment, expectedAmountInCents: 8500 },
       });
 
@@ -504,6 +560,13 @@ describe("Database Order Repository", () => {
       expect(res.order.tax_in_cents).toBe(850);
       expect(res.order.total_in_cents).toBe(9350);
       expect(res.items).toHaveLength(1);
+      expect(res.created).toBe(true);
+
+      // Verify payment attempt consumption was executed in this same transaction
+      const updateAttemptCall = mockQueries.find((q) =>
+        q.sql.includes("UPDATE public.payment_attempts"),
+      );
+      expect(updateAttemptCall).toBeDefined();
 
       // Verify cart status was marked converted while preserving guest token
       const updateCartCall = mockQueries.find((q) =>
@@ -544,6 +607,17 @@ describe("Database Order Repository", () => {
                     billing_address: null, // same-as-shipping selected
                     checkout_email: "rahul@example.com",
                     status: "active",
+                  },
+                ],
+              };
+            }
+            if (sql.includes("FROM public.payment_attempts") && sql.includes("FOR UPDATE")) {
+              return {
+                rows: [
+                  {
+                    ...defaultPaymentAttempt,
+                    cart_id: "cart-same-shipping",
+                    amount_in_cents: 9900,
                   },
                 ],
               };
@@ -622,6 +696,9 @@ describe("Database Order Repository", () => {
             if (sql.includes("UPDATE public.carts SET status = 'converted'")) {
               return { rowCount: 1 };
             }
+            if (sql.includes("UPDATE public.payment_attempts")) {
+              return { rows: [{ id: "attempt-1" }], rowCount: 1 };
+            }
             return { rows: [] };
           }),
         };
@@ -632,6 +709,7 @@ describe("Database Order Repository", () => {
         cartId: "cart-same-shipping",
         surface: "dtc",
         verifiedUserId: "user-1",
+        paymentAttemptId: defaultPaymentAttemptId,
         payment: { ...defaultPayment, expectedAmountInCents: 9900 },
       });
 
@@ -669,6 +747,17 @@ describe("Database Order Repository", () => {
                     billing_address: null,
                     checkout_email: "test@example.com",
                     status: "active",
+                  },
+                ],
+              };
+            }
+            if (sql.includes("FROM public.payment_attempts") && sql.includes("FOR UPDATE")) {
+              return {
+                rows: [
+                  {
+                    ...defaultPaymentAttempt,
+                    cart_id: "cart-999",
+                    amount_in_cents: 29000,
                   },
                 ],
               };
@@ -730,6 +819,9 @@ describe("Database Order Repository", () => {
             if (sql.includes("UPDATE public.carts SET status = 'converted'")) {
               return { rowCount: 1 };
             }
+            if (sql.includes("UPDATE public.payment_attempts")) {
+              return { rows: [{ id: "attempt-1" }], rowCount: 1 };
+            }
             return { rows: [] };
           }),
         };
@@ -740,6 +832,7 @@ describe("Database Order Repository", () => {
         cartId: "cart-999",
         surface: "dtc",
         verifiedUserId: "user-1",
+        paymentAttemptId: defaultPaymentAttemptId,
         payment: { ...defaultPayment, expectedAmountInCents: 29000 },
       });
 
@@ -764,6 +857,17 @@ describe("Database Order Repository", () => {
             if (sql.includes("FROM public.carts")) {
               return {
                 rows: [{ id: "cart-1", user_id: "user-1", surface: "dtc", status: "active" }],
+              };
+            }
+            if (sql.includes("FROM public.payment_attempts")) {
+              return {
+                rows: [
+                  {
+                    ...defaultPaymentAttempt,
+                    cart_id: "cart-1",
+                    amount_in_cents: 8000,
+                  },
+                ],
               };
             }
             if (sql.includes("FROM public.orders WHERE source_cart_id")) {
@@ -801,6 +905,7 @@ describe("Database Order Repository", () => {
           cartId: "cart-1",
           surface: "dtc",
           verifiedUserId: "user-1",
+          paymentAttemptId: defaultPaymentAttemptId,
           payment: { ...defaultPayment, expectedAmountInCents: 8000 },
         }),
       ).rejects.toThrow("Cannot place order: variant 'SKU-INACTIVE' is no longer active");
@@ -813,6 +918,17 @@ describe("Database Order Repository", () => {
             if (sql.includes("FROM public.carts")) {
               return {
                 rows: [{ id: "cart-1", user_id: "user-1", surface: "dtc", status: "active" }],
+              };
+            }
+            if (sql.includes("FROM public.payment_attempts")) {
+              return {
+                rows: [
+                  {
+                    ...defaultPaymentAttempt,
+                    cart_id: "cart-1",
+                    amount_in_cents: 8000,
+                  },
+                ],
               };
             }
             if (sql.includes("FROM public.orders WHERE source_cart_id")) {
@@ -850,6 +966,7 @@ describe("Database Order Repository", () => {
           cartId: "cart-1",
           surface: "dtc",
           verifiedUserId: "user-1",
+          paymentAttemptId: defaultPaymentAttemptId,
           payment: { ...defaultPayment, expectedAmountInCents: 8000 },
         }),
       ).rejects.toThrow("Cannot place order: variant 'SKU-DRAFT' is no longer active");
@@ -862,6 +979,17 @@ describe("Database Order Repository", () => {
             if (sql.includes("FROM public.carts")) {
               return {
                 rows: [{ id: "cart-1", user_id: "user-1", surface: "dtc", status: "active" }],
+              };
+            }
+            if (sql.includes("FROM public.payment_attempts")) {
+              return {
+                rows: [
+                  {
+                    ...defaultPaymentAttempt,
+                    cart_id: "cart-1",
+                    amount_in_cents: 8000,
+                  },
+                ],
               };
             }
             if (sql.includes("FROM public.orders WHERE source_cart_id")) {
@@ -899,6 +1027,7 @@ describe("Database Order Repository", () => {
           cartId: "cart-1",
           surface: "dtc",
           verifiedUserId: "user-1",
+          paymentAttemptId: defaultPaymentAttemptId,
           payment: { ...defaultPayment, expectedAmountInCents: 8000 },
         }),
       ).rejects.toThrow("Cannot place order: variant 'SKU-OOS' is out of stock");
@@ -911,6 +1040,17 @@ describe("Database Order Repository", () => {
             if (sql.includes("FROM public.carts")) {
               return {
                 rows: [{ id: "cart-1", user_id: "user-1", surface: "dtc", status: "active" }],
+              };
+            }
+            if (sql.includes("FROM public.payment_attempts")) {
+              return {
+                rows: [
+                  {
+                    ...defaultPaymentAttempt,
+                    cart_id: "cart-1",
+                    amount_in_cents: 8000,
+                  },
+                ],
               };
             }
             if (sql.includes("FROM public.orders WHERE source_cart_id")) {
@@ -950,6 +1090,7 @@ describe("Database Order Repository", () => {
           cartId: "cart-1",
           surface: "dtc",
           verifiedUserId: "user-1",
+          paymentAttemptId: defaultPaymentAttemptId,
           payment: { ...defaultPayment, expectedAmountInCents: 8000 },
         }),
       ).rejects.toThrow("recorded SKU 'SKU-WRONG'");
@@ -964,6 +1105,17 @@ describe("Database Order Repository", () => {
                 rows: [{ id: "cart-1", user_id: "user-1", surface: "dtc", currency: "USD", status: "active" }],
               };
             }
+            if (sql.includes("FROM public.payment_attempts")) {
+              return {
+                rows: [
+                  {
+                    ...defaultPaymentAttempt,
+                    cart_id: "cart-1",
+                    amount_in_cents: 9999,
+                  },
+                ],
+              };
+            }
             if (sql.includes("FROM public.orders WHERE source_cart_id")) {
               return { rows: [] };
             }
@@ -1001,6 +1153,7 @@ describe("Database Order Repository", () => {
           cartId: "cart-1",
           surface: "dtc",
           verifiedUserId: "user-1",
+          paymentAttemptId: defaultPaymentAttemptId,
           payment: { ...defaultPayment, expectedAmountInCents: 9999 },
         }),
       ).rejects.toThrow("Payment amount mismatch: cart total is 8500, verified payment was 9999");
@@ -1015,6 +1168,18 @@ describe("Database Order Repository", () => {
                 rows: [{ id: "cart-1", user_id: "user-1", surface: "dtc", currency: "INR", status: "active" }],
               };
             }
+            if (sql.includes("FROM public.payment_attempts")) {
+              return {
+                rows: [
+                  {
+                    ...defaultPaymentAttempt,
+                    cart_id: "cart-1",
+                    amount_in_cents: 8500,
+                    currency: "USD",
+                  },
+                ],
+              };
+            }
             if (sql.includes("FROM public.orders WHERE source_cart_id")) {
               return { rows: [] };
             }
@@ -1052,9 +1217,440 @@ describe("Database Order Repository", () => {
           cartId: "cart-1",
           surface: "dtc",
           verifiedUserId: "user-1",
+          paymentAttemptId: defaultPaymentAttemptId,
           payment: { ...defaultPayment, expectedAmountInCents: 8500, expectedCurrency: "USD" },
         }),
       ).rejects.toThrow("Payment currency mismatch: cart currency is 'INR', verified payment was 'USD'");
+    });
+
+    describe("Atomic payment_attempt finalization and validation", () => {
+      it("rolls back entire transaction if payment_attempt consumption query fails before commit", async () => {
+        mockTransaction.mockImplementation(async (cb) => {
+          const fakeClient = {
+            query: vi.fn(async (sql: string) => {
+              if (sql.includes("FROM public.carts") && sql.includes("FOR UPDATE")) {
+                return {
+                  rows: [
+                    {
+                      id: "11111111-1111-1111-1111-111111111111",
+                      user_id: "user-1",
+                      surface: "dtc",
+                      currency: "USD",
+                      checkout_email: "user@example.com",
+                      status: "active",
+                    },
+                  ],
+                };
+              }
+              if (sql.includes("FROM public.payment_attempts") && sql.includes("FOR UPDATE")) {
+                return { rows: [defaultPaymentAttempt] };
+              }
+              if (sql.includes("FROM public.orders WHERE source_cart_id")) {
+                return { rows: [] };
+              }
+              if (sql.includes("FROM public.cart_items")) {
+                return {
+                  rows: [
+                    {
+                      cart_item_id: "ci-1",
+                      cart_id: "11111111-1111-1111-1111-111111111111",
+                      variant_id: "var-1",
+                      variant_sku: "SKU-1",
+                      quantity: 1,
+                      db_variant_id: "var-1",
+                      db_variant_sku: "SKU-1",
+                      price_in_cents: 8500,
+                      variant_active: true,
+                      quantity_on_hand: 10,
+                      backorderable: true,
+                      product_id: "prod-1",
+                      product_name: "Derby",
+                      product_slug: "derby",
+                      product_status: "active",
+                    },
+                  ],
+                };
+              }
+              if (sql.includes("INSERT INTO public.orders")) {
+                return { rows: [{ id: "order-1", order_number: "MRZ-1" }] };
+              }
+              if (sql.includes("INSERT INTO public.order_items")) {
+                return { rows: [{ id: "oi-1" }] };
+              }
+              if (sql.includes("UPDATE public.carts")) {
+                return { rowCount: 1 };
+              }
+              if (sql.includes("UPDATE public.payment_attempts")) {
+                // Simulate failure during atomic payment attempt consumption
+                throw new Error("DB Error: payment_attempts consumption failure");
+              }
+              return { rows: [] };
+            }),
+          };
+          return cb(fakeClient);
+        });
+
+        await expect(
+          placeOrderFromCart({
+            cartId: "11111111-1111-1111-1111-111111111111",
+            surface: "dtc",
+            verifiedUserId: "user-1",
+            paymentAttemptId: defaultPaymentAttemptId,
+            payment: defaultPayment,
+          }),
+        ).rejects.toThrow("DB Error: payment_attempts consumption failure");
+      });
+
+      it("rejects order placement if payment_attempt is not found", async () => {
+        mockTransaction.mockImplementation(async (cb) => {
+          const fakeClient = {
+            query: vi.fn(async (sql: string) => {
+              if (sql.includes("FROM public.carts")) {
+                return {
+                  rows: [{ id: "cart-1", user_id: "user-1", surface: "dtc", status: "active" }],
+                };
+              }
+              if (sql.includes("FROM public.payment_attempts")) {
+                return { rows: [] }; // Not found!
+              }
+              return { rows: [] };
+            }),
+          };
+          return cb(fakeClient);
+        });
+
+        await expect(
+          placeOrderFromCart({
+            cartId: "cart-1",
+            surface: "dtc",
+            verifiedUserId: "user-1",
+            paymentAttemptId: "missing-attempt",
+            payment: defaultPayment,
+          }),
+        ).rejects.toThrow("Payment attempt not found");
+      });
+
+      it("rejects order placement if payment_attempt cart_id does not match", async () => {
+        mockTransaction.mockImplementation(async (cb) => {
+          const fakeClient = {
+            query: vi.fn(async (sql: string) => {
+              if (sql.includes("FROM public.carts")) {
+                return {
+                  rows: [{ id: "cart-1", user_id: "user-1", surface: "dtc", status: "active" }],
+                };
+              }
+              if (sql.includes("FROM public.payment_attempts")) {
+                return { rows: [{ ...defaultPaymentAttempt, id: "attempt-1", cart_id: "different-cart" }] };
+              }
+              return { rows: [] };
+            }),
+          };
+          return cb(fakeClient);
+        });
+
+        await expect(
+          placeOrderFromCart({
+            cartId: "cart-1",
+            surface: "dtc",
+            verifiedUserId: "user-1",
+            paymentAttemptId: "attempt-1",
+            payment: defaultPayment,
+          }),
+        ).rejects.toThrow("Payment attempt does not belong to requested cart");
+      });
+
+      it("rejects order placement if payment_attempt surface does not match", async () => {
+        mockTransaction.mockImplementation(async (cb) => {
+          const fakeClient = {
+            query: vi.fn(async (sql: string) => {
+              if (sql.includes("FROM public.carts")) {
+                return {
+                  rows: [{ id: "cart-1", user_id: "user-1", surface: "dtc", status: "active" }],
+                };
+              }
+              if (sql.includes("FROM public.payment_attempts")) {
+                return { rows: [{ ...defaultPaymentAttempt, id: "attempt-1", cart_id: "cart-1", surface: "wholesale" }] };
+              }
+              return { rows: [] };
+            }),
+          };
+          return cb(fakeClient);
+        });
+
+        await expect(
+          placeOrderFromCart({
+            cartId: "cart-1",
+            surface: "dtc",
+            verifiedUserId: "user-1",
+            paymentAttemptId: "attempt-1",
+            payment: defaultPayment,
+          }),
+        ).rejects.toThrow("Payment attempt surface mismatch");
+      });
+
+      it("rejects order placement if payment_attempt provider is not razorpay", async () => {
+        mockTransaction.mockImplementation(async (cb) => {
+          const fakeClient = {
+            query: vi.fn(async (sql: string) => {
+              if (sql.includes("FROM public.carts")) {
+                return {
+                  rows: [{ id: "cart-1", user_id: "user-1", surface: "dtc", status: "active" }],
+                };
+              }
+              if (sql.includes("FROM public.payment_attempts")) {
+                return { rows: [{ ...defaultPaymentAttempt, id: "attempt-1", cart_id: "cart-1", provider: "stripe" }] };
+              }
+              return { rows: [] };
+            }),
+          };
+          return cb(fakeClient);
+        });
+
+        await expect(
+          placeOrderFromCart({
+            cartId: "cart-1",
+            surface: "dtc",
+            verifiedUserId: "user-1",
+            paymentAttemptId: "attempt-1",
+            payment: defaultPayment,
+          }),
+        ).rejects.toThrow("Payment attempt provider mismatch");
+      });
+
+      it("rejects order placement if payment_attempt provider_order_id does not match", async () => {
+        mockTransaction.mockImplementation(async (cb) => {
+          const fakeClient = {
+            query: vi.fn(async (sql: string) => {
+              if (sql.includes("FROM public.carts")) {
+                return {
+                  rows: [{ id: "cart-1", user_id: "user-1", surface: "dtc", status: "active" }],
+                };
+              }
+              if (sql.includes("FROM public.payment_attempts")) {
+                return { rows: [{ ...defaultPaymentAttempt, id: "attempt-1", cart_id: "cart-1", provider_order_id: "order_different_999" }] };
+              }
+              return { rows: [] };
+            }),
+          };
+          return cb(fakeClient);
+        });
+
+        await expect(
+          placeOrderFromCart({
+            cartId: "cart-1",
+            surface: "dtc",
+            verifiedUserId: "user-1",
+            paymentAttemptId: "attempt-1",
+            payment: defaultPayment,
+          }),
+        ).rejects.toThrow("Payment attempt provider order ID mismatch");
+      });
+
+      it("rejects order placement if payment_attempt amount does not match verified payment", async () => {
+        mockTransaction.mockImplementation(async (cb) => {
+          const fakeClient = {
+            query: vi.fn(async (sql: string) => {
+              if (sql.includes("FROM public.carts")) {
+                return {
+                  rows: [{ id: "cart-1", user_id: "user-1", surface: "dtc", status: "active" }],
+                };
+              }
+              if (sql.includes("FROM public.payment_attempts")) {
+                return { rows: [{ ...defaultPaymentAttempt, id: "attempt-1", cart_id: "cart-1", amount_in_cents: 99999 }] };
+              }
+              return { rows: [] };
+            }),
+          };
+          return cb(fakeClient);
+        });
+
+        await expect(
+          placeOrderFromCart({
+            cartId: "cart-1",
+            surface: "dtc",
+            verifiedUserId: "user-1",
+            paymentAttemptId: "attempt-1",
+            payment: defaultPayment,
+          }),
+        ).rejects.toThrow("Payment attempt amount mismatch");
+      });
+
+      it("rejects order placement if payment_attempt currency does not match verified payment", async () => {
+        mockTransaction.mockImplementation(async (cb) => {
+          const fakeClient = {
+            query: vi.fn(async (sql: string) => {
+              if (sql.includes("FROM public.carts")) {
+                return {
+                  rows: [{ id: "cart-1", user_id: "user-1", surface: "dtc", status: "active" }],
+                };
+              }
+              if (sql.includes("FROM public.payment_attempts")) {
+                return { rows: [{ ...defaultPaymentAttempt, id: "attempt-1", cart_id: "cart-1", currency: "EUR" }] };
+              }
+              return { rows: [] };
+            }),
+          };
+          return cb(fakeClient);
+        });
+
+        await expect(
+          placeOrderFromCart({
+            cartId: "cart-1",
+            surface: "dtc",
+            verifiedUserId: "user-1",
+            paymentAttemptId: "attempt-1",
+            payment: defaultPayment,
+          }),
+        ).rejects.toThrow("Payment attempt currency mismatch");
+      });
+
+      it("rejects order placement if payment_attempt is already consumed with a different payment ID", async () => {
+        mockTransaction.mockImplementation(async (cb) => {
+          const fakeClient = {
+            query: vi.fn(async (sql: string) => {
+              if (sql.includes("FROM public.carts")) {
+                return {
+                  rows: [{ id: "cart-1", user_id: "user-1", surface: "dtc", status: "active" }],
+                };
+              }
+              if (sql.includes("FROM public.payment_attempts")) {
+                return {
+                  rows: [
+                    {
+                      ...defaultPaymentAttempt,
+                      id: "attempt-1",
+                      cart_id: "cart-1",
+                      status: "consumed",
+                      provider_payment_id: "pay_different_999", // Different!
+                    },
+                  ],
+                };
+              }
+              return { rows: [] };
+            }),
+          };
+          return cb(fakeClient);
+        });
+
+        await expect(
+          placeOrderFromCart({
+            cartId: "cart-1",
+            surface: "dtc",
+            verifiedUserId: "user-1",
+            paymentAttemptId: "attempt-1",
+            payment: defaultPayment, // has providerPaymentId: "pay_test_456"
+          }),
+        ).rejects.toThrow("Payment attempt already consumed with different payment ID");
+      });
+
+      it("allows idempotent retry when payment_attempt is already consumed with the same payment ID", async () => {
+        const existingOrderRow = {
+          id: "order-1",
+          user_id: "user-1",
+          source_cart_id: "cart-1",
+          order_number: "MRZ-IDEMPOTENT1",
+          status: "complete",
+          currency: "USD",
+          subtotal_in_cents: 8500,
+          shipping_in_cents: 0,
+          tax_in_cents: 850,
+          total_in_cents: 9350,
+          email: "user@example.com",
+          surface: "dtc",
+          payment_provider: "razorpay",
+          payment_status: "paid",
+          payment_provider_order_id: "order_test_123",
+          payment_provider_payment_id: "pay_test_456",
+          completed_at: new Date(),
+          created_at: new Date(),
+          updated_at: new Date(),
+        };
+
+        mockTransaction.mockImplementation(async (cb) => {
+          const fakeClient = {
+            query: vi.fn(async (sql: string) => {
+              if (sql.includes("FROM public.carts")) {
+                return {
+                  rows: [{ id: "cart-1", user_id: "user-1", surface: "dtc", status: "converted" }],
+                };
+              }
+              if (sql.includes("FROM public.payment_attempts") && sql.includes("FOR UPDATE")) {
+                return {
+                  rows: [
+                    {
+                      ...defaultPaymentAttempt,
+                      id: "attempt-1",
+                      cart_id: "cart-1",
+                      status: "consumed",
+                      provider_payment_id: "pay_test_456", // Same!
+                    },
+                  ],
+                };
+              }
+              if (sql.includes("FROM public.orders WHERE source_cart_id")) {
+                return { rows: [existingOrderRow] };
+              }
+              if (sql.includes("UPDATE public.payment_attempts")) {
+                return { rows: [{ id: "attempt-1" }], rowCount: 1 };
+              }
+              if (sql.includes("FROM public.order_items")) {
+                return { rows: [] };
+              }
+              return { rows: [] };
+            }),
+          };
+          return cb(fakeClient);
+        });
+
+        const res = await placeOrderFromCart({
+          cartId: "cart-1",
+          surface: "dtc",
+          verifiedUserId: "user-1",
+          paymentAttemptId: "attempt-1",
+          payment: defaultPayment,
+        });
+
+        expect(res.order.order_number).toBe("MRZ-IDEMPOTENT1");
+        expect(res.created).toBe(false);
+      });
+
+      it("rejects order placement if payment_attempt has an unexpected status", async () => {
+        mockTransaction.mockImplementation(async (cb) => {
+          const fakeClient = {
+            query: vi.fn(async (sql: string) => {
+              if (sql.includes("FROM public.carts")) {
+                return {
+                  rows: [{ id: "cart-1", user_id: "user-1", surface: "dtc", status: "active" }],
+                };
+              }
+              if (sql.includes("FROM public.payment_attempts")) {
+                return {
+                  rows: [
+                    {
+                      ...defaultPaymentAttempt,
+                      id: "attempt-1",
+                      cart_id: "cart-1",
+                      status: "failed", // Unexpected!
+                    },
+                  ],
+                };
+              }
+              return { rows: [] };
+            }),
+          };
+          return cb(fakeClient);
+        });
+
+        await expect(
+          placeOrderFromCart({
+            cartId: "cart-1",
+            surface: "dtc",
+            verifiedUserId: "user-1",
+            paymentAttemptId: "attempt-1",
+            payment: defaultPayment,
+          }),
+        ).rejects.toThrow("Invalid payment attempt status 'failed'");
+      });
     });
   });
 

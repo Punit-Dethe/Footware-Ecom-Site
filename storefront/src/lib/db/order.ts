@@ -149,16 +149,21 @@ export async function placeOrderFromCart(params: {
   surface: CartSurface;
   verifiedUserId?: string | null;
   guestTokenHash?: string | null;
+  paymentAttemptId: string;
   payment: VerifiedPaymentDetails;
 }): Promise<{ order: DbOrder; items: DbOrderItem[]; created: boolean }> {
-  const { cartId, surface, verifiedUserId, guestTokenHash, payment } = params;
+  const { cartId, surface, verifiedUserId, guestTokenHash, paymentAttemptId, payment } = params;
 
   if (payment?.status !== "paid" || !payment.providerPaymentId || !payment.providerOrderId) {
     throw new Error("Cannot place order without verified captured payment");
   }
 
+  if (!paymentAttemptId) {
+    throw new Error("Cannot place order without trusted paymentAttemptId");
+  }
+
   return await transaction(async (client) => {
-    // 1. Lock source cart
+    // 1. Lock source cart FOR UPDATE
     const cartRes = await client.query<Record<string, unknown>>(
       `SELECT id, user_id, guest_token_hash, surface, currency, shipping_address, billing_address, checkout_email, status
        FROM public.carts
@@ -190,6 +195,66 @@ export async function placeOrderFromCart(params: {
       throw new Error(`Cart surface mismatch: cart belongs to '${cart.surface}', requested '${surface}'`);
     }
 
+    // 2c. Lock payment_attempt row FOR UPDATE in the SAME transaction
+    const attemptRes = await client.query<Record<string, unknown>>(
+      `SELECT id, cart_id, surface, provider, provider_order_id, provider_payment_id, amount_in_cents, currency, status, consumed_at
+       FROM public.payment_attempts
+       WHERE id = $1
+       FOR UPDATE;`,
+      [paymentAttemptId],
+    );
+
+    const attempt = attemptRes.rows[0];
+    if (!attempt) {
+      throw new Error("Payment attempt not found");
+    }
+
+    if (attempt.id !== paymentAttemptId) {
+      throw new Error("Payment attempt ID mismatch");
+    }
+    if (attempt.cart_id !== cartId) {
+      throw new Error("Payment attempt does not belong to requested cart");
+    }
+    if (attempt.surface !== surface) {
+      throw new Error(
+        `Payment attempt surface mismatch: attempt belongs to '${attempt.surface}', requested '${surface}'`,
+      );
+    }
+    if (attempt.provider !== "razorpay") {
+      throw new Error(
+        `Payment attempt provider mismatch: expected 'razorpay', got '${attempt.provider}'`,
+      );
+    }
+    if (attempt.provider_order_id !== payment.providerOrderId) {
+      throw new Error("Payment attempt provider order ID mismatch");
+    }
+    if (Number(attempt.amount_in_cents) !== payment.expectedAmountInCents) {
+      throw new Error(
+        `Payment attempt amount mismatch: attempt has ${attempt.amount_in_cents}, payment was ${payment.expectedAmountInCents}`,
+      );
+    }
+    if (String(attempt.currency).toUpperCase() !== payment.expectedCurrency.toUpperCase()) {
+      throw new Error(
+        `Payment attempt currency mismatch: attempt has '${attempt.currency}', payment was '${payment.expectedCurrency}'`,
+      );
+    }
+
+    // 2d. Payment-attempt status handling
+    if (attempt.status === "created") {
+      // Allow normal finalization
+    } else if (attempt.status === "consumed") {
+      if (attempt.provider_payment_id !== payment.providerPaymentId) {
+        throw new Error(
+          `Payment attempt already consumed with different payment ID: '${attempt.provider_payment_id}' vs '${payment.providerPaymentId}'`,
+        );
+      }
+      // Allow idempotent retry when provider_payment_id === verified payment ID
+    } else {
+      throw new Error(
+        `Invalid payment attempt status '${attempt.status}', expected 'created' or 'consumed'`,
+      );
+    }
+
     // 3. Idempotency check: does an order already exist for this source_cart_id?
     const existingOrderRes = await client.query<Record<string, unknown>>(
       `SELECT * FROM public.orders WHERE source_cart_id = $1;`,
@@ -208,6 +273,22 @@ export async function placeOrderFromCart(params: {
         throw new Error(
           "Cannot complete order: cart was already converted with different payment details",
         );
+      }
+
+      // Ensure the payment_attempt is consumed with that same payment ID inside THIS transaction
+      const consumeAttemptRes = await client.query<Record<string, unknown>>(
+        `UPDATE public.payment_attempts
+         SET status = 'consumed',
+             provider_payment_id = $2,
+             consumed_at = COALESCE(consumed_at, NOW()),
+             updated_at = NOW()
+         WHERE id = $1
+         RETURNING id;`,
+        [attempt.id, payment.providerPaymentId],
+      );
+
+      if (consumeAttemptRes.rows.length === 0) {
+        throw new Error("Failed to finalize payment attempt for existing order");
       }
 
       const existingItemsRes = await client.query<Record<string, unknown>>(
@@ -432,6 +513,21 @@ export async function placeOrderFromCart(params: {
           "Cannot complete order: cart was already converted with different payment details",
         );
       }
+      // Ensure the payment_attempt is consumed with that same payment ID inside THIS transaction
+      const consumeFallbackRes = await client.query<Record<string, unknown>>(
+        `UPDATE public.payment_attempts
+         SET status = 'consumed',
+             provider_payment_id = $2,
+             consumed_at = COALESCE(consumed_at, NOW()),
+             updated_at = NOW()
+         WHERE id = $1
+         RETURNING id;`,
+        [attempt.id, payment.providerPaymentId],
+      );
+      if (consumeFallbackRes.rows.length === 0) {
+        throw new Error("Failed to finalize payment attempt for existing order");
+      }
+
       const itemsRes = await client.query<Record<string, unknown>>(
         `SELECT * FROM public.order_items WHERE order_id = $1 ORDER BY created_at ASC;`,
         [orderRow.id],
@@ -476,6 +572,24 @@ export async function placeOrderFromCart(params: {
        WHERE id = $1;`,
       [cartId],
     );
+
+    // 11. Consume payment attempt in THIS SAME ACID transaction before commit
+    const updateAttemptRes = await client.query<Record<string, unknown>>(
+      `UPDATE public.payment_attempts
+       SET status = 'consumed',
+           provider_payment_id = $2,
+           consumed_at = COALESCE(consumed_at, NOW()),
+           updated_at = NOW()
+       WHERE id = $1
+       RETURNING id;`,
+      [attempt.id, payment.providerPaymentId],
+    );
+
+    if (updateAttemptRes.rows.length !== 1) {
+      throw new Error(
+        `Failed to finalize payment attempt: expected 1 row updated, got ${updateAttemptRes.rows.length}`,
+      );
+    }
 
     return { order, items: insertedItems, created: true };
   });

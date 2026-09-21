@@ -11,7 +11,6 @@ import { placeOrderFromCart } from "@/lib/db/order";
 import {
   createPaymentAttempt,
   findPaymentAttempt,
-  markPaymentAttemptConsumed,
 } from "@/lib/db/payment-attempt";
 import type { Order } from "@/types/commerce";
 import { getCart, verifyAuthSession } from "./cart";
@@ -38,6 +37,9 @@ function cartTag(surface: Surface): string {
 
 const GENERIC_VERIFICATION_ERROR =
   "We could not verify this payment. Please try again or contact support.";
+
+const GATEWAY_UNAVAILABLE_ERROR =
+  "Payment service is currently unavailable. Please try again or contact support.";
 
 export interface CreateRazorpayCheckoutOrderResult {
   success: true;
@@ -148,11 +150,25 @@ export async function createRazorpayCheckoutOrder(
     };
   } catch (err: unknown) {
     if (err instanceof RazorpayConfigError) {
-      return { success: false, error: err.message };
+      console.error(
+        "[payment:config] Razorpay credentials not configured:",
+        err.message,
+      );
+      return { success: false, error: GATEWAY_UNAVAILABLE_ERROR };
     }
     if (err instanceof RazorpayApiError) {
-      return { success: false, error: `Payment service error: ${err.message}` };
+      console.error(
+        "[payment:gateway] Razorpay order creation failed:",
+        err.message,
+        err.statusCode,
+        err.code,
+      );
+      return { success: false, error: GATEWAY_UNAVAILABLE_ERROR };
     }
+    console.error(
+      "[payment:init] Unexpected checkout order initialization error:",
+      err,
+    );
     return {
       success: false,
       error:
@@ -347,12 +363,13 @@ export async function verifyRazorpayPaymentAndCompleteOrder(
       }
     }
 
-    // 7. Place order atomically inside ACID transaction
+    // 7. Place order atomically inside ACID transaction (includes payment_attempt consumption)
     const { order, items, created } = await placeOrderFromCart({
       cartId,
       surface,
       verifiedUserId,
       guestTokenHash,
+      paymentAttemptId: paymentAttempt.id,
       payment: {
         provider: "razorpay",
         status: "paid",
@@ -363,12 +380,6 @@ export async function verifyRazorpayPaymentAndCompleteOrder(
         expectedAmountInCents: payment.amount,
         expectedCurrency: payment.currency,
       },
-    });
-
-    // 8. Consume payment attempt
-    await markPaymentAttemptConsumed({
-      attemptId: paymentAttempt.id,
-      providerPaymentId: razorpayPaymentId,
     });
 
     const adaptedOrder = adaptDbOrderToCommerceOrder(order, items);
@@ -393,13 +404,22 @@ export async function verifyRazorpayPaymentAndCompleteOrder(
     return { success: true, order: adaptedOrder as unknown as Order };
   } catch (error: unknown) {
     if (error instanceof RazorpayConfigError) {
-      return { success: false, error: error.message };
+      console.error(
+        "[payment:config] Razorpay credentials not configured:",
+        error.message,
+      );
+      return { success: false, error: GENERIC_VERIFICATION_ERROR };
     }
     if (error instanceof RazorpayApiError) {
-      console.error("[payment:gateway] API error:", error.message);
+      console.error(
+        "[payment:gateway] API error during verification:",
+        error.message,
+        error.statusCode,
+        error.code,
+      );
       return {
         success: false,
-        error: `Payment gateway error: ${error.message}`,
+        error: GENERIC_VERIFICATION_ERROR,
       };
     }
     console.error("[payment:verification] Verification error:", error);

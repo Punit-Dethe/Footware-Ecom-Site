@@ -294,7 +294,7 @@ describe("payment server actions (Razorpay integration)", () => {
       const result = await createRazorpayCheckoutOrder("cart-1");
       expect(result).toEqual({
         success: false,
-        error: "Razorpay credentials are not configured.",
+        error: "Payment service is currently unavailable. Please try again or contact support.",
       });
     });
 
@@ -306,7 +306,7 @@ describe("payment server actions (Razorpay integration)", () => {
       const result = await createRazorpayCheckoutOrder("cart-1");
       expect(result).toEqual({
         success: false,
-        error: "Payment service error: Bad request from Razorpay",
+        error: "Payment service is currently unavailable. Please try again or contact support.",
       });
     });
   });
@@ -360,12 +360,13 @@ describe("payment server actions (Razorpay integration)", () => {
         expect.objectContaining({ keyId: "rzp_test_public_key" }),
       );
 
-      // Assert placeOrderFromCart called with trusted parameters
+      // Assert placeOrderFromCart called with trusted parameters including paymentAttemptId
       expect(mockPlaceOrderFromCart).toHaveBeenCalledWith({
         cartId: "cart-1",
         surface: "dtc",
         verifiedUserId: "auth-user-999",
         guestTokenHash: null,
+        paymentAttemptId: "attempt-1",
         payment: {
           provider: "razorpay",
           status: "paid",
@@ -378,11 +379,8 @@ describe("payment server actions (Razorpay integration)", () => {
         },
       });
 
-      // Assert payment attempt consumed
-      expect(mockMarkPaymentAttemptConsumed).toHaveBeenCalledWith({
-        attemptId: "attempt-1",
-        providerPaymentId: "pay_test_456",
-      });
+      // Assert markPaymentAttemptConsumed is NOT called separately (consumed atomically in placeOrderFromCart)
+      expect(mockMarkPaymentAttemptConsumed).not.toHaveBeenCalled();
 
       // Assert order confirmation email scheduled
       expect(mockScheduleOrderConfirmationEmail).toHaveBeenCalledWith({
@@ -721,6 +719,7 @@ describe("payment server actions (Razorpay integration)", () => {
           surface: "dtc",
           verifiedUserId: null,
           guestTokenHash: expectedHash,
+          paymentAttemptId: "attempt-1",
           payment: expect.objectContaining({
             provider: "razorpay",
             status: "paid",
@@ -732,7 +731,7 @@ describe("payment server actions (Razorpay integration)", () => {
       });
     });
 
-    describe("Error hygiene", () => {
+    describe("Error hygiene and atomic failure propagation", () => {
       it("returns generic error when signature is invalid, without leaking secrets", async () => {
         mockVerifyRazorpayPaymentSignature.mockReturnValue(false);
 
@@ -768,6 +767,66 @@ describe("payment server actions (Razorpay integration)", () => {
           success: false,
           error: GENERIC_ERROR,
         });
+      });
+
+      it("when placeOrderFromCart transaction fails (e.g. payment_attempt consumption query failure), verification returns failure and confirmation email is NOT scheduled", async () => {
+        mockVerifyAuthSession.mockResolvedValue({ status: "anonymous" });
+        mockPlaceOrderFromCart.mockRejectedValue(
+          new Error("DB Error: payment_attempts consumption failure"),
+        );
+
+        const result = await verifyRazorpayPaymentAndCompleteOrder({
+          cartId: "cart-1",
+          razorpayOrderId: "order_test_123",
+          razorpayPaymentId: "pay_test_456",
+          razorpaySignature: "valid_signature",
+        });
+
+        expect(result).toEqual({
+          success: false,
+          error: GENERIC_ERROR,
+        });
+        expect(mockScheduleOrderConfirmationEmail).not.toHaveBeenCalled();
+      });
+
+      it("sanitizes raw RazorpayApiError messages during verification to generic customer error", async () => {
+        mockFetchRazorpayOrder.mockRejectedValue(
+          new RazorpayApiError("Unauthorized access to Razorpay API", 401, "BAD_REQUEST_ERROR"),
+        );
+
+        const result = await verifyRazorpayPaymentAndCompleteOrder({
+          cartId: "cart-1",
+          razorpayOrderId: "order_test_123",
+          razorpayPaymentId: "pay_test_456",
+          razorpaySignature: "valid_signature",
+        });
+
+        expect(result).toEqual({
+          success: false,
+          error: GENERIC_ERROR,
+        });
+        expect(mockPlaceOrderFromCart).not.toHaveBeenCalled();
+        expect(mockScheduleOrderConfirmationEmail).not.toHaveBeenCalled();
+      });
+
+      it("sanitizes raw RazorpayConfigError messages during verification to generic customer error", async () => {
+        mockGetRazorpayConfig.mockImplementation(() => {
+          throw new RazorpayConfigError("Missing key secret");
+        });
+
+        const result = await verifyRazorpayPaymentAndCompleteOrder({
+          cartId: "cart-1",
+          razorpayOrderId: "order_test_123",
+          razorpayPaymentId: "pay_test_456",
+          razorpaySignature: "valid_signature",
+        });
+
+        expect(result).toEqual({
+          success: false,
+          error: GENERIC_ERROR,
+        });
+        expect(mockPlaceOrderFromCart).not.toHaveBeenCalled();
+        expect(mockScheduleOrderConfirmationEmail).not.toHaveBeenCalled();
       });
     });
   });
