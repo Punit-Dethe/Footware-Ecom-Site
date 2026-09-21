@@ -232,6 +232,8 @@ describe("Admin Catalog DAL Unit Tests", () => {
               sku: "TEST-001-8",
               sizeOption: "8",
               priceInCents: 15000,
+
+              priceInInrPaise: 880000,
               quantityOnHand: 5,
               backorderable: false,
               isDefault: true,
@@ -265,14 +267,20 @@ describe("Admin Catalog DAL Unit Tests", () => {
           if (sql.includes("SELECT COUNT(*)::int AS count FROM public.product_categories")) {
             return Promise.resolve({ rows: [{ count: 1 }] });
           }
-          if (sql.includes("SELECT id, sku, size_option, price_in_cents")) {
+          if (sql.includes("vp_usd.price_in_cents") && sql.includes("WHERE v.product_id = $1")) {
             return Promise.resolve({
               rows: [
                 {
                   id: TEST_VARIANT_ID_1,
                   sku: "TEST-001-8",
                   size_option: "8",
-                  price_in_cents: 10000,
+                  usd_price_in_cents: 10000,
+
+                  usd_compare_at_price_in_cents: null,
+
+                  inr_price_in_cents: 880000,
+
+                  inr_compare_at_price_in_cents: null,
                   active: false, // Inactive!
                   is_default: true,
                 },
@@ -296,6 +304,8 @@ describe("Admin Catalog DAL Unit Tests", () => {
               sku: "TEST-001-8",
               sizeOption: "8",
               priceInCents: 10000,
+
+              priceInInrPaise: 880000,
               quantityOnHand: 5,
               backorderable: false,
               isDefault: true,
@@ -320,14 +330,20 @@ describe("Admin Catalog DAL Unit Tests", () => {
           if (sql.includes("SELECT COUNT(*)::int AS count FROM public.product_categories")) {
             return Promise.resolve({ rows: [{ count: 1 }] });
           }
-          if (sql.includes("SELECT id, sku, size_option, price_in_cents")) {
+          if (sql.includes("vp_usd.price_in_cents") && sql.includes("WHERE v.product_id = $1")) {
             return Promise.resolve({
               rows: [
                 {
                   id: TEST_VARIANT_ID_1,
                   sku: "TEST-001-8",
                   size_option: "8",
-                  price_in_cents: 0, // Invalid 0 price!
+                  usd_price_in_cents: 0, // Invalid authoritative USD price
+
+                  usd_compare_at_price_in_cents: null,
+
+                  inr_price_in_cents: 880000,
+
+                  inr_compare_at_price_in_cents: null,
                   quantity_on_hand: 5,
                   currency: "USD",
                   active: true,
@@ -353,6 +369,8 @@ describe("Admin Catalog DAL Unit Tests", () => {
               sku: "TEST-001-8",
               sizeOption: "8",
               priceInCents: 0,
+
+              priceInInrPaise: 880000,
               quantityOnHand: 5,
               backorderable: false,
               isDefault: true,
@@ -360,7 +378,7 @@ describe("Admin Catalog DAL Unit Tests", () => {
             },
           ],
         }),
-      ).rejects.toThrow("Active variant TEST-001-8 must have a price greater than 0");
+      ).rejects.toThrow("Active variant TEST-001-8 must have a valid USD price greater than 0");
     });
 
     it("rejects cross-product variant tampering", async () => {
@@ -389,6 +407,8 @@ describe("Admin Catalog DAL Unit Tests", () => {
               sku: "SKU-FOREIGN",
               sizeOption: "8",
               priceInCents: 10000,
+
+              priceInInrPaise: 880000,
               quantityOnHand: 5,
               backorderable: false,
               isDefault: true,
@@ -424,6 +444,8 @@ describe("Admin Catalog DAL Unit Tests", () => {
               sku: "NEW-SKU-RENAMED", // Attempting to rename existing SKU
               sizeOption: "8",
               priceInCents: 10000,
+
+              priceInInrPaise: 880000,
               quantityOnHand: 5,
               backorderable: false,
               isDefault: true,
@@ -443,16 +465,17 @@ describe("Admin Catalog DAL Unit Tests", () => {
           if (sql.includes("SELECT COUNT(*)::int AS count FROM public.product_categories")) {
             return Promise.resolve({ rows: [{ count: 1 }] });
           }
-          if (sql.includes("FROM public.variants") && sql.includes("WHERE product_id = $1")) {
+          if (sql.includes("vp_usd.price_in_cents") && sql.includes("WHERE v.product_id = $1")) {
             return Promise.resolve({
               rows: [
                 {
                   id: TEST_VARIANT_ID_1,
                   sku: "TEST-001-8",
                   size_option: "8",
-                  price_in_cents: 10000,
-                  compare_at_price_in_cents: null,
-                  currency: "USD",
+                  usd_price_in_cents: 10000,
+                  usd_compare_at_price_in_cents: null,
+                  inr_price_in_cents: 880000,
+                  inr_compare_at_price_in_cents: null,
                   quantity_on_hand: 5,
                   is_default: true,
                   active: true,
@@ -480,6 +503,8 @@ describe("Admin Catalog DAL Unit Tests", () => {
               sku: "TEST-001-8",
               sizeOption: "8",
               priceInCents: 10000,
+
+              priceInInrPaise: 880000,
               quantityOnHand: 5,
               backorderable: false,
               isDefault: true,
@@ -499,16 +524,17 @@ describe("Admin Catalog DAL Unit Tests", () => {
           if (sql.includes("SELECT COUNT(*)::int AS count FROM public.product_categories")) {
             return Promise.resolve({ rows: [{ count: 1 }] });
           }
-          if (sql.includes("FROM public.variants") && sql.includes("WHERE product_id = $1")) {
+          if (sql.includes("vp_usd.price_in_cents") && sql.includes("WHERE v.product_id = $1")) {
             return Promise.resolve({
               rows: [
                 {
                   id: TEST_VARIANT_ID_1,
                   sku: "TEST-001-8",
                   size_option: "8",
-                  price_in_cents: 10000,
-                  compare_at_price_in_cents: null,
-                  currency: "USD",
+                  usd_price_in_cents: 10000,
+                  usd_compare_at_price_in_cents: null,
+                  inr_price_in_cents: 880000,
+                  inr_compare_at_price_in_cents: null,
                   quantity_on_hand: 5,
                   is_default: true,
                   active: true,
@@ -561,6 +587,8 @@ describe("Admin Catalog DAL Unit Tests", () => {
             sku: "TEST-001-8",
             sizeOption: "8",
             priceInCents: 10000,
+
+            priceInInrPaise: 880000,
             quantityOnHand: 5,
             backorderable: false,
             isDefault: true,
@@ -582,16 +610,17 @@ describe("Admin Catalog DAL Unit Tests", () => {
           if (sql.includes("SELECT COUNT(*)::int AS count FROM public.product_categories")) {
             return Promise.resolve({ rows: [{ count: 1 }] });
           }
-          if (sql.includes("FROM public.variants") && sql.includes("WHERE product_id = $1")) {
+          if (sql.includes("vp_usd.price_in_cents") && sql.includes("WHERE v.product_id = $1")) {
             return Promise.resolve({
               rows: [
                 {
                   id: TEST_VARIANT_ID_1,
                   sku: "TEST-001-8",
                   size_option: "8",
-                  price_in_cents: 10000,
-                  compare_at_price_in_cents: null,
-                  currency: "USD",
+                  usd_price_in_cents: 10000,
+                  usd_compare_at_price_in_cents: null,
+                  inr_price_in_cents: 880000,
+                  inr_compare_at_price_in_cents: null,
                   quantity_on_hand: 5,
                   is_default: true,
                   active: true,
@@ -619,6 +648,8 @@ describe("Admin Catalog DAL Unit Tests", () => {
               sku: "TEST-001-8",
               sizeOption: "8",
               priceInCents: 10000,
+
+              priceInInrPaise: 880000,
               quantityOnHand: 5,
               backorderable: false,
               isDefault: true,
@@ -638,16 +669,17 @@ describe("Admin Catalog DAL Unit Tests", () => {
           if (sql.includes("SELECT COUNT(*)::int AS count FROM public.product_categories")) {
             return Promise.resolve({ rows: [{ count: 1 }] });
           }
-          if (sql.includes("FROM public.variants") && sql.includes("WHERE product_id = $1")) {
+          if (sql.includes("vp_usd.price_in_cents") && sql.includes("WHERE v.product_id = $1")) {
             return Promise.resolve({
               rows: [
                 {
                   id: TEST_VARIANT_ID_1,
                   sku: "TEST-001-8",
                   size_option: "8",
-                  price_in_cents: 10000,
-                  compare_at_price_in_cents: null,
-                  currency: "USD",
+                  usd_price_in_cents: 10000,
+                  usd_compare_at_price_in_cents: null,
+                  inr_price_in_cents: 880000,
+                  inr_compare_at_price_in_cents: null,
                   quantity_on_hand: 5,
                   is_default: true,
                   active: true,
@@ -676,6 +708,8 @@ describe("Admin Catalog DAL Unit Tests", () => {
               sku: "TEST-001-8",
               sizeOption: "8",
               priceInCents: 10000,
+
+              priceInInrPaise: 880000,
               quantityOnHand: 5,
               backorderable: false,
               isDefault: true,
@@ -695,16 +729,17 @@ describe("Admin Catalog DAL Unit Tests", () => {
           if (sql.includes("SELECT COUNT(*)::int AS count FROM public.product_categories")) {
             return Promise.resolve({ rows: [{ count: 1 }] });
           }
-          if (sql.includes("FROM public.variants") && sql.includes("WHERE product_id = $1")) {
+          if (sql.includes("vp_usd.price_in_cents") && sql.includes("WHERE v.product_id = $1")) {
             return Promise.resolve({
               rows: [
                 {
                   id: TEST_VARIANT_ID_1,
                   sku: "TEST-001-8",
                   size_option: "8",
-                  price_in_cents: 10000,
-                  compare_at_price_in_cents: null,
-                  currency: "USD",
+                  usd_price_in_cents: 10000,
+                  usd_compare_at_price_in_cents: null,
+                  inr_price_in_cents: 880000,
+                  inr_compare_at_price_in_cents: null,
                   quantity_on_hand: 5,
                   is_default: true,
                   active: true,
@@ -732,6 +767,8 @@ describe("Admin Catalog DAL Unit Tests", () => {
               sku: "TEST-001-8",
               sizeOption: "8",
               priceInCents: 10000,
+
+              priceInInrPaise: 880000,
               quantityOnHand: 5,
               backorderable: false,
               isDefault: true,

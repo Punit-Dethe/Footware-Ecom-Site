@@ -115,6 +115,16 @@ vi.mock("@/lib/db/catalog", () => ({
           meta_title: p.meta_title ?? null,
           meta_description: p.meta_description ?? null,
           meta_keywords: p.meta_keywords ?? null,
+          prices: [
+            {
+              id: `price-${v.id}-usd`,
+              variant_id: v.id,
+              currency: "USD",
+              price_in_cents: v.price.amount_in_cents,
+              compare_at_price_in_cents:
+                v.price.compare_at_amount_in_cents ?? null,
+            },
+          ],
         };
       }
     }

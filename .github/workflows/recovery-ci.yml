@@ -26,7 +26,9 @@ jobs:
           run_install: false
 
       - name: Install dependencies
-        run: pnpm --prefix storefront install --frozen-lockfile
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --prefix storefront install --frozen-lockfile
 
       - name: Typecheck
         run: pnpm --prefix storefront exec tsc --noEmit
