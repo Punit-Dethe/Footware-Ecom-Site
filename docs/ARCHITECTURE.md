@@ -293,4 +293,36 @@ Phase 8 introduces read-only operational domains for **Orders** and **Customers*
    - Zero customer storefront JS bundle impact (0 bytes).
    - Zero customer database migrations or schema alterations.
 
+---
+
+## 12. Payment Architecture: Razorpay Standard Checkout (Test Mode)
+
+1. **Razorpay Standard Checkout Overlay**:
+   - Integrates the client-side Razorpay modal overlay directly onto Mirza's existing checkout page (`checkout.js` loaded lazily on demand).
+   - The browser initiates payment by calling the server action `createRazorpayCheckoutOrder()`, which generates a server-authoritative Razorpay Order and returns public metadata (`keyId`, `amount`, `currency`, `order_id`, `customer`). `keySecret` is never exposed to the client.
+
+2. **Server-Side `payment_attempts` Binding**:
+   - Every Razorpay Order creation persists an authoritative record in `public.payment_attempts` linking `cart_id`, `surface`, `provider_order_id`, `amount_in_cents`, and `currency` with status `created`.
+   - Carts can legitimately create multiple attempts across retries, but each attempt is cryptographically bound to its source cart and surface in the database.
+
+3. **Trusted Provider Order ID (Cross-Cart Replay Defense)**:
+   - When the client verification callback returns `(razorpay_order_id, razorpay_payment_id, razorpay_signature)`, the server does **not** treat the callback's `razorpay_order_id` as trusted.
+   - The server queries `payment_attempts` strictly filtered by `provider_order_id`, `cart_id`, and `surface`.
+   - The server-stored `payment_attempt.provider_order_id` is used as the `trustedOrderId` for constant-time HMAC-SHA256 signature verification (`trustedOrderId|razorpay_payment_id`), completely eliminating cross-cart payment replay attacks.
+
+4. **Captured-Payment & Live Provider Verification**:
+   - Before any database mutations, the server queries Razorpay API:
+     - `fetchRazorpayOrder(trustedOrderId)`: Verifies order ID, `notes.cart_id`, `notes.surface`, amount, and currency match the payment attempt and active cart.
+     - `fetchRazorpayPayment(razorpay_payment_id)`: Verifies payment ID, `order_id === trustedOrderId`, `status === 'captured'`, amount, and currency.
+
+5. **Mirza Order Placed Only After Verification**:
+   - `placeOrderFromCart()` executes atomically inside an ACID transaction only *after* signature, provider order, and provider payment verification succeed.
+   - Idempotency guards validate that if the cart was already converted, the existing order's stored payment IDs match the incoming payment; otherwise, conflicting completions are rejected.
+   - Returns `{ order, items, created: boolean }`; order confirmation emails are scheduled *only* when `created === true`.
+   - Upon successful placement, `payment_attempts` row is marked `consumed` with `provider_payment_id` and timestamp.
+
+6. **Webhook Reconciliation Deferred to Next Phase**:
+   - In the current test checkout phase, payments are captured via the standard overlay and verified synchronously via the client callback.
+   - Webhook processing (`payment.captured`, `order.paid`) with signature verification and replay-defense is planned for the subsequent production phase to handle edge-case dropoffs where the browser terminates prior to callback completion.
+
 

@@ -217,6 +217,11 @@ describe("Database Order Repository", () => {
         billing_address_snapshot: null,
         email: "user@example.com",
         surface: "dtc",
+        payment_provider: "razorpay",
+        payment_status: "paid",
+        payment_provider_order_id: "order_test_123",
+        payment_provider_payment_id: "pay_test_456",
+        payment_method: "upi",
         completed_at: new Date(),
         created_at: new Date(),
         updated_at: new Date(),
@@ -255,6 +260,64 @@ describe("Database Order Repository", () => {
       });
 
       expect(res.order.order_number).toBe("MRZ-ALREADYPLACED");
+      expect(res.created).toBe(false);
+    });
+
+    it("rejects existing converted cart if payment details do not match", async () => {
+      const existingOrderRowWithDifferentPayment = {
+        id: "22222222-2222-2222-2222-222222222222",
+        user_id: "user-1",
+        source_cart_id: "11111111-1111-1111-1111-111111111111",
+        order_number: "MRZ-DIFFERENTPAYMENT",
+        status: "complete",
+        currency: "USD",
+        subtotal_in_cents: 8500,
+        shipping_in_cents: 0,
+        tax_in_cents: 850,
+        total_in_cents: 9350,
+        email: "user@example.com",
+        surface: "dtc",
+        payment_provider: "razorpay",
+        payment_status: "paid",
+        payment_provider_order_id: "order_other_999",
+        payment_provider_payment_id: "pay_other_999",
+        completed_at: new Date(),
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
+
+      mockTransaction.mockImplementation(async (cb) => {
+        const fakeClient = {
+          query: vi
+            .fn()
+            .mockResolvedValueOnce({
+              rows: [
+                {
+                  id: "11111111-1111-1111-1111-111111111111",
+                  user_id: "user-1",
+                  guest_token_hash: null,
+                  surface: "dtc",
+                  status: "converted",
+                },
+              ],
+            })
+            .mockResolvedValueOnce({
+              rows: [existingOrderRowWithDifferentPayment],
+            }),
+        };
+        return cb(fakeClient);
+      });
+
+      await expect(
+        placeOrderFromCart({
+          cartId: "11111111-1111-1111-1111-111111111111",
+          surface: "dtc",
+          verifiedUserId: "user-1",
+          payment: defaultPayment,
+        }),
+      ).rejects.toThrow(
+        "Cannot complete order: cart was already converted with different payment details",
+      );
     });
 
     it("fails placement if cart has no line items", async () => {

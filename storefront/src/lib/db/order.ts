@@ -150,7 +150,7 @@ export async function placeOrderFromCart(params: {
   verifiedUserId?: string | null;
   guestTokenHash?: string | null;
   payment: VerifiedPaymentDetails;
-}): Promise<{ order: DbOrder; items: DbOrderItem[] }> {
+}): Promise<{ order: DbOrder; items: DbOrderItem[]; created: boolean }> {
   const { cartId, surface, verifiedUserId, guestTokenHash, payment } = params;
 
   if (payment?.status !== "paid" || !payment.providerPaymentId || !payment.providerOrderId) {
@@ -198,6 +198,18 @@ export async function placeOrderFromCart(params: {
 
     if (existingOrderRes.rows.length > 0) {
       const existingOrder = mapOrderRow(existingOrderRes.rows[0]);
+
+      // Validate payment identity on existing order:
+      // Prevent an unrelated second payment from being accepted as an idempotent completion
+      if (
+        existingOrder.payment_provider_order_id !== payment.providerOrderId ||
+        existingOrder.payment_provider_payment_id !== payment.providerPaymentId
+      ) {
+        throw new Error(
+          "Cannot complete order: cart was already converted with different payment details",
+        );
+      }
+
       const existingItemsRes = await client.query<Record<string, unknown>>(
         `SELECT * FROM public.order_items WHERE order_id = $1 ORDER BY created_at ASC;`,
         [existingOrder.id],
@@ -205,6 +217,7 @@ export async function placeOrderFromCart(params: {
       return {
         order: existingOrder,
         items: existingItemsRes.rows.map(mapOrderItemRow),
+        created: false,
       };
     }
 
@@ -410,13 +423,23 @@ export async function placeOrderFromCart(params: {
         [cartId],
       );
       orderRow = fallbackRes.rows[0];
+      const existingOrder = mapOrderRow(orderRow);
+      if (
+        existingOrder.payment_provider_order_id !== payment.providerOrderId ||
+        existingOrder.payment_provider_payment_id !== payment.providerPaymentId
+      ) {
+        throw new Error(
+          "Cannot complete order: cart was already converted with different payment details",
+        );
+      }
       const itemsRes = await client.query<Record<string, unknown>>(
         `SELECT * FROM public.order_items WHERE order_id = $1 ORDER BY created_at ASC;`,
         [orderRow.id],
       );
       return {
-        order: mapOrderRow(orderRow),
+        order: existingOrder,
         items: itemsRes.rows.map(mapOrderItemRow),
+        created: false,
       };
     }
 
@@ -454,7 +477,7 @@ export async function placeOrderFromCart(params: {
       [cartId],
     );
 
-    return { order, items: insertedItems };
+    return { order, items: insertedItems, created: true };
   });
 }
 

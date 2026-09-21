@@ -8,6 +8,11 @@ import {
   type Surface,
 } from "@/lib/storefront";
 import { placeOrderFromCart } from "@/lib/db/order";
+import {
+  createPaymentAttempt,
+  findPaymentAttempt,
+  markPaymentAttemptConsumed,
+} from "@/lib/db/payment-attempt";
 import type { Order } from "@/types/commerce";
 import { getCart, verifyAuthSession } from "./cart";
 import { adaptDbOrderToCommerceOrder } from "./order-adapter";
@@ -15,6 +20,7 @@ import { resolveSurfaceForCart } from "./checkout";
 import { scheduleOrderConfirmationEmail } from "@/lib/emails/order-confirmation-flow";
 import {
   createRazorpayOrder,
+  fetchRazorpayOrder,
   fetchRazorpayPayment,
   getRazorpayConfig,
   RazorpayApiError,
@@ -29,6 +35,9 @@ function checkoutTag(surface: Surface): string {
 function cartTag(surface: Surface): string {
   return `cart${cacheTagSuffix(surface)}`;
 }
+
+const GENERIC_VERIFICATION_ERROR =
+  "We could not verify this payment. Please try again or contact support.";
 
 export interface CreateRazorpayCheckoutOrderResult {
   success: true;
@@ -48,7 +57,8 @@ export type CreateRazorpayCheckoutOrderResponse =
   | { success: false; error: string };
 
 /**
- * Initializes a server-authoritative Razorpay order for an active cart.
+ * Initializes a server-authoritative Razorpay order for an active cart,
+ * and records a trusted payment_attempt row bound to the cart and surface.
  * Key Secret is NEVER returned or sent to client.
  */
 export async function createRazorpayCheckoutOrder(
@@ -93,6 +103,16 @@ export async function createRazorpayCheckoutOrder(
       },
       config,
     );
+
+    // Persist server-side payment-attempt binding
+    await createPaymentAttempt({
+      cartId: cart.id,
+      surface,
+      provider: "razorpay",
+      providerOrderId: razorpayOrder.id,
+      amountInCents: razorpayOrder.amount,
+      currency: razorpayOrder.currency,
+    });
 
     const shipping = cart.shipping_address;
     const billing = cart.billing_address;
@@ -155,8 +175,15 @@ export type VerifyRazorpayPaymentResponse =
 
 /**
  * Verifies Razorpay payment signature and status, and completes order placement atomically.
- * Prevents payment bypass by requiring cryptographic signature verification,
- * live payment status confirmation ('captured'), and exact cart amount/currency matching.
+ *
+ * Security guarantees:
+ * - Order ID used for HMAC signature verification comes from a server-trusted payment_attempt
+ *   record bound strictly to the cart ID and surface (eliminating cross-cart replay attacks).
+ * - Live provider Order is fetched and validated for notes (cart_id, surface), amount, and currency.
+ * - Live provider Payment is fetched and validated for order ID, 'captured' status, amount, and currency.
+ * - Local order placement is idempotent and validates payment identity against existing orders.
+ * - Order confirmation email is scheduled ONLY when created === true.
+ * - Internal payment integrity errors are logged server-side and sanitized for browser response.
  */
 export async function verifyRazorpayPaymentAndCompleteOrder(
   params: VerifyRazorpayPaymentParams,
@@ -186,10 +213,34 @@ export async function verifyRazorpayPaymentAndCompleteOrder(
     const surface = knownSurface ?? (await resolveSurfaceForCart(cartId));
     const config = getRazorpayConfig();
 
-    // 1. Cryptographic HMAC verification using constant-time comparison
+    // 1. Authorize current Mirza cart
+    const cart = await getCart(cartId, surface);
+    if (!cart || cart.id !== cartId) {
+      console.error(
+        `[payment:integrity] Cart '${cartId}' not found or access denied for surface '${surface}'`,
+      );
+      return { success: false, error: GENERIC_VERIFICATION_ERROR };
+    }
+
+    // 2. Lookup server-trusted payment attempt strictly bound to cart and surface
+    const paymentAttempt = await findPaymentAttempt({
+      providerOrderId: razorpayOrderId,
+      cartId: cart.id,
+      surface,
+    });
+
+    if (!paymentAttempt) {
+      console.error(
+        `[payment:integrity] No payment attempt found for providerOrderId='${razorpayOrderId}', cartId='${cart.id}', surface='${surface}'`,
+      );
+      return { success: false, error: GENERIC_VERIFICATION_ERROR };
+    }
+
+    // 3. Cryptographic HMAC verification using SERVER-TRUSTED order ID
+    const trustedOrderId = paymentAttempt.provider_order_id;
     const isValidSignature = verifyRazorpayPaymentSignature(
       {
-        razorpayOrderId,
+        razorpayOrderId: trustedOrderId,
         razorpayPaymentId,
         razorpaySignature,
       },
@@ -197,30 +248,89 @@ export async function verifyRazorpayPaymentAndCompleteOrder(
     );
 
     if (!isValidSignature) {
-      return {
-        success: false,
-        error: "Invalid payment signature verification",
-      };
+      console.error(
+        `[payment:integrity] Invalid HMAC signature for trustedOrderId='${trustedOrderId}', paymentId='${razorpayPaymentId}'`,
+      );
+      return { success: false, error: GENERIC_VERIFICATION_ERROR };
     }
 
-    // 2. Fetch authoritative payment status directly from Razorpay
+    // 4. Fetch and verify live Razorpay Order
+    const razorpayOrder = await fetchRazorpayOrder(trustedOrderId, config);
+    if (razorpayOrder.id !== trustedOrderId) {
+      console.error(
+        `[payment:integrity] Razorpay order ID mismatch: got '${razorpayOrder.id}', expected '${trustedOrderId}'`,
+      );
+      return { success: false, error: GENERIC_VERIFICATION_ERROR };
+    }
+
+    if (
+      razorpayOrder.notes?.cart_id !== cart.id ||
+      razorpayOrder.notes?.surface !== surface
+    ) {
+      console.error(
+        `[payment:integrity] Razorpay order notes mismatch. Notes: ${JSON.stringify(razorpayOrder.notes)}, expected cart_id='${cart.id}', surface='${surface}'`,
+      );
+      return { success: false, error: GENERIC_VERIFICATION_ERROR };
+    }
+
+    if (
+      razorpayOrder.amount !== paymentAttempt.amount_in_cents ||
+      razorpayOrder.currency.toUpperCase() !== paymentAttempt.currency.toUpperCase()
+    ) {
+      console.error(
+        `[payment:integrity] Razorpay order amount/currency mismatch: order has ${razorpayOrder.amount} ${razorpayOrder.currency}, attempt has ${paymentAttempt.amount_in_cents} ${paymentAttempt.currency}`,
+      );
+      return { success: false, error: GENERIC_VERIFICATION_ERROR };
+    }
+
+    // Also verify current authoritative Mirza cart still matches attempt amount/currency
+    const currentCartAmount = cart.total_amount?.amount_in_cents ?? 0;
+    const currentCartCurrency = (cart.currency || "INR").toUpperCase();
+    if (
+      currentCartAmount !== paymentAttempt.amount_in_cents ||
+      currentCartCurrency !== paymentAttempt.currency.toUpperCase()
+    ) {
+      console.error(
+        `[payment:integrity] Current cart amount/currency mismatch with attempt: cart has ${currentCartAmount} ${currentCartCurrency}, attempt has ${paymentAttempt.amount_in_cents} ${paymentAttempt.currency}`,
+      );
+      return { success: false, error: GENERIC_VERIFICATION_ERROR };
+    }
+
+    // 5. Fetch and verify live Razorpay Payment
     const payment = await fetchRazorpayPayment(razorpayPaymentId, config);
 
-    if (payment.order_id !== razorpayOrderId) {
-      return {
-        success: false,
-        error: `Payment order ID '${payment.order_id}' does not match expected '${razorpayOrderId}'`,
-      };
+    if (payment.id !== razorpayPaymentId) {
+      console.error(
+        `[payment:integrity] Payment ID mismatch: got '${payment.id}', expected '${razorpayPaymentId}'`,
+      );
+      return { success: false, error: GENERIC_VERIFICATION_ERROR };
+    }
+
+    if (payment.order_id !== trustedOrderId) {
+      console.error(
+        `[payment:integrity] Payment order_id mismatch: got '${payment.order_id}', expected '${trustedOrderId}'`,
+      );
+      return { success: false, error: GENERIC_VERIFICATION_ERROR };
     }
 
     if (payment.status !== "captured") {
-      return {
-        success: false,
-        error: `Payment status is '${payment.status}', expected 'captured'`,
-      };
+      console.error(
+        `[payment:integrity] Payment status is '${payment.status}', expected 'captured'`,
+      );
+      return { success: false, error: GENERIC_VERIFICATION_ERROR };
     }
 
-    // 3. Resolve user auth / guest token hash
+    if (
+      payment.amount !== paymentAttempt.amount_in_cents ||
+      payment.currency.toUpperCase() !== paymentAttempt.currency.toUpperCase()
+    ) {
+      console.error(
+        `[payment:integrity] Payment amount/currency mismatch: payment has ${payment.amount} ${payment.currency}, attempt has ${paymentAttempt.amount_in_cents} ${paymentAttempt.currency}`,
+      );
+      return { success: false, error: GENERIC_VERIFICATION_ERROR };
+    }
+
+    // 6. Resolve user auth / guest token hash
     const authSession = await verifyAuthSession();
     let verifiedUserId: string | null = null;
     let guestTokenHash: string | null = null;
@@ -237,8 +347,8 @@ export async function verifyRazorpayPaymentAndCompleteOrder(
       }
     }
 
-    // 4. Place order atomically inside ACID transaction (enforcing amount & currency parity)
-    const { order, items } = await placeOrderFromCart({
+    // 7. Place order atomically inside ACID transaction
+    const { order, items, created } = await placeOrderFromCart({
       cartId,
       surface,
       verifiedUserId,
@@ -246,7 +356,7 @@ export async function verifyRazorpayPaymentAndCompleteOrder(
       payment: {
         provider: "razorpay",
         status: "paid",
-        providerOrderId: razorpayOrderId,
+        providerOrderId: trustedOrderId,
         providerPaymentId: razorpayPaymentId,
         paymentMethod: payment.method,
         paidAt: new Date(payment.created_at * 1000),
@@ -255,12 +365,20 @@ export async function verifyRazorpayPaymentAndCompleteOrder(
       },
     });
 
+    // 8. Consume payment attempt
+    await markPaymentAttemptConsumed({
+      attemptId: paymentAttempt.id,
+      providerPaymentId: razorpayPaymentId,
+    });
+
     const adaptedOrder = adaptDbOrderToCommerceOrder(order, items);
     updateTag(checkoutTag(surface));
     updateTag(cartTag(surface));
 
-    // Fast checkout: schedule order confirmation email in post-response background task
-    scheduleOrderConfirmationEmail({ order, items });
+    // Fast checkout: schedule order confirmation email ONLY when created === true
+    if (created) {
+      scheduleOrderConfirmationEmail({ order, items });
+    }
 
     const totalMs = Math.round(performance.now() - tStart);
     if (process.env.PERF_DIAGNOSTICS === "1") {
@@ -278,15 +396,16 @@ export async function verifyRazorpayPaymentAndCompleteOrder(
       return { success: false, error: error.message };
     }
     if (error instanceof RazorpayApiError) {
+      console.error("[payment:gateway] API error:", error.message);
       return {
         success: false,
         error: `Payment gateway error: ${error.message}`,
       };
     }
+    console.error("[payment:verification] Verification error:", error);
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to complete order",
+      error: GENERIC_VERIFICATION_ERROR,
     };
   }
 }
