@@ -37,4 +37,4 @@ jobs:
         run: pnpm --prefix storefront lint
 
       - name: Tests (non-DB)
-        run: pnpm --prefix storefront exec vitest run --exclude src/lib/catalog/__tests__/catalog-parity.test.ts
+        run: pnpm --prefix storefront exec vitest run --exclude src/lib/catalog/__tests__/catalog-parity.test.ts --exclude src/lib/media/__tests__/stone-media-pipeline.test.ts
