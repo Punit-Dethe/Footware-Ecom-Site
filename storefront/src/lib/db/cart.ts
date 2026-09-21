@@ -314,6 +314,7 @@ export async function claimOrMergeGuestCart(
   userId: string,
   guestTokenHash: string,
   surface: CartSurface,
+  currency = "USD",
 ): Promise<DbCart> {
   return await transaction(async (client) => {
     // 1. Lock active guest cart if exists
@@ -344,11 +345,11 @@ export async function claimOrMergeGuestCart(
       // Neither exists: create user cart with concurrency conflict resolution
       const createRes = await client.query<Record<string, unknown>>(
         `INSERT INTO public.carts (user_id, surface, currency, status, created_at, updated_at)
-         VALUES ($1, $2, 'USD', 'active', NOW(), NOW())
+         VALUES ($1, $2, $3, 'active', NOW(), NOW())
          ON CONFLICT (user_id, surface) WHERE (user_id IS NOT NULL AND status = 'active')
          DO UPDATE SET updated_at = NOW()
          RETURNING id, user_id, guest_token_hash, surface, currency, shipping_address, billing_address, checkout_email, status, created_at, updated_at;`,
-        [userId, surface],
+        [userId, surface, currency],
       );
       return mapCartRow(createRes.rows[0]);
     }

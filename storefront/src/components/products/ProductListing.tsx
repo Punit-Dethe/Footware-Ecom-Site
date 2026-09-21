@@ -120,6 +120,7 @@ async function ProductListingInner({
     limit: PAGE_SIZE,
     ...queryParams,
     ...baseParams,
+    ...(currency ? { currency } : {}),
     fields: PRODUCT_CARD_FIELDS,
   };
 
@@ -132,6 +133,7 @@ async function ProductListingInner({
   const filterFetchParams = wrapInRansackParams({
     ...filterQueryParams,
     ...baseParams,
+    ...(currency ? { currency } : {}),
   });
 
   // Products fetch is highest priority: render products immediately without

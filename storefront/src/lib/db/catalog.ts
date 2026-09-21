@@ -58,6 +58,17 @@ export interface DbCatalogVariantRow {
   position: number;
   is_default: boolean;
   active: boolean;
+  prices?: DbVariantPriceRow[];
+  created_at?: Date;
+  updated_at?: Date;
+}
+
+export interface DbVariantPriceRow {
+  id: string;
+  variant_id: string;
+  currency: string;
+  price_in_cents: number;
+  compare_at_price_in_cents: number | null;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -72,6 +83,7 @@ export interface PublicCatalogRawData {
   categories: DbCatalogCategoryRow[];
   variants: DbCatalogVariantRow[];
   productCategories: DbProductCategoryJoinRow[];
+  variantPrices?: DbVariantPriceRow[];
 }
 
 export interface DbVariantDetailRow extends DbCatalogVariantRow {
@@ -83,6 +95,7 @@ export interface DbVariantDetailRow extends DbCatalogVariantRow {
   meta_title: string | null;
   meta_description: string | null;
   meta_keywords: string | null;
+  prices?: DbVariantPriceRow[];
 }
 
 export interface QueryableClient {
@@ -147,7 +160,23 @@ export async function loadPublicCatalogRows(
     runner.query<DbCatalogVariantRow>(
       `SELECT v.id, v.product_id, v.sku, v.size_option, v.price_in_cents,
               v.compare_at_price_in_cents, v.currency, v.quantity_on_hand,
-              v.backorderable, v.position, v.is_default, v.active
+              v.backorderable, v.position, v.is_default, v.active,
+              COALESCE(
+                (
+                  SELECT json_agg(
+                    json_build_object(
+                      'id', vp.id,
+                      'variant_id', vp.variant_id,
+                      'currency', vp.currency,
+                      'price_in_cents', vp.price_in_cents,
+                      'compare_at_price_in_cents', vp.compare_at_price_in_cents
+                    )
+                  )
+                  FROM public.variant_prices vp
+                  WHERE vp.variant_id = v.id
+                ),
+                '[]'::json
+              ) AS prices
        FROM public.variants v
        JOIN public.products p ON p.id = v.product_id
        WHERE v.active = TRUE AND p.status = 'active'
@@ -159,11 +188,19 @@ export async function loadPublicCatalogRows(
     ),
   ]);
 
+  const allVariantPrices: DbVariantPriceRow[] = [];
+  for (const v of variantsRes?.rows || []) {
+    if (v.prices && Array.isArray(v.prices)) {
+      allVariantPrices.push(...v.prices);
+    }
+  }
+
   return {
-    products: productsRes.rows,
-    categories: categoriesRes.rows,
-    variants: variantsRes.rows,
-    productCategories: pcRes.rows,
+    products: productsRes?.rows || [],
+    categories: categoriesRes?.rows || [],
+    variants: variantsRes?.rows || [],
+    productCategories: pcRes?.rows || [],
+    variantPrices: allVariantPrices,
   };
 }
 
@@ -184,7 +221,23 @@ export async function getVariantByIdOrSku(
               v.backorderable, v.position, v.is_default, v.active,
               p.name AS product_name, p.slug AS product_slug, p.status AS product_status,
               p.sku AS product_sku, p.description AS product_description,
-              p.meta_title, p.meta_description, p.meta_keywords
+              p.meta_title, p.meta_description, p.meta_keywords,
+              COALESCE(
+                (
+                  SELECT json_agg(
+                    json_build_object(
+                      'id', vp.id,
+                      'variant_id', vp.variant_id,
+                      'currency', vp.currency,
+                      'price_in_cents', vp.price_in_cents,
+                      'compare_at_price_in_cents', vp.compare_at_price_in_cents
+                    )
+                  )
+                  FROM public.variant_prices vp
+                  WHERE vp.variant_id = v.id
+                ),
+                '[]'::json
+              ) AS prices
        FROM public.variants v
        JOIN public.products p ON p.id = v.product_id
        WHERE v.id = $1::uuid
@@ -194,7 +247,23 @@ export async function getVariantByIdOrSku(
               v.backorderable, v.position, v.is_default, v.active,
               p.name AS product_name, p.slug AS product_slug, p.status AS product_status,
               p.sku AS product_sku, p.description AS product_description,
-              p.meta_title, p.meta_description, p.meta_keywords
+              p.meta_title, p.meta_description, p.meta_keywords,
+              COALESCE(
+                (
+                  SELECT json_agg(
+                    json_build_object(
+                      'id', vp.id,
+                      'variant_id', vp.variant_id,
+                      'currency', vp.currency,
+                      'price_in_cents', vp.price_in_cents,
+                      'compare_at_price_in_cents', vp.compare_at_price_in_cents
+                    )
+                  )
+                  FROM public.variant_prices vp
+                  WHERE vp.variant_id = v.id
+                ),
+                '[]'::json
+              ) AS prices
        FROM public.variants v
        JOIN public.products p ON p.id = v.product_id
        WHERE v.sku = $1
@@ -224,7 +293,23 @@ export async function getVariantsByIdsOrSkus(
             v.backorderable, v.position, v.is_default, v.active,
             p.name AS product_name, p.slug AS product_slug, p.status AS product_status,
             p.sku AS product_sku, p.description AS product_description,
-            p.meta_title, p.meta_description, p.meta_keywords
+            p.meta_title, p.meta_description, p.meta_keywords,
+            COALESCE(
+              (
+                SELECT json_agg(
+                  json_build_object(
+                    'id', vp.id,
+                    'variant_id', vp.variant_id,
+                    'currency', vp.currency,
+                    'price_in_cents', vp.price_in_cents,
+                    'compare_at_price_in_cents', vp.compare_at_price_in_cents
+                  )
+                )
+                FROM public.variant_prices vp
+                WHERE vp.variant_id = v.id
+              ),
+              '[]'::json
+            ) AS prices
      FROM public.variants v
      JOIN public.products p ON p.id = v.product_id
      WHERE v.sku = ANY($1::text[])

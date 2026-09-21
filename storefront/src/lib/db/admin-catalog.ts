@@ -79,6 +79,8 @@ export interface AdminVariantRecord {
   sizeOption: string | null;
   priceInCents: number;
   compareAtPriceInCents: number | null;
+  priceInInrPaise?: number | null;
+  compareAtPriceInInrPaise?: number | null;
   currency: string;
   quantityOnHand: number;
   backorderable: boolean;
@@ -147,6 +149,8 @@ export interface SaveProductVariantInput {
   sizeOption?: string | null;
   priceInCents: number;
   compareAtPriceInCents?: number | null;
+  priceInInrPaise?: number | null;
+  compareAtPriceInInrPaise?: number | null;
   quantityOnHand: number;
   backorderable: boolean;
   position?: number;
@@ -746,13 +750,18 @@ export async function getAdminProduct(
       active: boolean;
       created_at: Date;
       updated_at: Date;
+      inr_price_in_cents: number | null;
+      inr_compare_at_price_in_cents: number | null;
     }>(
-      `SELECT id, product_id, sku, size_option, price_in_cents, compare_at_price_in_cents,
-              currency, quantity_on_hand, backorderable, position, is_default, active,
-              created_at, updated_at
-       FROM public.variants
-       WHERE product_id = $1
-       ORDER BY position ASC, created_at ASC;`,
+      `SELECT v.id, v.product_id, v.sku, v.size_option, v.price_in_cents, v.compare_at_price_in_cents,
+              v.currency, v.quantity_on_hand, v.backorderable, v.position, v.is_default, v.active,
+              v.created_at, v.updated_at,
+              vp_inr.price_in_cents AS inr_price_in_cents,
+              vp_inr.compare_at_price_in_cents AS inr_compare_at_price_in_cents
+       FROM public.variants v
+       LEFT JOIN public.variant_prices vp_inr ON vp_inr.variant_id = v.id AND vp_inr.currency = 'INR'
+       WHERE v.product_id = $1
+       ORDER BY v.position ASC, v.created_at ASC;`,
       [id],
     ),
     listProductMediaV1(id),
@@ -800,6 +809,8 @@ export async function getAdminProduct(
       sizeOption: v.size_option,
       priceInCents: v.price_in_cents,
       compareAtPriceInCents: v.compare_at_price_in_cents,
+      priceInInrPaise: v.inr_price_in_cents != null ? Number(v.inr_price_in_cents) : null,
+      compareAtPriceInInrPaise: v.inr_compare_at_price_in_cents != null ? Number(v.inr_compare_at_price_in_cents) : null,
       currency: v.currency,
       quantityOnHand: v.quantity_on_hand,
       backorderable: v.backorderable,
@@ -1055,7 +1066,10 @@ async function syncVariants(
     }
     seenSkus.add(lowerSku);
 
+    let targetVariantId: string;
+
     if (v.id) {
+      targetVariantId = v.id;
       // Existing variant: verify ownership
       if (!existingMap.has(v.id)) {
         throw new CatalogValidationError(
@@ -1105,7 +1119,7 @@ async function syncVariants(
       }
     } else {
       // New variant: generate UUID and insert
-      const newVariantId = crypto.randomUUID();
+      targetVariantId = crypto.randomUUID();
       try {
         await client.query(
           `INSERT INTO public.variants (
@@ -1115,7 +1129,7 @@ async function syncVariants(
              created_at, updated_at
            ) VALUES ($1, $2, $3, $4, $5, $6, 'USD', $7, $8, $9, $10, $11, NOW(), NOW());`,
           [
-            newVariantId,
+            targetVariantId,
             productId,
             trimmedSku,
             sizeOption,
@@ -1131,6 +1145,46 @@ async function syncVariants(
       } catch (err: any) {
         handleConstraintViolation(err);
       }
+    }
+
+    // Sync authoritative multi-currency variant_prices (USD and INR)
+    const inrPrice =
+      v.priceInInrPaise != null
+        ? validateInteger(v.priceInInrPaise, `variants[${i}].priceInInrPaise`, { min: 0 })!
+        : Math.round(priceInCents * 0.88) * 100;
+
+    const inrCompareAt =
+      v.compareAtPriceInInrPaise != null
+        ? validateInteger(v.compareAtPriceInInrPaise, `variants[${i}].compareAtPriceInInrPaise`, {
+            min: 0,
+            allowNull: true,
+          })
+        : compareAtPriceInCents != null
+        ? Math.round(compareAtPriceInCents * 0.88) * 100
+        : null;
+
+    try {
+      await client.query(
+        `INSERT INTO public.variant_prices (variant_id, currency, price_in_cents, compare_at_price_in_cents, created_at, updated_at)
+         VALUES ($1, 'USD', $2, $3, NOW(), NOW())
+         ON CONFLICT (variant_id, currency) DO UPDATE
+         SET price_in_cents = EXCLUDED.price_in_cents,
+             compare_at_price_in_cents = EXCLUDED.compare_at_price_in_cents,
+             updated_at = NOW();`,
+        [targetVariantId, priceInCents, compareAtPriceInCents],
+      );
+
+      await client.query(
+        `INSERT INTO public.variant_prices (variant_id, currency, price_in_cents, compare_at_price_in_cents, created_at, updated_at)
+         VALUES ($1, 'INR', $2, $3, NOW(), NOW())
+         ON CONFLICT (variant_id, currency) DO UPDATE
+         SET price_in_cents = EXCLUDED.price_in_cents,
+             compare_at_price_in_cents = EXCLUDED.compare_at_price_in_cents,
+             updated_at = NOW();`,
+        [targetVariantId, inrPrice, inrCompareAt],
+      );
+    } catch (err: any) {
+      handleConstraintViolation(err);
     }
   }
 }

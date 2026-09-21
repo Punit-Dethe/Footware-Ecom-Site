@@ -10,19 +10,25 @@ import {
   getProductBySlugOrId,
   queryProducts,
 } from "@/lib/catalog/catalog-repository";
+import { resolveCountryCurrency } from "@/lib/data/pricing";
 
 /**
  * Cached product list fetch. Cache key is derived from function arguments by Next.js "use cache":
  *
  * - params: pagination, search, and category filters
- * - options: locale/country for market formatting
+ * - options: locale/country for market formatting and currency resolution
  * - surface: DTC vs wholesale — distinct catalog segmentation via cache tag and arguments
  */
 export async function cachedListProducts(
   params?: ProductListParams,
-  _options?: { locale?: string; country?: string },
+  options?: { locale?: string; country?: string; currency?: string },
   _surface: Surface = DEFAULT_SURFACE,
 ) {
+  const currency =
+    options?.currency ||
+    (typeof params?.currency === "string" ? params.currency : undefined) ||
+    (options?.country ? resolveCountryCurrency(options.country) : "USD");
+
   const raw = (params || {}) as Record<string, any>;
   const rawFilter = (raw.filter || {}) as Record<string, any>;
 
@@ -68,6 +74,7 @@ export async function cachedListProducts(
     q,
     in_category,
     sort,
+    currency,
   });
 }
 
@@ -75,7 +82,8 @@ export async function getProducts(
   params?: ProductListParams,
   surface: Surface = DEFAULT_SURFACE,
 ) {
-  return cachedListProducts(params, undefined, surface);
+  const currency = typeof params?.currency === "string" ? params.currency : undefined;
+  return cachedListProducts(params, currency ? { currency } : undefined, surface);
 }
 
 /**
@@ -84,10 +92,13 @@ export async function getProducts(
 export async function cachedGetProduct(
   slugOrId: string,
   _expand?: string[],
-  _options?: { locale?: string; country?: string },
+  options?: { locale?: string; country?: string; currency?: string },
   _surface?: Surface,
 ) {
-  const local = await getProductBySlugOrId(slugOrId);
+  const currency =
+    options?.currency ||
+    (options?.country ? resolveCountryCurrency(options.country) : "USD");
+  const local = await getProductBySlugOrId(slugOrId, currency);
   if (local) {
     return local;
   }
@@ -96,22 +107,29 @@ export async function cachedGetProduct(
 
 export async function getProduct(
   slugOrId: string,
-  params?: { expand?: string[] },
+  params?: { expand?: string[]; currency?: string; country?: string },
   surface: Surface = DEFAULT_SURFACE,
 ) {
   return cachedGetProduct(
     slugOrId,
     params?.expand ?? [],
-    undefined,
+    params?.currency || params?.country
+      ? { currency: params.currency, country: params.country }
+      : undefined,
     surface,
   );
 }
 
 export async function cachedGetProductFilters(
   params?: Record<string, unknown>,
-  _options?: { locale?: string; country?: string },
+  options?: { locale?: string; country?: string; currency?: string },
   _surface?: Surface,
 ) {
+  const currency =
+    options?.currency ||
+    (typeof params?.currency === "string" ? params.currency : undefined) ||
+    (options?.country ? resolveCountryCurrency(options.country) : "USD");
+
   const in_category =
     typeof params?.in_category === "string"
       ? params.in_category
@@ -123,13 +141,14 @@ export async function cachedGetProductFilters(
       ? (params["q[in_category]"] as string)
       : undefined;
 
-  return await getCatalogFilters({ in_category });
+  return await getCatalogFilters({ in_category, currency });
 }
 
 export async function getProductFilters(
   params?: Record<string, unknown>,
   surface: Surface = DEFAULT_SURFACE,
 ) {
-  return cachedGetProductFilters(params, undefined, surface);
+  const currency = typeof params?.currency === "string" ? params.currency : undefined;
+  return cachedGetProductFilters(params, currency ? { currency } : undefined, surface);
 }
 

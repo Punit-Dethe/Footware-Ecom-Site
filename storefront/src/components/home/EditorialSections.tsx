@@ -56,7 +56,7 @@ export async function EditorialProductRow({
   const [tHome, tProducts, snapshot] = await Promise.all([
     getTranslations({ locale: locale as Locale, namespace: "home" }),
     getTranslations({ locale: locale as Locale, namespace: "products" }),
-    getPublicCatalogSnapshot().catch(() => null),
+    getPublicCatalogSnapshot(currency).catch(() => null),
   ]);
 
   if (!snapshot?.products.length) return null;
@@ -145,7 +145,7 @@ export async function MoreProductsSection({
 }: HomeSectionProps & { currency?: string }) {
   const [t, snapshot] = await Promise.all([
     getTranslations({ locale: locale as Locale, namespace: "home" }),
-    getPublicCatalogSnapshot().catch(() => null),
+    getPublicCatalogSnapshot(currency).catch(() => null),
   ]);
   if (!snapshot?.products.length) return null;
 

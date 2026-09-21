@@ -16,6 +16,7 @@ import {
 } from "react";
 import { toast } from "sonner";
 import { useOptionalAuth } from "@/contexts/AuthContext";
+import { useOptionalStore } from "@/contexts/StoreContext";
 import {
   addToCart as addToCartAction,
   getCart as getCartAction,
@@ -54,6 +55,8 @@ export function CartProvider({
   const [isOpen, setIsOpen] = useState(false);
   const t = useTranslations("cart");
   const auth = useOptionalAuth();
+  const store = useOptionalStore();
+  const currency = store?.currency || "USD";
   const userId = auth?.user?.id ?? null;
   const prevUserRef = useRef<string | null | undefined>(undefined);
   const requestSeqRef = useRef(0);
@@ -144,11 +147,14 @@ export function CartProvider({
       // Instant interaction: acknowledge click immediately on next frame
       setIsOpen(true);
       await mutateCart(
-        () => addToCartAction(variantId, quantity, surface),
+        () =>
+          currency && currency !== "USD"
+            ? addToCartAction(variantId, quantity, surface, currency)
+            : addToCartAction(variantId, quantity, surface),
         t("failedToAddItem"),
       );
     },
-    [mutateCart, t, surface],
+    [mutateCart, t, surface, currency],
   );
 
   const updateItem = useCallback(

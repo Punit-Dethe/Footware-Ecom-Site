@@ -19,6 +19,7 @@ const {
 vi.mock("@/lib/data/cart", () => ({
   getCart: mockGetCart,
   verifyAuthSession: mockVerifyAuthSession,
+  ensureCartMarket: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("@/lib/db/order", () => ({

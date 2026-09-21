@@ -3,8 +3,10 @@ import { cache } from "react";
 import {
   loadPublicCatalogRows,
   type DbCatalogVariantRow,
+  type DbVariantPriceRow,
   type PublicCatalogRawData,
 } from "@/lib/db/catalog";
+import { formatMoney, resolveVariantPrice } from "@/lib/data/pricing";
 import {
   getStoragePublicUrl,
   resolveResponsiveVariants,
@@ -148,7 +150,10 @@ export interface PublicCatalogSnapshot {
  */
 export function adaptRawCatalogToPublicSnapshot(
   raw: PublicCatalogRawData,
+  currency = "USD",
 ): PublicCatalogSnapshot {
+  const normCurrency = (currency || "USD").toUpperCase();
+
   // 1. Adapt Categories
   const categoryMap = new Map<string, CatalogCategory>();
   const categories: CatalogCategory[] = raw.categories.map((c) => {
@@ -172,6 +177,25 @@ export function adaptRawCatalogToPublicSnapshot(
     const list = variantsByProductId.get(v.product_id) || [];
     list.push(v);
     variantsByProductId.set(v.product_id, list);
+  }
+
+  // Group variantPrices by variant_id
+  const variantPricesByVariantId = new Map<string, DbVariantPriceRow[]>();
+  if (raw.variantPrices) {
+    for (const vp of raw.variantPrices) {
+      const list = variantPricesByVariantId.get(vp.variant_id) || [];
+      list.push(vp);
+      variantPricesByVariantId.set(vp.variant_id, list);
+    }
+  }
+  for (const v of raw.variants || []) {
+    if (v.prices && Array.isArray(v.prices)) {
+      for (const vp of v.prices) {
+        const list = variantPricesByVariantId.get(vp.variant_id || v.id) || [];
+        list.push(vp);
+        variantPricesByVariantId.set(vp.variant_id || v.id, list);
+      }
+    }
   }
 
   // Group categories by product_id
@@ -203,25 +227,51 @@ export function adaptRawCatalogToPublicSnapshot(
     const thumbUrl = heroVariants?.["320"]?.webp || heroMainUrl;
 
     const variants: CatalogVariant[] = dbVariants.map((v, sIdx) => {
-      const cents = v.price_in_cents;
-      const compareCents =
-        v.compare_at_price_in_cents != null
-          ? v.compare_at_price_in_cents
-          : undefined;
+      const pricesForVariant = variantPricesByVariantId.get(v.id);
+      let cents: number;
+      let compareCents: number | undefined;
+      let hasPrice = false;
+
+      if (pricesForVariant && pricesForVariant.length > 0) {
+        const resolvedPrice = resolveVariantPrice(pricesForVariant, normCurrency);
+        if (resolvedPrice) {
+          cents = resolvedPrice.price_in_cents;
+          compareCents = resolvedPrice.compare_at_price_in_cents ?? undefined;
+          hasPrice = true;
+        } else {
+          // Fail closed: variant has configured prices, but none for the target currency
+          cents = 0;
+          compareCents = undefined;
+          hasPrice = false;
+        }
+      } else {
+        // Fallback for tests or fixtures without variant_prices table populated
+        if (normCurrency === "USD" || !v.currency || v.currency === normCurrency) {
+          cents = v.price_in_cents;
+          compareCents = v.compare_at_price_in_cents ?? undefined;
+          hasPrice = true;
+        } else {
+          cents = 0;
+          compareCents = undefined;
+          hasPrice = false;
+        }
+      }
+
       const amountStr = (cents / 100).toFixed(2);
-      const displayAmount = `$${amountStr}`;
-      const isAvailable = (v.quantity_on_hand > 0 || v.backorderable) && v.active;
+      const displayAmount = hasPrice ? formatMoney(cents, normCurrency) : "";
+      const isAvailable =
+        hasPrice && (v.quantity_on_hand > 0 || v.backorderable) && v.active;
 
       const variantPrice: CatalogVariant["price"] = {
         amount: amountStr,
-        currency: v.currency || "USD",
+        currency: normCurrency,
         display_amount: displayAmount,
         amount_in_cents: cents,
       };
 
-      if (compareCents != null) {
+      if (compareCents != null && hasPrice) {
         variantPrice.compare_at_amount_in_cents = compareCents;
-        variantPrice.display_compare_at_amount = `$${(compareCents / 100).toFixed(2)}`;
+        variantPrice.display_compare_at_amount = formatMoney(compareCents, normCurrency);
       }
 
       return {
@@ -235,7 +285,7 @@ export function adaptRawCatalogToPublicSnapshot(
         price: variantPrice,
         original_price: {
           amount: amountStr,
-          currency: v.currency || "USD",
+          currency: normCurrency,
           display_amount: displayAmount,
           amount_in_cents: cents,
         },
@@ -399,11 +449,12 @@ function getCatalogCacheVersion(): string {
  */
 async function cachedCatalogSnapshot(
   cacheVersion: string,
+  currency = "USD",
 ): Promise<PublicCatalogSnapshot> {
   "use cache: remote";
-  // The value is part of the cache key even though the query itself does not
-  // otherwise depend on it.
+  // The values are part of the cache key so USD and INR are cached separately
   void cacheVersion;
+  void currency;
 
   try {
     cacheLife("hours");
@@ -413,30 +464,31 @@ async function cachedCatalogSnapshot(
   }
 
   const raw = await loadPublicCatalogRows();
-  return adaptRawCatalogToPublicSnapshot(raw);
+  return adaptRawCatalogToPublicSnapshot(raw, currency);
 }
 
 /**
  * Public catalog snapshot getter.
  * Request-memoized via React cache() and multi-tenant cached via Next.js remote cache.
  */
-export const getPublicCatalogSnapshot = cache(async () => {
-  return await cachedCatalogSnapshot(getCatalogCacheVersion());
+export const getPublicCatalogSnapshot = cache(async (currency = "USD") => {
+  const normCurrency = (currency || "USD").toUpperCase();
+  return await cachedCatalogSnapshot(getCatalogCacheVersion(), normCurrency);
 });
 
 /**
- * Lists all active catalog products from the prepared read model.
+ * Lists all active catalog products from the prepared read model for a market currency.
  */
-export async function listCatalogProducts(): Promise<CatalogProduct[]> {
-  const snapshot = await getPublicCatalogSnapshot();
+export async function listCatalogProducts(currency = "USD"): Promise<CatalogProduct[]> {
+  const snapshot = await getPublicCatalogSnapshot(currency);
   return snapshot.products;
 }
 
 /**
- * Lists all catalog categories from the prepared read model.
+ * Lists all catalog categories from the prepared read model for a market currency.
  */
-export async function listCatalogCategories(): Promise<CatalogCategory[]> {
-  const snapshot = await getPublicCatalogSnapshot();
+export async function listCatalogCategories(currency = "USD"): Promise<CatalogCategory[]> {
+  const snapshot = await getPublicCatalogSnapshot(currency);
   return snapshot.categories;
 }
 
@@ -451,8 +503,9 @@ export async function queryProducts(params: {
   category_id?: string;
   in_category?: string;
   sort?: string;
+  currency?: string;
 }) {
-  const { products } = await getPublicCatalogSnapshot();
+  const { products } = await getPublicCatalogSnapshot(params.currency);
   const page = Math.max(1, Number(params.page) || 1);
   const limit = Math.max(1, Math.min(100, Number(params.limit) || 12));
 
@@ -522,8 +575,9 @@ export async function queryProducts(params: {
  */
 export async function getProductBySlugOrId(
   slugOrId: string,
+  currency = "USD",
 ): Promise<CatalogProduct | null> {
-  const { products } = await getPublicCatalogSnapshot();
+  const { products } = await getPublicCatalogSnapshot(currency);
   const clean = slugOrId.toLowerCase().trim();
   return (
     products.find(
@@ -550,8 +604,9 @@ export async function getProductBySlugOrId(
  */
 export async function getCategoryByPermalinkOrId(
   permalinkOrId: string,
+  currency = "USD",
 ): Promise<CatalogCategory | null> {
-  const { categories } = await getPublicCatalogSnapshot();
+  const { categories } = await getPublicCatalogSnapshot(currency);
   const clean = permalinkOrId.toLowerCase().replace(/^categories\//, "");
   return (
     categories.find(
@@ -573,8 +628,10 @@ export async function getCategoryByPermalinkOrId(
 export async function getCatalogFilters(params?: {
   in_category?: string;
   category_id?: string;
+  currency?: string;
 }) {
-  const { products, categories } = await getPublicCatalogSnapshot();
+  const normCurrency = (params?.currency || "USD").toUpperCase();
+  const { products, categories } = await getPublicCatalogSnapshot(normCurrency);
 
   // 1. Categories: dynamically count active public products belonging to each category
   const categoryOptions = categories.map((cat) => {
@@ -670,7 +727,7 @@ export async function getCatalogFilters(params?: {
       type: "price_range",
       min: minPrice,
       max: maxPrice,
-      currency: "USD",
+      currency: normCurrency,
     },
     {
       id: "availability",
@@ -701,8 +758,9 @@ export async function getCatalogFilters(params?: {
  */
 export async function findCatalogVariantBySku(
   sku: string,
+  currency = "USD",
 ): Promise<{ product: CatalogProduct; variant: CatalogVariant } | null> {
-  const { products } = await getPublicCatalogSnapshot();
+  const { products } = await getPublicCatalogSnapshot(currency);
   for (const p of products) {
     const v = p.variants.find((vItem) => vItem.sku === sku);
     if (v) return { product: p, variant: v };
@@ -715,8 +773,9 @@ export async function findCatalogVariantBySku(
  */
 export async function findCatalogVariantByIdOrSku(
   idOrSku: string,
+  currency = "USD",
 ): Promise<{ product: CatalogProduct; variant: CatalogVariant } | null> {
-  const { products } = await getPublicCatalogSnapshot();
+  const { products } = await getPublicCatalogSnapshot(currency);
   for (const p of products) {
     const v = p.variants.find(
       (vItem) => vItem.id === idOrSku || vItem.sku === idOrSku,
@@ -744,11 +803,12 @@ export interface CatalogVariantSearchResult {
 export async function searchCatalogVariants(
   query: string,
   limit = 8,
+  currency = "USD",
 ): Promise<CatalogVariantSearchResult[]> {
   const trimmed = query.trim().toLowerCase();
   if (trimmed.length < 2) return [];
 
-  const { products } = await getPublicCatalogSnapshot();
+  const { products } = await getPublicCatalogSnapshot(currency);
   const results: CatalogVariantSearchResult[] = [];
 
   for (const product of products) {

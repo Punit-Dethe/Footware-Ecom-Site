@@ -13,12 +13,16 @@ import {
   listCatalogCategories,
   queryProducts,
 } from "@/lib/catalog/catalog-repository";
+import { resolveCountryCurrency } from "@/lib/data/pricing";
 
 export async function cachedListCategories(
   _params?: CategoryListParams,
-  _options?: { locale?: string; country?: string },
+  options?: { locale?: string; country?: string; currency?: string },
 ) {
-  const categories = await listCatalogCategories();
+  const currency =
+    options?.currency ||
+    (options?.country ? resolveCountryCurrency(options.country) : "USD");
+  const categories = await listCatalogCategories(currency);
   return {
     data: categories,
     meta: { count: categories.length, total_count: categories.length },
@@ -27,7 +31,7 @@ export async function cachedListCategories(
 
 export async function getCategories(
   params?: CategoryListParams,
-  options?: { locale?: string; country?: string },
+  options?: { locale?: string; country?: string; currency?: string },
 ) {
   return cachedListCategories(params, options);
 }
@@ -35,9 +39,12 @@ export async function getCategories(
 export async function cachedGetCategory(
   idOrPermalink: string,
   _params?: { expand?: string[] },
-  _options?: { locale?: string; country?: string },
+  options?: { locale?: string; country?: string; currency?: string },
 ) {
-  const local = await getCategoryByPermalinkOrId(idOrPermalink);
+  const currency =
+    options?.currency ||
+    (options?.country ? resolveCountryCurrency(options.country) : "USD");
+  const local = await getCategoryByPermalinkOrId(idOrPermalink, currency);
   if (local) {
     return local as Category;
   }
@@ -46,9 +53,15 @@ export async function cachedGetCategory(
 
 export async function getCategory(
   idOrPermalink: string,
-  params?: { expand?: string[] },
+  params?: { expand?: string[]; currency?: string; country?: string },
 ) {
-  return cachedGetCategory(idOrPermalink, params);
+  return cachedGetCategory(
+    idOrPermalink,
+    params,
+    params?.currency || params?.country
+      ? { currency: params.currency, country: params.country }
+      : undefined,
+  );
 }
 
 /**
@@ -57,8 +70,13 @@ export async function getCategory(
 export async function cachedListCategoryProducts(
   categoryId: string,
   params?: ProductListParams,
-  _options?: { locale?: string; country?: string },
+  options?: { locale?: string; country?: string; currency?: string },
 ) {
+  const currency =
+    options?.currency ||
+    (typeof params?.currency === "string" ? params.currency : undefined) ||
+    (options?.country ? resolveCountryCurrency(options.country) : "USD");
+
   const raw = (params || {}) as Record<string, any>;
   const page = Number(raw.page) || 1;
   const limit = Number(raw.limit) || 12;
@@ -80,6 +98,7 @@ export async function cachedListCategoryProducts(
     offset,
     q,
     sort,
+    currency,
   });
   return result as unknown as PaginatedResponse<Product>;
 }
@@ -88,6 +107,11 @@ export async function getCategoryProducts(
   categoryId: string,
   params?: ProductListParams,
 ) {
-  return cachedListCategoryProducts(categoryId, params);
+  const currency = typeof params?.currency === "string" ? params.currency : undefined;
+  return cachedListCategoryProducts(
+    categoryId,
+    params,
+    currency ? { currency } : undefined,
+  );
 }
 

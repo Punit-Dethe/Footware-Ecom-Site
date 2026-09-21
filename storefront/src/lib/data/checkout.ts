@@ -16,7 +16,7 @@ import {
 } from "@/lib/db/cart";
 import { getOrderBySourceCartAuthorized } from "@/lib/db/order";
 import type { AddressParams, Cart } from "@/types/commerce";
-import { getCart, verifyAuthSession } from "./cart";
+import { ensureCartMarket, getCart, verifyAuthSession } from "./cart";
 import { adaptDbOrderToCart } from "./order-adapter";
 import { actionResult } from "./utils";
 import { getWholesaleChannel } from "./wholesale";
@@ -220,12 +220,21 @@ export async function updateCartMarket(
       throw new Error("Unauthorized to update cart market");
     }
 
-    await updateAuthorizedCartCurrency({
+    // Verify all cart items have valid, in-stock prices in the target currency before switching
+    if (typeof ensureCartMarket === "function") {
+      await ensureCartMarket(cartId, params.currency);
+    }
+
+    const updated = await updateAuthorizedCartCurrency({
       cartId,
       surface,
       auth: { userId, guestTokenHash },
       currency: params.currency,
     });
+
+    if (!updated) {
+      throw new Error("Failed to update cart market: cart not found or unauthorized");
+    }
 
     const cart = await getCart(cartId, surface);
     updateTag(checkoutTag(surface));

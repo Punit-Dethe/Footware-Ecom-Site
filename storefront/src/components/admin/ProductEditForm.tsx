@@ -29,6 +29,8 @@ interface FormVariant {
   sizeOption: string;
   priceDollars: string;
   compareAtDollars: string;
+  priceInr: string;
+  compareAtInr: string;
   quantityOnHand: number;
   backorderable: boolean;
   isDefault: boolean;
@@ -69,6 +71,16 @@ export function ProductEditForm({
       priceDollars: (v.priceInCents / 100).toFixed(2),
       compareAtDollars:
         v.compareAtPriceInCents != null ? (v.compareAtPriceInCents / 100).toFixed(2) : "",
+      priceInr:
+        v.priceInInrPaise != null
+          ? (v.priceInInrPaise / 100).toFixed(2)
+          : (Math.round((v.priceInCents / 100) * 88)).toFixed(2),
+      compareAtInr:
+        v.compareAtPriceInInrPaise != null
+          ? (v.compareAtPriceInInrPaise / 100).toFixed(2)
+          : v.compareAtPriceInCents != null
+          ? (Math.round((v.compareAtPriceInCents / 100) * 88)).toFixed(2)
+          : "",
       quantityOnHand: v.quantityOnHand,
       backorderable: v.backorderable,
       isDefault: v.isDefault,
@@ -114,6 +126,18 @@ export function ProductEditForm({
           ? (initV.compareAtPriceInCents / 100).toFixed(2)
           : "";
       if (v.compareAtDollars !== initCompare) return true;
+      const initPriceInr =
+        initV.priceInInrPaise != null
+          ? (initV.priceInInrPaise / 100).toFixed(2)
+          : (Math.round((initV.priceInCents / 100) * 88)).toFixed(2);
+      if (v.priceInr !== initPriceInr) return true;
+      const initCompareInr =
+        initV.compareAtPriceInInrPaise != null
+          ? (initV.compareAtPriceInInrPaise / 100).toFixed(2)
+          : initV.compareAtPriceInCents != null
+          ? (Math.round((initV.compareAtPriceInCents / 100) * 88)).toFixed(2)
+          : "";
+      if (v.compareAtInr !== initCompareInr) return true;
       if (v.quantityOnHand !== initV.quantityOnHand) return true;
       if (v.backorderable !== initV.backorderable) return true;
       if (v.isDefault !== initV.isDefault) return true;
@@ -152,6 +176,8 @@ export function ProductEditForm({
         sizeOption: `${7 + nextIndex}`,
         priceDollars: variants[0]?.priceDollars || "285.00",
         compareAtDollars: "",
+        priceInr: variants[0]?.priceInr || "25080.00",
+        compareAtInr: "",
         quantityOnHand: 10,
         backorderable: true,
         isDefault: variants.length === 0,
@@ -195,6 +221,14 @@ export function ProductEditForm({
       const compareCents = v.compareAtDollars.trim()
         ? Math.round(parseFloat(v.compareAtDollars) * 100)
         : null;
+      const priceInrPaise = v.priceInr?.trim()
+        ? Math.round(parseFloat(v.priceInr) * 100)
+        : Math.round(priceCents * 0.88) * 100;
+      const compareAtInrPaise = v.compareAtInr?.trim()
+        ? Math.round(parseFloat(v.compareAtInr) * 100)
+        : compareCents != null
+        ? Math.round(compareCents * 0.88) * 100
+        : null;
 
       return {
         id: v.id,
@@ -202,6 +236,8 @@ export function ProductEditForm({
         sizeOption: v.sizeOption.trim() || null,
         priceInCents: priceCents,
         compareAtPriceInCents: compareCents,
+        priceInInrPaise: priceInrPaise,
+        compareAtPriceInInrPaise: compareAtInrPaise,
         quantityOnHand: Number(v.quantityOnHand) || 0,
         backorderable: Boolean(v.backorderable),
         isDefault: Boolean(v.isDefault),
@@ -566,6 +602,8 @@ export function ProductEditForm({
                 <th scope="col" className="admin-th">Size</th>
                 <th scope="col" className="admin-th">Price ($ USD)</th>
                 <th scope="col" className="admin-th">Compare-At ($)</th>
+                <th scope="col" className="admin-th">Price (₹ INR)</th>
+                <th scope="col" className="admin-th">Compare-At (₹)</th>
                 <th scope="col" className="admin-th">Stock</th>
                 <th scope="col" className="admin-th text-center">Backorder</th>
                 <th scope="col" className="admin-th text-center">Active</th>
@@ -640,6 +678,33 @@ export function ProductEditForm({
                       className="admin-input !py-1 !px-2 text-xs w-24"
                       placeholder="Optional"
                       aria-label="Variant Compare-At Price"
+                    />
+                  </td>
+                  <td className="admin-td">
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={v.priceInr}
+                      onChange={(e) =>
+                        handleVariantChange(idx, "priceInr", e.target.value)
+                      }
+                      className="admin-input !py-1 !px-2 text-xs w-28"
+                      aria-label="Variant Price INR"
+                    />
+                  </td>
+                  <td className="admin-td">
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={v.compareAtInr}
+                      onChange={(e) =>
+                        handleVariantChange(idx, "compareAtInr", e.target.value)
+                      }
+                      className="admin-input !py-1 !px-2 text-xs w-28"
+                      placeholder="Optional"
+                      aria-label="Variant Compare-At Price INR"
                     />
                   </td>
                   <td className="admin-td">

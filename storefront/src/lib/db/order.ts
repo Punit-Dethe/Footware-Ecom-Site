@@ -307,7 +307,8 @@ export async function placeOrderFromCart(params: {
       throw new Error(`Cannot place order: cart status is '${cart.status}', must be 'active'`);
     }
 
-    // 4. Load cart items joined directly to variants and products inside the transaction
+    // 4. Load cart items joined directly to variants, variant_prices, and products inside the transaction
+    const cartCurrency = ((cart.currency as string) || "USD").toUpperCase();
     const cartItemsRes = await client.query<Record<string, unknown>>(
       `SELECT
          ci.id AS cart_item_id,
@@ -318,7 +319,7 @@ export async function placeOrderFromCart(params: {
          v.id AS db_variant_id,
          v.sku AS db_variant_sku,
          v.size_option,
-         v.price_in_cents,
+         COALESCE(vp.price_in_cents, (CASE WHEN $2 = 'USD' THEN v.price_in_cents ELSE NULL END)) AS authoritative_price_in_cents,
          v.active AS variant_active,
          v.quantity_on_hand,
          v.backorderable,
@@ -345,9 +346,10 @@ export async function placeOrderFromCart(params: {
        FROM public.cart_items ci
        JOIN public.variants v ON v.id = ci.variant_id
        JOIN public.products p ON p.id = v.product_id
+       LEFT JOIN public.variant_prices vp ON vp.variant_id = v.id AND vp.currency = $2
        WHERE ci.cart_id = $1
        FOR UPDATE OF ci;`,
-      [cartId],
+      [cartId, cartCurrency],
     );
 
     if (cartItemsRes.rows.length === 0) {
@@ -394,7 +396,14 @@ export async function placeOrderFromCart(params: {
         throw new Error(`Cannot place order: variant '${sku}' is out of stock`);
       }
 
-      const priceInCents = Number(row.price_in_cents);
+      const priceRaw = row.authoritative_price_in_cents ?? row.price_in_cents;
+      if (priceRaw == null) {
+        throw new Error(
+          `Cannot place order: variant '${sku}' has no configured price for market currency '${cartCurrency}'`,
+        );
+      }
+
+      const priceInCents = Number(priceRaw);
       const lineTotalInCents = priceInCents * quantity;
       subtotalInCents += lineTotalInCents;
 
