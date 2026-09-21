@@ -5,22 +5,25 @@ export interface PriceBucket {
   max?: number;
 }
 
-const THRESHOLDS = [50, 100, 200];
+const DEFAULT_THRESHOLDS = [50, 100, 200];
+const INR_THRESHOLDS = [10000, 20000, 30000];
 
 function formatCurrency(
   amount: number,
   currency: string,
   locale?: string,
 ): string {
+  const normCurrency = (currency || "USD").toUpperCase();
+  const targetLocale = locale || (normCurrency === "INR" ? "en-IN" : "en-US");
   try {
-    return new Intl.NumberFormat(locale || "en", {
+    return new Intl.NumberFormat(targetLocale, {
       style: "currency",
-      currency,
+      currency: normCurrency,
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(amount);
   } catch {
-    return `${currency} ${amount}`;
+    return `${normCurrency} ${amount}`;
   }
 }
 
@@ -41,33 +44,35 @@ export function generatePriceBuckets(
   options?: BucketLabelOptions,
 ): PriceBucket[] {
   const { t, locale } = options || {};
+  const normCurrency = (currency || "USD").toUpperCase();
+  const thresholds = normCurrency === "INR" ? INR_THRESHOLDS : DEFAULT_THRESHOLDS;
   const buckets: PriceBucket[] = [];
 
-  if (filterMin < THRESHOLDS[0]) {
-    const price = formatCurrency(THRESHOLDS[0], currency, locale);
+  if (filterMin < thresholds[0]) {
+    const price = formatCurrency(thresholds[0], normCurrency, locale);
     buckets.push({
-      id: `under-${THRESHOLDS[0]}`,
+      id: `under-${thresholds[0]}`,
       label: t ? t("priceUnder", { price }) : `Under ${price}`,
-      max: THRESHOLDS[0],
+      max: thresholds[0],
     });
   }
 
-  for (let i = 0; i < THRESHOLDS.length - 1; i++) {
-    if (filterMax > THRESHOLDS[i] && filterMin < THRESHOLDS[i + 1]) {
-      const min = formatCurrency(THRESHOLDS[i], currency, locale);
-      const max = formatCurrency(THRESHOLDS[i + 1], currency, locale);
+  for (let i = 0; i < thresholds.length - 1; i++) {
+    if (filterMax > thresholds[i] && filterMin < thresholds[i + 1]) {
+      const min = formatCurrency(thresholds[i], normCurrency, locale);
+      const max = formatCurrency(thresholds[i + 1], normCurrency, locale);
       buckets.push({
-        id: `${THRESHOLDS[i]}-${THRESHOLDS[i + 1]}`,
+        id: `${thresholds[i]}-${thresholds[i + 1]}`,
         label: t ? t("priceRangeBucket", { min, max }) : `${min} - ${max}`,
-        min: THRESHOLDS[i],
-        max: THRESHOLDS[i + 1],
+        min: thresholds[i],
+        max: thresholds[i + 1],
       });
     }
   }
 
-  const lastThreshold = THRESHOLDS[THRESHOLDS.length - 1];
+  const lastThreshold = thresholds[thresholds.length - 1];
   if (filterMax > lastThreshold) {
-    const price = formatCurrency(lastThreshold, currency, locale);
+    const price = formatCurrency(lastThreshold, normCurrency, locale);
     buckets.push({
       id: `${lastThreshold}-plus`,
       label: t ? t("priceAbove", { price }) : `${price}+`,

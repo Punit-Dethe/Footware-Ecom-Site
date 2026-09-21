@@ -22,6 +22,20 @@ import {
   getCatalogFilters,
 } from "../catalog-repository";
 
+function withUsdPrices(raw: PublicCatalogRawData): PublicCatalogRawData {
+  if (raw.variantPrices?.length) return raw;
+  return {
+    ...raw,
+    variantPrices: raw.variants.map((v) => ({
+      id: `price-${v.id}-usd`,
+      variant_id: v.id,
+      currency: "USD",
+      price_in_cents: v.price_in_cents,
+      compare_at_price_in_cents: v.compare_at_price_in_cents,
+    })),
+  };
+}
+
 describe("B6B.1 Closure Findings: Filters, Compare-At, and Media", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -169,7 +183,7 @@ describe("B6B.1 Closure Findings: Filters, Compare-At, and Media", () => {
         ],
       };
 
-      mockDbCatalog.loadPublicCatalogRows.mockResolvedValue(rawData);
+      mockDbCatalog.loadPublicCatalogRows.mockResolvedValue(withUsdPrices(rawData));
 
       const filterResult = await getCatalogFilters();
       const catFilter = filterResult.filters.find((f) => f.id === "categories");
@@ -256,7 +270,7 @@ describe("B6B.1 Closure Findings: Filters, Compare-At, and Media", () => {
         productCategories: [{ product_id: "prod-1", category_id: "cat-1" }],
       };
 
-      const snapshot = adaptRawCatalogToPublicSnapshot(rawData);
+      const snapshot = adaptRawCatalogToPublicSnapshot(withUsdPrices(rawData));
       const product = snapshot.products[0];
       const variant = product.variants[0];
 
@@ -316,7 +330,7 @@ describe("B6B.1 Closure Findings: Filters, Compare-At, and Media", () => {
         productCategories: [{ product_id: "prod-1", category_id: "cat-1" }],
       };
 
-      const snapshot = adaptRawCatalogToPublicSnapshot(rawData);
+      const snapshot = adaptRawCatalogToPublicSnapshot(withUsdPrices(rawData));
       const product = snapshot.products[0];
       const variant = product.variants[0];
 
@@ -398,7 +412,7 @@ describe("B6B.1 Closure Findings: Filters, Compare-At, and Media", () => {
         productCategories: [{ product_id: "prod-seeded", category_id: "cat-1" }],
       };
 
-      const snapshot = adaptRawCatalogToPublicSnapshot(rawData);
+      const snapshot = adaptRawCatalogToPublicSnapshot(withUsdPrices(rawData));
       const seededProduct = snapshot.products[0];
 
       expect(seededProduct.primary_media.url).toContain("/products/office-footwear-01/");
@@ -457,7 +471,7 @@ describe("B6B.1 Closure Findings: Filters, Compare-At, and Media", () => {
         productCategories: [{ product_id: "prod-new-uuid", category_id: "cat-1" }],
       };
 
-      const snapshot = adaptRawCatalogToPublicSnapshot(rawData);
+      const snapshot = adaptRawCatalogToPublicSnapshot(withUsdPrices(rawData));
       const product = snapshot.products[0];
 
       // Primary media, original media, thumb media, and product media all use /placeholder.svg

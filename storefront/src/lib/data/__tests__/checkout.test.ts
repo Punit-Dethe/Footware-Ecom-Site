@@ -4,14 +4,14 @@ const {
   mockGetCart,
   mockGetOrderBySourceCartAuthorized,
   mockUpdateAuthorizedCartCheckoutData,
-  mockUpdateAuthorizedCartCurrency,
+  mockSwitchAuthorizedCartCurrency,
   mockVerifyAuthSession,
   mockGetCartToken,
 } = vi.hoisted(() => ({
   mockGetCart: vi.fn(),
   mockGetOrderBySourceCartAuthorized: vi.fn(),
   mockUpdateAuthorizedCartCheckoutData: vi.fn().mockResolvedValue(true),
-  mockUpdateAuthorizedCartCurrency: vi.fn().mockResolvedValue(true),
+  mockSwitchAuthorizedCartCurrency: vi.fn().mockResolvedValue({ id: "order-1", currency: "INR" }),
   mockVerifyAuthSession: vi.fn().mockResolvedValue({ status: "anonymous" }),
   mockGetCartToken: vi.fn().mockResolvedValue("order-token-123"),
 }));
@@ -19,6 +19,7 @@ const {
 vi.mock("@/lib/data/cart", () => ({
   getCart: mockGetCart,
   verifyAuthSession: mockVerifyAuthSession,
+  ensureCartMarket: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("@/lib/db/order", () => ({
@@ -28,7 +29,7 @@ vi.mock("@/lib/db/order", () => ({
 vi.mock("@/lib/db/cart", () => ({
   findCartById: vi.fn().mockResolvedValue(null),
   updateAuthorizedCartCheckoutData: mockUpdateAuthorizedCartCheckoutData,
-  updateAuthorizedCartCurrency: mockUpdateAuthorizedCartCurrency,
+  switchAuthorizedCartCurrency: mockSwitchAuthorizedCartCurrency,
 }));
 
 vi.mock("@/lib/storefront", () => ({
@@ -197,21 +198,22 @@ describe("checkout server actions (first-party architecture)", () => {
 
   describe("updateCartMarket", () => {
     it("updates currency in PostgreSQL and returns updated cart", async () => {
-      mockUpdateAuthorizedCartCurrency.mockResolvedValue(true);
-      const updatedOrder = { ...mockOrder, currency: "EUR" };
+      mockSwitchAuthorizedCartCurrency.mockResolvedValue(true);
+      const updatedOrder = { ...mockOrder, currency: "INR" };
       mockGetCart.mockResolvedValue(updatedOrder);
 
       const result = await updateCartMarket("order-1", {
-        currency: "EUR",
-        locale: "de",
+        currency: "INR",
+        locale: "en",
       });
 
-      expect(mockUpdateAuthorizedCartCurrency).toHaveBeenCalledWith({
+      expect(mockSwitchAuthorizedCartCurrency).toHaveBeenCalledWith({
         cartId: "order-1",
         surface: "dtc",
-        currency: "EUR",
+        currency: "INR",
         auth: expect.any(Object),
       });
+      expect(mockGetCart).toHaveBeenCalledWith("order-1", "dtc", "INR");
       expect(result).toEqual({ success: true, cart: updatedOrder });
     });
   });

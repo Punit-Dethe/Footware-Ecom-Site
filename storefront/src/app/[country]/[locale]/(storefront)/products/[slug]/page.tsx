@@ -7,6 +7,7 @@ import { Suspense } from "react";
 import { Breadcrumbs } from "@/components/navigation/Breadcrumbs";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { getPublicCatalogSnapshot } from "@/lib/catalog/catalog-repository";
+import { resolveCountryCurrency } from "@/lib/data/pricing";
 import { getProductMedia } from "@/lib/media/catalog-images";
 import { generateProductMetadata } from "@/lib/metadata/product";
 import {
@@ -90,8 +91,9 @@ async function ProductPageContent({ params, searchParams }: ProductPageProps) {
     searchParams,
   ]);
   const basePath = `/${country}/${locale}`;
+  const currency = resolveCountryCurrency(country);
 
-  const snapshot = await getPublicCatalogSnapshot();
+  const snapshot = await getPublicCatalogSnapshot(currency);
   const clean = slug.toLowerCase().trim();
   const product =
     snapshot.products.find(

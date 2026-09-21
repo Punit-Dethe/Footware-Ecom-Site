@@ -8,6 +8,12 @@ import {
   type CatalogProduct,
   type CatalogVariant,
 } from "@/lib/catalog/catalog-repository";
+import {
+  formatMoney,
+  formatZeroMoney,
+  isSupportedCurrency,
+  resolveVariantPrice,
+} from "@/lib/data/pricing";
 import { getVariantByIdOrSku } from "@/lib/db/catalog";
 import {
   addOrIncrementCartItem,
@@ -19,6 +25,7 @@ import {
   loadCartItems,
   markCartAbandoned,
   removeCartItem as removeCartItemFromDb,
+  switchAuthorizedCartCurrency,
   updateCartItemQuantity,
   type DbCart,
   type DbCartItem,
@@ -136,12 +143,13 @@ async function adaptDbCartToCommerceCart(
   items: DbCartItem[],
   surface: Surface,
 ): Promise<Cart> {
+  const cartCurrency = (cart.currency || "USD").toUpperCase();
   let totalCents = 0;
   let totalQty = 0;
 
   let adaptedItems: any[] = [];
   if (items.length > 0) {
-    const { products } = await getPublicCatalogSnapshot();
+    const { products } = await getPublicCatalogSnapshot(cartCurrency);
 
     adaptedItems = items.map((item) => {
       let match: { product: CatalogProduct; variant: CatalogVariant } | null =
@@ -188,7 +196,7 @@ async function adaptDbCartToCommerceCart(
       totalQty += item.quantity;
 
       const displayUnitPrice = match.variant.price.display_amount;
-      const displayLineTotal = `$${(lineTotalCents / 100).toFixed(2)}`;
+      const displayLineTotal = formatMoney(lineTotalCents, cartCurrency);
 
       return {
         id: item.id,
@@ -199,7 +207,7 @@ async function adaptDbCartToCommerceCart(
         quantity: item.quantity,
         price: {
           amount: (unitPriceCents / 100).toFixed(2),
-          currency: cart.currency,
+          currency: cartCurrency,
           display_amount: displayUnitPrice,
           amount_in_cents: unitPriceCents,
         },
@@ -214,14 +222,14 @@ async function adaptDbCartToCommerceCart(
     });
   }
 
-  const formattedTotal = `$${(totalCents / 100).toFixed(2)}`;
+  const formattedTotal = formatMoney(totalCents, cartCurrency);
 
   return {
     id: cart.id,
     number: `R-MRZ-${cart.id.replace(/-/g, "").slice(-4).toUpperCase()}`,
     // Harmless non-secret compatibility token: NEVER leaks raw guest bearer token!
     token: `cart_${cart.id.replace(/-/g, "").slice(0, 12)}`,
-    currency: cart.currency,
+    currency: cartCurrency,
     channel_id: surface === "wholesale" ? "ch-wholesale" : "ch-dtc",
     item_count: totalQty,
     total_quantity: totalQty,
@@ -230,12 +238,12 @@ async function adaptDbCartToCommerceCart(
     item_total: { display_amount: formattedTotal, amount_in_cents: totalCents },
     display_item_total: formattedTotal,
     total_amount: { display_amount: formattedTotal, amount_in_cents: totalCents },
-    ship_total: { display_amount: "$0.00", amount_in_cents: 0 },
-    display_ship_total: "$0.00",
+    ship_total: { display_amount: formatZeroMoney(cartCurrency), amount_in_cents: 0 },
+    display_ship_total: formatZeroMoney(cartCurrency),
     tax_total: "0.00",
-    display_tax_total: "$0.00",
-    promo_total: { display_amount: "$0.00", amount_in_cents: 0 },
-    display_promo_total: "$0.00",
+    display_tax_total: formatZeroMoney(cartCurrency),
+    promo_total: { display_amount: formatZeroMoney(cartCurrency), amount_in_cents: 0 },
+    display_promo_total: formatZeroMoney(cartCurrency),
     current_step: "cart",
     state: "cart",
     items: adaptedItems,
@@ -251,6 +259,31 @@ async function dropSurfaceCartCookies(surface: Surface): Promise<void> {
   }
 }
 
+async function reconcileAuthorizedCartCurrency(
+  cart: DbCart,
+  surface: Surface,
+  expectedCurrency: string | undefined,
+  auth: { userId?: string | null; guestTokenHash?: string | null },
+): Promise<DbCart> {
+  if (!expectedCurrency) return cart;
+  const currency = expectedCurrency.toUpperCase();
+  if (!isSupportedCurrency(currency)) {
+    throw new Error(`Unsupported cart currency '${expectedCurrency}'`);
+  }
+  if (cart.currency.toUpperCase() === currency) return cart;
+
+  const switched = await switchAuthorizedCartCurrency({
+    cartId: cart.id,
+    surface,
+    auth,
+    currency,
+  });
+  if (!switched) {
+    throw new Error("Failed to reconcile cart with selected market");
+  }
+  return switched;
+}
+
 /**
  * Resolves the raw authorized PostgreSQL DbCart without loading line items or adapting catalog.
  * Solves single-resolution auth invariant for cart mutations.
@@ -259,6 +292,7 @@ async function dropSurfaceCartCookies(surface: Surface): Promise<void> {
 export async function getAuthorizedDbCart(
   surface: Surface = DEFAULT_SURFACE,
   explicitCartId?: string,
+  expectedCurrency?: string,
 ): Promise<DbCart | null> {
   const auth = await verifyAuthSession();
   const rawGuestToken = await getCartToken(surface);
@@ -293,7 +327,12 @@ export async function getAuthorizedDbCart(
       return null;
     }
 
-    return userCart;
+    return await reconcileAuthorizedCartCurrency(
+      userCart,
+      surface,
+      expectedCurrency,
+      { userId: verifiedUserId },
+    );
   }
 
   // Anonymous guest flow
@@ -313,7 +352,12 @@ export async function getAuthorizedDbCart(
     return null;
   }
 
-  return guestCart;
+  return await reconcileAuthorizedCartCurrency(
+    guestCart,
+    surface,
+    expectedCurrency,
+    { guestTokenHash },
+  );
 }
 
 /**
@@ -322,7 +366,12 @@ export async function getAuthorizedDbCart(
  */
 export async function getOrCreateAuthorizedDbCart(
   surface: Surface = DEFAULT_SURFACE,
+  currency = "USD",
 ): Promise<DbCart> {
+  const normCurrency = (currency || "USD").toUpperCase();
+  if (!isSupportedCurrency(normCurrency)) {
+    throw new Error(`Unsupported cart currency '${currency}'`);
+  }
   const auth = await verifyAuthSession();
   const rawGuestToken = await getCartToken(surface);
 
@@ -336,6 +385,7 @@ export async function getOrCreateAuthorizedDbCart(
         verifiedUserId,
         guestTokenHash,
         surface,
+        normCurrency,
       );
       try {
         await clearCartToken(surface);
@@ -348,10 +398,15 @@ export async function getOrCreateAuthorizedDbCart(
     }
 
     if (userCart) {
-      return userCart;
+      return await reconcileAuthorizedCartCurrency(
+        userCart,
+        surface,
+        normCurrency,
+        { userId: verifiedUserId },
+      );
     }
 
-    const newUserCart = await createUserCart(verifiedUserId, surface, "USD");
+    const newUserCart = await createUserCart(verifiedUserId, surface, normCurrency);
     try {
       await setCartCookies(newUserCart.id, undefined, surface);
     } catch {
@@ -365,7 +420,12 @@ export async function getOrCreateAuthorizedDbCart(
     const guestTokenHash = hashGuestToken(rawGuestToken);
     const guestCart = await findActiveGuestCart(guestTokenHash, surface);
     if (guestCart) {
-      return guestCart;
+      return await reconcileAuthorizedCartCurrency(
+        guestCart,
+        surface,
+        normCurrency,
+        { guestTokenHash },
+      );
     }
     await dropSurfaceCartCookies(surface);
   }
@@ -373,7 +433,7 @@ export async function getOrCreateAuthorizedDbCart(
   // Generate secure 256-bit guest token
   const rawToken = generateGuestBearerToken();
   const guestTokenHash = hashGuestToken(rawToken);
-  const newGuestCart = await createGuestCart(guestTokenHash, surface, "USD");
+  const newGuestCart = await createGuestCart(guestTokenHash, surface, normCurrency);
 
   try {
     await setCartCookies(newGuestCart.id, rawToken, surface);
@@ -392,8 +452,9 @@ export async function getOrCreateAuthorizedDbCart(
 export async function getCart(
   explicitCartId?: string,
   surface: Surface = DEFAULT_SURFACE,
+  expectedCurrency?: string,
 ): Promise<Cart | null> {
-  const cart = await getAuthorizedDbCart(surface, explicitCartId);
+  const cart = await getAuthorizedDbCart(surface, explicitCartId, expectedCurrency);
   if (!cart) {
     return null;
   }
@@ -407,10 +468,11 @@ export async function getCart(
  * Creates either a user-owned cart or a cryptographically secure guest cart.
  */
 export async function getOrCreateCart(
-  _params?: CreateCartParams,
+  params?: CreateCartParams & { currency?: string },
   surface: Surface = DEFAULT_SURFACE,
 ): Promise<Cart> {
-  const cart = await getOrCreateAuthorizedDbCart(surface);
+  const currency = params?.currency || "USD";
+  const cart = await getOrCreateAuthorizedDbCart(surface, currency);
   const items = await loadCartItems(cart.id);
   return await adaptDbCartToCommerceCart(cart, items, surface);
 }
@@ -439,6 +501,7 @@ export async function addToCart(
   variantId: string,
   quantity: number,
   surface: Surface = DEFAULT_SURFACE,
+  currency?: string,
 ) {
   return actionResult(async () => {
     const match = await getVariantByIdOrSku(variantId);
@@ -458,13 +521,58 @@ export async function addToCart(
       throw new Error("Quantity must be a positive integer");
     }
 
-    const cart = await getOrCreateAuthorizedDbCart(surface);
+    const targetCurrency = (currency || "USD").toUpperCase();
+    if (!isSupportedCurrency(targetCurrency)) {
+      throw new Error(`Unsupported cart currency '${currency}'`);
+    }
+    const targetPrice = resolveVariantPrice(match.prices, targetCurrency);
+    if (!targetPrice || targetPrice.price_in_cents <= 0) {
+      throw new Error(
+        `Variant is not priced for the selected market (${targetCurrency})`,
+      );
+    }
+
+    const cart = await getOrCreateAuthorizedDbCart(surface, targetCurrency);
     await addOrIncrementCartItem(cart.id, match.id, match.sku, quantity);
 
     const items = await loadCartItems(cart.id);
     const updatedCart = await adaptDbCartToCommerceCart(cart, items, surface);
     return { cart: updatedCart };
   }, "Failed to add item to cart");
+}
+
+/**
+ * Verifies that all line items in a cart have an available, in-stock price in the target currency.
+ * Throws if any item cannot be sold in the target market.
+ */
+export async function ensureCartMarket(
+  cartId: string,
+  targetCurrency: string,
+): Promise<void> {
+  const normCurrency = (targetCurrency || "USD").toUpperCase();
+  const items = await loadCartItems(cartId);
+  if (items.length === 0) return;
+
+  const { products } = await getPublicCatalogSnapshot(normCurrency);
+
+  for (const item of items) {
+    let match: { product: CatalogProduct; variant: CatalogVariant } | null = null;
+    for (const p of products) {
+      const v = item.variant_id
+        ? p.variants.find((vItem) => vItem.id === item.variant_id)
+        : p.variants.find((vItem) => vItem.sku === item.variant_sku);
+      if (v) {
+        match = { product: p, variant: v };
+        break;
+      }
+    }
+
+    if (!match?.variant.purchasable || !match.variant.in_stock) {
+      throw new Error(
+        `Item '${item.variant_sku || item.variant_id}' is not available for purchase in ${normCurrency}`,
+      );
+    }
+  }
 }
 
 /**

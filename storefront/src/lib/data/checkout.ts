@@ -11,8 +11,8 @@ import {
 } from "@/lib/storefront";
 import {
   findCartById,
+  switchAuthorizedCartCurrency,
   updateAuthorizedCartCheckoutData,
-  updateAuthorizedCartCurrency,
 } from "@/lib/db/cart";
 import { getOrderBySourceCartAuthorized } from "@/lib/db/order";
 import type { AddressParams, Cart } from "@/types/commerce";
@@ -220,14 +220,18 @@ export async function updateCartMarket(
       throw new Error("Unauthorized to update cart market");
     }
 
-    await updateAuthorizedCartCurrency({
+    const updated = await switchAuthorizedCartCurrency({
       cartId,
       surface,
       auth: { userId, guestTokenHash },
       currency: params.currency,
     });
 
-    const cart = await getCart(cartId, surface);
+    if (!updated) {
+      throw new Error("Failed to update cart market: cart not found or unauthorized");
+    }
+
+    const cart = await getCart(cartId, surface, params.currency);
     updateTag(checkoutTag(surface));
     updateTag(cartTag(surface));
     return { cart };

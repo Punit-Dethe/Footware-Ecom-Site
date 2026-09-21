@@ -109,6 +109,10 @@ export function StoreProvider({
   );
 }
 
+export function useOptionalStore() {
+  return useContext(StoreContext);
+}
+
 export function useStore() {
   const context = useContext(StoreContext);
   if (context === undefined) {
