@@ -1,0 +1,38 @@
+name: Recovery CI
+
+on:
+  push:
+    branches:
+      - fix/market-pricing-inr-razorpay
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.4
+          run_install: false
+
+      - name: Install dependencies
+        run: pnpm --prefix storefront install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm --prefix storefront exec tsc --noEmit
+
+      - name: Lint
+        run: pnpm --prefix storefront lint
+
+      - name: Tests
+        run: pnpm --prefix storefront test --run
