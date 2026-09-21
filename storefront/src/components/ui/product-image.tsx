@@ -37,10 +37,9 @@ export function ProductImage({
     );
   }
 
-  const avifSrcSet = variants ? generateSrcSet(variants, "avif") : null;
   const webpSrcSet = variants ? generateSrcSet(variants, "webp") : null;
 
-  if (avifSrcSet || webpSrcSet) {
+  if (webpSrcSet) {
     const isPriority =
       Boolean(rest.priority) ||
       fetchPriority === "high" ||
@@ -52,40 +51,28 @@ export function ProductImage({
       src;
 
     return (
-      <picture className={rest.fill ? "absolute inset-0 block w-full h-full" : undefined}>
-        {avifSrcSet && (
-          <source
-            type="image/avif"
-            srcSet={avifSrcSet}
-            sizes={rest.sizes}
-          />
-        )}
-        {webpSrcSet && (
-          <source
-            type="image/webp"
-            srcSet={webpSrcSet}
-            sizes={rest.sizes}
-          />
-        )}
-        <img
-          src={fallbackSrc}
-          alt={rest.alt || ""}
-          loading={isPriority ? "eager" : "lazy"}
-          fetchPriority={fetchPriority ?? (isPriority ? "high" : undefined)}
-          decoding="async"
-          className={rest.className}
-          style={{
-            objectFit: rest.className?.includes("object-contain") ? "contain" : "cover",
-            width: "100%",
-            height: "100%",
-            ...(rest.style as React.CSSProperties),
-          }}
-          onError={(e) => {
-            setHasError(true);
-            onError?.(e as any);
-          }}
-        />
-      </picture>
+      <img
+        src={fallbackSrc}
+        srcSet={webpSrcSet}
+        sizes={rest.sizes}
+        alt={rest.alt || ""}
+        loading={isPriority ? "eager" : "lazy"}
+        fetchPriority={fetchPriority ?? (isPriority ? "high" : undefined)}
+        decoding="async"
+        className={rest.className}
+        style={{
+          objectFit: rest.className?.includes("object-contain") ? "contain" : "cover",
+          width: "100%",
+          height: "100%",
+          position: rest.fill ? "absolute" : undefined,
+          inset: rest.fill ? 0 : undefined,
+          ...(rest.style as React.CSSProperties),
+        }}
+        onError={(e) => {
+          setHasError(true);
+          onError?.(e as any);
+        }}
+      />
     );
   }
 
