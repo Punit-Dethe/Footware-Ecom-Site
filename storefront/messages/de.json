@@ -155,7 +155,11 @@
     "wholesaleBenefitQuickOrderTitle": "Schnelle Sammelbestellung",
     "wholesaleBenefitQuickOrderDescription": "Geben Sie SKUs und Mengen ein, um in Sekunden eine große Bestellung zusammenzustellen.",
     "wholesaleBenefitOrdersTitle": "Bestellverlauf",
-    "wholesaleBenefitOrdersDescription": "Sehen Sie vergangene Bestellungen ein und bestellen Sie Ihre Standardartikel mit wenigen Klicks nach."
+    "wholesaleBenefitOrdersDescription": "Sehen Sie vergangene Bestellungen ein und bestellen Sie Ihre Standardartikel mit wenigen Klicks nach.",
+    "heroOverlayTitle": "Gefertigt",
+    "heroOverlayAccent": "für deinen nächsten Weg.",
+    "heroOverlaySubtitle": "Zeitlose Schuhe für ein Leben in Bewegung.",
+    "heroOverlayCta": "Kollektion entdecken"
   },
   "cart": {
     "cart": "Warenkorb",

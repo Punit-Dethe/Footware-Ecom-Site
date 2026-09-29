@@ -1342,11 +1342,64 @@ body:has(.home-page.mirza-home:not([style*="display: none"])) .editorial-footer_
   object-position: center;
 }
 
+.mirza-home .mirza-evening-hero__content {
+  display: flex;
+  min-height: calc(100svh - 84px);
+  align-items: flex-end;
+  padding-block: 60px 8svh;
+}
+
+.mirza-home .mirza-evening-hero__copy {
+  width: min(780px, 70%);
+}
+
+.mirza-home .mirza-evening-hero__title {
+  margin: 0;
+  font-size: clamp(46px, 4.6vw, 76px);
+  line-height: 1.03;
+  font-weight: 400;
+}
+
+.mirza-home .mirza-evening-hero__title span,
+.mirza-home .mirza-evening-hero__title em {
+  display: block;
+}
+
+.mirza-home .mirza-evening-hero__subtitle {
+  margin-top: 24px;
+  font-size: 16px;
+  line-height: 1.6;
+  letter-spacing: .12em;
+  color: rgba(243, 239, 232, .9);
+}
+
+.mirza-home .mirza-evening-hero__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 24px;
+  margin-top: 28px;
+  font-size: 10px;
+  line-height: 1.4;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+}
+
+.mirza-home .mirza-evening-hero__link span {
+  padding-bottom: 7px;
+  border-bottom: 1px solid rgba(243, 239, 232, .65);
+}
+
+.mirza-home .mirza-evening-hero__link:focus-visible {
+  outline: 2px solid #f3efe8;
+  outline-offset: 8px;
+}
+
 .mirza-home .mirza-evening-hero::before {
   position: absolute;
   z-index: -1;
   inset: 0;
-  background: linear-gradient(180deg, rgba(24, 19, 17, .28), transparent 40%),
+  background: radial-gradient(ellipse at 0% 72%, rgba(24, 19, 17, .24), transparent 60%),
+    linear-gradient(180deg, rgba(24, 19, 17, .28), transparent 40%),
     linear-gradient(90deg, rgba(24, 19, 17, .15), transparent 60%);
   content: "";
   pointer-events: none;
@@ -1387,8 +1440,29 @@ body:has(.home-page.mirza-home:not([style*="display: none"])) .editorial-header:
     object-position: 64% center;
   }
 
+  .mirza-home .mirza-evening-hero__content {
+    min-height: calc(100svh - 68px);
+    padding-bottom: 8svh;
+  }
+
+  .mirza-home .mirza-evening-hero__copy {
+    width: min(100%, 540px);
+  }
+
+  .mirza-home .mirza-evening-hero__title {
+    font-size: clamp(38px, 8.5vw, 56px);
+  }
+
+  .mirza-home .mirza-evening-hero__subtitle {
+    max-width: 32ch;
+    margin-top: 20px;
+    font-size: 14px;
+    letter-spacing: .08em;
+  }
+
   .mirza-home .mirza-evening-hero::before {
-    background: linear-gradient(180deg, rgba(24, 19, 17, .48), rgba(24, 19, 17, .18) 42%, transparent 70%);
+    background: radial-gradient(ellipse at 0% 72%, rgba(24, 19, 17, .28), transparent 65%),
+      linear-gradient(180deg, rgba(24, 19, 17, .48), rgba(24, 19, 17, .18) 42%, transparent 70%);
   }
 }
 

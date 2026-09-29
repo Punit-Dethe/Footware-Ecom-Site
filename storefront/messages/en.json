@@ -155,7 +155,11 @@
     "wholesaleBenefitQuickOrderTitle": "Bulk quick-order",
     "wholesaleBenefitQuickOrderDescription": "Enter SKUs and quantities to build a large order in seconds.",
     "wholesaleBenefitOrdersTitle": "Order history",
-    "wholesaleBenefitOrdersDescription": "Review past orders and reorder your regular lines in a couple of clicks."
+    "wholesaleBenefitOrdersDescription": "Review past orders and reorder your regular lines in a couple of clicks.",
+    "heroOverlayTitle": "Crafted",
+    "heroOverlayAccent": "for where you go next.",
+    "heroOverlaySubtitle": "Timeless footwear for a life in motion.",
+    "heroOverlayCta": "Shop the collection"
   },
   "cart": {
     "cart": "Cart",

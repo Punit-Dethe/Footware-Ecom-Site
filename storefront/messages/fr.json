@@ -154,7 +154,11 @@
     "wholesaleBenefitQuickOrderTitle": "Commande rapide en volume",
     "wholesaleBenefitQuickOrderDescription": "Saisissez des SKU et des quantités pour composer une grande commande en quelques secondes.",
     "wholesaleBenefitOrdersTitle": "Historique des commandes",
-    "wholesaleBenefitOrdersDescription": "Consultez vos commandes passées et recommandez vos références habituelles en quelques clics."
+    "wholesaleBenefitOrdersDescription": "Consultez vos commandes passées et recommandez vos références habituelles en quelques clics.",
+    "heroOverlayTitle": "Façonné",
+    "heroOverlayAccent": "pour votre prochaine étape.",
+    "heroOverlaySubtitle": "Des chaussures intemporelles pour une vie en mouvement.",
+    "heroOverlayCta": "Découvrir la collection"
   },
   "cart": {
     "cart": "Panier",

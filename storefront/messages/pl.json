@@ -155,7 +155,11 @@
     "wholesaleBenefitQuickOrderTitle": "Szybkie zamówienie zbiorcze",
     "wholesaleBenefitQuickOrderDescription": "Wprowadź numery SKU i ilości, aby w kilka sekund złożyć duże zamówienie.",
     "wholesaleBenefitOrdersTitle": "Historia zamówień",
-    "wholesaleBenefitOrdersDescription": "Przeglądaj poprzednie zamówienia i zamawiaj ponownie swoje stałe pozycje w kilka kliknięć."
+    "wholesaleBenefitOrdersDescription": "Przeglądaj poprzednie zamówienia i zamawiaj ponownie swoje stałe pozycje w kilka kliknięć.",
+    "heroOverlayTitle": "Stworzone",
+    "heroOverlayAccent": "na Twój kolejny krok.",
+    "heroOverlaySubtitle": "Ponadczasowe obuwie dla życia w ruchu.",
+    "heroOverlayCta": "Odkryj kolekcję"
   },
   "cart": {
     "cart": "Koszyk",

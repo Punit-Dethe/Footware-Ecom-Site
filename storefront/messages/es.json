@@ -154,7 +154,11 @@
     "wholesaleBenefitQuickOrderTitle": "Pedido rápido por lotes",
     "wholesaleBenefitQuickOrderDescription": "Introduce SKUs y cantidades para crear un pedido grande en segundos.",
     "wholesaleBenefitOrdersTitle": "Historial de pedidos",
-    "wholesaleBenefitOrdersDescription": "Consulta pedidos anteriores y vuelve a pedir tus líneas habituales con un par de clics."
+    "wholesaleBenefitOrdersDescription": "Consulta pedidos anteriores y vuelve a pedir tus líneas habituales con un par de clics.",
+    "heroOverlayTitle": "Hecho a mano",
+    "heroOverlayAccent": "para tu próximo destino.",
+    "heroOverlaySubtitle": "Calzado atemporal para una vida en movimiento.",
+    "heroOverlayCta": "Descubre la colección"
   },
   "cart": {
     "cart": "Carrito",
