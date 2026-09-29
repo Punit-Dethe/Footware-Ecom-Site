@@ -9,6 +9,10 @@ interface StoryProps {
 }
 
 async function getStudyCopy(locale: string) {
+  const home = await getTranslations({
+    locale: locale as Locale,
+    namespace: "home",
+  });
   const t = await getTranslations({
     locale: locale as Locale,
     namespace: "home.journal",
@@ -32,8 +36,15 @@ async function getStudyCopy(locale: string) {
     }),
     traditionalTitle: t("traditionalTitle"),
     traditionalDescription: t("traditionalDescription"),
+    traditionalSecondaryDescription: t("traditionalSecondaryDescription"),
+    traditionalCompactDescription: t("traditionalCompactDescription"),
+    traditionalCta: home("shopTraditional"),
     officeTitle: t("officeTitle"),
     officeDescription: t("officeDescription"),
+    officeSecondaryDescription: t("officeSecondaryDescription"),
+    officeCompactDescription: t("officeCompactDescription"),
+    collectionDesignLabel: t("collectionDesignLabel"),
+    officeCta: home("exploreFormals"),
     heritageImageAlt: t("heritageImageAlt"),
     officeImageAlt: t("officeImageAlt"),
   };

@@ -11,6 +11,7 @@ interface ParallaxSceneImageProps {
   speed?: number;
   objectPosition?: string;
   priority?: boolean;
+  classPrefix?: string;
 }
 
 /**
@@ -25,6 +26,7 @@ export function ParallaxSceneImage({
   speed = 0.16,
   objectPosition = "center 50%",
   priority = false,
+  classPrefix = "folio-three-scene",
 }: ParallaxSceneImageProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
@@ -102,10 +104,10 @@ export function ParallaxSceneImage({
   }, [update]);
 
   return (
-    <div ref={containerRef} className="folio-three-scene__image">
+    <div ref={containerRef} className={`${classPrefix}__image`}>
       <div
         ref={innerRef}
-        className="folio-three-scene__image-inner"
+        className={`${classPrefix}__image-inner`}
         style={{
           willChange: "transform",
         }}

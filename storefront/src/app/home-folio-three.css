@@ -1,43 +1,302 @@
-/* A cinematic procession continues the product edit's mineral field. */
+/* Dusk photographs open a measured space for each collection's story. */
 .mirza-home .folio-three-collections {
   position: relative;
   padding-block: clamp(112px, 8.5vw, 136px) clamp(124px, 9vw, 148px);
-  overflow: hidden;
   background: var(--mirza-mineral);
   color: var(--mirza-ink);
 }
 
 .mirza-home .folio-three-collections__inner {
-  position: relative;
-  z-index: 2;
   display: grid;
-  gap: 34px;
+  container-type: inline-size;
+  gap: clamp(72px, 7vw, 112px);
 }
 
 .mirza-home .folio-three-collections__title {
   max-width: 10ch;
-  margin: 0 auto 38px;
+  margin: 0 auto;
   font-size: clamp(58px, 6vw, 88px);
   line-height: 1;
   text-align: center;
 }
 
 .mirza-home .folio-three-scene {
+  --image-reveal: var(--image-progress, 1);
+  --copy-reveal: var(--copy-progress, 1);
+  position: relative;
+  container-type: inline-size;
+  min-width: 0;
+  height: calc(88cqw / 2.48);
+  color: inherit;
+}
+
+.mirza-home .folio-three-scene:focus-within {
+  --image-reveal: 1;
+  --copy-reveal: 1;
+}
+
+.mirza-home .folio-three-scene__image {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 88%;
+  clip-path: inset(0 calc(20.454545% * var(--image-reveal)) 0 0);
+  overflow: hidden;
+  background: #514035;
+}
+
+.mirza-home .folio-three-scene--office .folio-three-scene__image {
+  right: 0;
+  left: auto;
+  clip-path: inset(0 0 0 calc(20.454545% * var(--image-reveal)));
+}
+
+.mirza-home .folio-three-scene__image img {
+  object-fit: cover;
+  object-position: center;
+}
+
+.mirza-home .folio-three-scene__image-inner {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+}
+
+.mirza-home .folio-three-scene__caption {
+  position: absolute;
+  z-index: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  width: 28%;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  padding-block: 16px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* A single feather follows reading order without fading separate paragraphs. */
+.mirza-home .folio-three-scene__copy {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  align-items: flex-start;
+  mask-image: linear-gradient(180deg, #000 calc(var(--copy-reveal) * 118% - 18%), transparent calc(var(--copy-reveal) * 118%));
+}
+
+.mirza-home .folio-three-scene--office .folio-three-scene__caption {
+  right: auto;
+  left: 0;
+}
+
+.mirza-home .folio-three-scene__caption h3 {
+  margin: 0;
+  font-size: clamp(38px, 3.7vw, 56px);
+  line-height: 1;
+}
+
+.mirza-home .folio-three-scene__caption p {
+  max-width: 42ch;
+  margin-top: 20px;
+  color: var(--mirza-muted);
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.mirza-home .folio-three-scene__caption .folio-three-scene__secondary-copy {
+  margin-top: 16px;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.mirza-home .folio-three-scene__caption .mirza-link {
+  margin-top: 18px;
+  pointer-events: auto;
+}
+
+.mirza-home .folio-three-scene__image:focus-visible {
+  outline: none;
+}
+
+.mirza-home .folio-three-scene__image:focus-visible::after {
+  position: absolute;
+  inset: 2px calc(20.454545% * var(--image-reveal) + 2px) 2px 2px;
+  outline: 2px solid #f3efe8;
+  content: "";
+}
+
+.mirza-home .folio-three-scene--office .folio-three-scene__image:focus-visible::after {
+  inset: 2px 2px 2px calc(20.454545% * var(--image-reveal) + 2px);
+}
+
+@media (min-width: 1201px) and (max-width: 1300px) {
+  .mirza-home .folio-three-scene__caption {
+    padding-block: 0;
+  }
+
+  .mirza-home .folio-three-scene__caption h3 {
+    font-size: 42px;
+  }
+
+  .mirza-home .folio-three-scene__caption p {
+    margin-top: 14px;
+    font-size: 13px;
+    line-height: 1.65;
+  }
+
+  .mirza-home .folio-three-scene__caption .folio-three-scene__secondary-copy {
+    margin-top: 12px;
+  }
+
+  .mirza-home .folio-three-scene__caption .mirza-link {
+    margin-top: 10px;
+  }
+}
+
+@media (max-width: 1200px) {
+  .mirza-home .folio-three-collections {
+    padding-block: 104px 96px;
+  }
+
+  .mirza-home .folio-three-collections__inner {
+    gap: 56px;
+  }
+
+  .mirza-home .folio-three-collections__title {
+    font-size: clamp(48px, 9vw, 72px);
+  }
+
+  .mirza-home .folio-three-scene {
+    --image-reveal: 1;
+    --copy-reveal: 1;
+    height: auto;
+  }
+
+  .mirza-home .folio-three-scene__image,
+  .mirza-home .folio-three-scene--office .folio-three-scene__image {
+    position: relative;
+    display: block;
+    width: 100%;
+    aspect-ratio: 2.818;
+    clip-path: none;
+  }
+
+  .mirza-home .folio-three-scene__caption,
+  .mirza-home .folio-three-scene--office .folio-three-scene__caption {
+    position: static;
+    width: 100%;
+    padding-block: 28px 0;
+    clip-path: none;
+  }
+
+  .mirza-home .folio-three-scene__image-inner {
+    width: 100%;
+  }
+
+  .mirza-home .folio-three-scene__image:focus-visible::after,
+  .mirza-home .folio-three-scene--office .folio-three-scene__image:focus-visible::after {
+    inset: 2px;
+  }
+
+  .mirza-home .folio-three-scene__caption h3 {
+    font-size: 40px;
+  }
+
+  .mirza-home .folio-three-scene__caption p {
+    max-width: 58ch;
+    margin-top: 16px;
+  }
+}
+
+@media (max-width: 760px) {
+  .mirza-home .folio-three-scene__image,
+  .mirza-home .folio-three-scene--office .folio-three-scene__image {
+    aspect-ratio: 2.1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mirza-home .folio-three-scene {
+    --image-reveal: 1;
+    --copy-reveal: 1;
+  }
+}
+
+/* The alternative keeps the original offset paper-caption composition. */
+.mirza-home .folio-three-design-layout {
+  display: grid;
+  gap: clamp(72px, 7vw, 112px);
+}
+
+.mirza-home .folio-three-design-header {
+  display: grid;
+  justify-items: center;
+  gap: 20px;
+}
+
+.mirza-home .folio-three-design-switch {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--mirza-line);
+  border-radius: 999px;
+}
+
+.mirza-home .folio-three-design-switch button {
+  width: 28px;
+  height: 26px;
+  border-radius: 999px;
+  color: var(--mirza-muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.mirza-home .folio-three-design-switch button[aria-pressed="true"] {
+  background: var(--mirza-ink);
+  color: var(--mirza-paper);
+}
+
+.mirza-home .folio-three-design-switch button:focus-visible {
+  outline: 2px solid var(--mirza-focus, #8e5038);
+  outline-offset: 3px;
+}
+
+.mirza-home .folio-three-legacy-collections__inner {
+  display: grid;
+  gap: 34px;
+}
+
+@media (max-width: 1200px) {
+  .mirza-home .folio-three-design-layout { gap: 56px; }
+}
+
+@media (max-width: 760px) {
+  .mirza-home .folio-three-legacy-collections__inner { gap: 38px; }
+}
+
+.mirza-home .folio-three-legacy-scene {
   display: block;
   width: 88%;
   color: inherit;
   text-decoration: none;
 }
 
-.mirza-home .folio-three-scene--traditional {
+.mirza-home .folio-three-legacy-scene--traditional {
   justify-self: start;
 }
 
-.mirza-home .folio-three-scene--office {
+.mirza-home .folio-three-legacy-scene--office {
   justify-self: end;
 }
 
-.mirza-home .folio-three-scene__image {
+.mirza-home .folio-three-legacy-scene__image {
   position: relative;
   width: 100%;
   aspect-ratio: 2.48;
@@ -45,7 +304,7 @@
   background: #514035;
 }
 
-.mirza-home .folio-three-scene__image-inner {
+.mirza-home .folio-three-legacy-scene__image-inner {
   position: absolute;
   top: -20%;
   left: 0;
@@ -53,16 +312,16 @@
   height: 140%;
 }
 
-.mirza-home .folio-three-scene__image img {
+.mirza-home .folio-three-legacy-scene__image img {
   object-fit: cover;
   object-position: center center;
 }
 
-.mirza-home .folio-three-scene--office .folio-three-scene__image img {
+.mirza-home .folio-three-legacy-scene--office .folio-three-legacy-scene__image img {
   object-position: center center;
 }
 
-.mirza-home .folio-three-scene__caption {
+.mirza-home .folio-three-legacy-scene__caption {
   position: relative;
   z-index: 1;
   display: flex;
@@ -76,82 +335,69 @@
   background: var(--mirza-mineral);
 }
 
-.mirza-home .folio-three-scene--office .folio-three-scene__caption {
+.mirza-home .folio-three-legacy-scene--office .folio-three-legacy-scene__caption {
   margin-left: auto;
   padding-left: 30px;
 }
 
-.mirza-home .folio-three-scene__caption h3 {
+.mirza-home .folio-three-legacy-scene__caption h3 {
   font-size: clamp(38px, 3.7vw, 56px);
   line-height: 1;
 }
 
-.mirza-home .folio-three-scene__caption p {
+.mirza-home .folio-three-legacy-scene__caption p {
   margin-top: 8px;
   color: var(--mirza-muted);
   font-size: 13px;
   line-height: 1.65;
 }
 
-.mirza-home .folio-three-scene__caption > svg {
+.mirza-home .folio-three-legacy-scene__caption > svg {
   flex: none;
 }
 
-.mirza-home .folio-three-scene:hover h3,
-.mirza-home .folio-three-scene:focus-visible h3 {
+.mirza-home .folio-three-legacy-scene:hover h3,
+.mirza-home .folio-three-legacy-scene:focus-visible h3 {
   text-decoration: underline;
   text-decoration-thickness: 1px;
   text-underline-offset: 7px;
 }
 
-.mirza-home .folio-three-scene:focus-visible {
-  outline: 2px solid var(--mirza-focus);
+.mirza-home .folio-three-legacy-scene:focus-visible {
+  outline: 2px solid var(--mirza-focus, #8e5038);
   outline-offset: 6px;
 }
 
 @media (max-width: 760px) {
-  .mirza-home .folio-three-collections {
-    padding-block: 104px 96px;
-  }
-
-  .mirza-home .folio-three-collections__inner {
-    gap: 38px;
-  }
-
-  .mirza-home .folio-three-collections__title {
-    margin-bottom: 16px;
-    font-size: clamp(48px, 12vw, 64px);
-  }
-
-  .mirza-home .folio-three-scene {
+  .mirza-home .folio-three-legacy-scene {
     width: 100%;
   }
 
-  .mirza-home .folio-three-scene__image {
+  .mirza-home .folio-three-legacy-scene__image {
     aspect-ratio: 2.1;
   }
 
-  .mirza-home .folio-three-scene__image-inner {
+  .mirza-home .folio-three-legacy-scene__image-inner {
     top: -16%;
     height: 132%;
   }
 
-  .mirza-home .folio-three-scene__caption {
+  .mirza-home .folio-three-legacy-scene__caption {
     width: 88%;
     min-height: 104px;
     margin-top: -42px;
     padding-top: 20px;
   }
 
-  .mirza-home .folio-three-scene--office .folio-three-scene__caption {
+  .mirza-home .folio-three-legacy-scene--office .folio-three-legacy-scene__caption {
     padding-left: 20px;
   }
 
-  .mirza-home .folio-three-scene__caption h3 {
+  .mirza-home .folio-three-legacy-scene__caption h3 {
     font-size: 38px;
   }
 
-  .mirza-home .folio-three-scene__caption p {
+  .mirza-home .folio-three-legacy-scene__caption p {
     max-width: 27ch;
     font-size: 12px;
   }

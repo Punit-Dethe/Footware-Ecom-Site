@@ -19,7 +19,7 @@ export function CraftDesignTwo({ basePath, copy }: EditorialStudyProps) {
         </h2>
         <div className="folio-two-craft__process">
           <Image
-            src="/editorial/craft-hands.webp"
+            src="/editorial/craft-hands-dusk-v2.webp"
             alt={copy.craftImageAlt}
             fill
             sizes="(max-width: 360px) calc(100vw - 40px), (max-width: 760px) calc(100vw - 48px), (max-width: 1600px) 52vw, 820px"

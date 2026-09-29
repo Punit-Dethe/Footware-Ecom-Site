@@ -1324,3 +1324,71 @@ body:has(.home-page.mirza-home:not([style*="display: none"])) .editorial-footer_
   }
 }
 
+/* One continuous evening photograph fills the opening viewport. */
+.mirza-home .mirza-evening-hero {
+  position: relative;
+  min-height: 120svh;
+  margin-top: -84px;
+  padding-top: 84px;
+  overflow: hidden;
+  isolation: isolate;
+  background: #33271f;
+  color: #f3efe8;
+}
+
+.mirza-home .mirza-evening-hero__image {
+  z-index: -2;
+  object-fit: cover;
+  object-position: center;
+}
+
+.mirza-home .mirza-evening-hero::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(24, 19, 17, .28), transparent 40%),
+    linear-gradient(90deg, rgba(24, 19, 17, .15), transparent 60%);
+  content: "";
+  pointer-events: none;
+}
+
+.mirza-home .mirza-evening-hero::after {
+  position: absolute;
+  z-index: -1;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 16svh;
+  background: linear-gradient(180deg, rgba(243, 239, 232, 0), rgba(243, 239, 232, .42) 40%, rgba(243, 239, 232, .88) 76%, #f3efe8);
+  content: "";
+  pointer-events: none;
+}
+
+body:has(.home-page.mirza-home:not([style*="display: none"])) .editorial-header:not(.editorial-header--solid),
+body:has(.home-page.mirza-home:not([style*="display: none"])) .editorial-header:not(.editorial-header--solid) button {
+  color: #f3efe8;
+}
+
+body:has(.home-page.mirza-home:not([style*="display: none"])) .editorial-header:not(.editorial-header--solid) button:hover {
+  background: rgba(243, 239, 232, .12);
+}
+
+body:has(.home-page.mirza-home:not([style*="display: none"])) .editorial-header:not(.editorial-header--solid) :is(a, button):focus-visible {
+  outline-color: #f3efe8;
+}
+
+@media (max-width: 760px) {
+  .mirza-home .mirza-evening-hero {
+    margin-top: -68px;
+    padding-top: 68px;
+  }
+
+  .mirza-home .mirza-evening-hero__image {
+    object-position: 64% center;
+  }
+
+  .mirza-home .mirza-evening-hero::before {
+    background: linear-gradient(180deg, rgba(24, 19, 17, .48), rgba(24, 19, 17, .18) 42%, transparent 70%);
+  }
+}
+

@@ -16,8 +16,15 @@ export interface EditorialStudyCopy {
   collectionsHeading: ReactNode;
   traditionalTitle: string;
   traditionalDescription: string;
+  traditionalSecondaryDescription: string;
+  traditionalCompactDescription: string;
+  traditionalCta: string;
   officeTitle: string;
   officeDescription: string;
+  officeSecondaryDescription: string;
+  officeCompactDescription: string;
+  collectionDesignLabel: string;
+  officeCta: string;
   heritageImageAlt: string;
   officeImageAlt: string;
 }

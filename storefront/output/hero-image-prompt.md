@@ -1,0 +1,8 @@
+Use case: photorealistic-natural.
+Asset type: premium Indian footwear storefront full-screen hero background, landscape 16:9.
+Primary request: an atmospheric traditional Indian courtyard in the early evening, evoking tradition and a very restrained hint of Diwali, without depicting an overt festival.
+Scene: aged warm sandstone and limewashed walls, elegant old Indian courtyard with carved archways, a small warm-lit doorway toward the right, understated natural textile glimpsed near the doorway, a few tiny clay oil lamps along the stone floor. Twilight blue still visible overhead; evening, not nighttime.
+Style: sophisticated photographic editorial, cinematic yet natural, tactile stone, real subtle imperfections, quiet and timeless, no theatrical set decoration. Wide architectural framing at human eye level.
+Composition: upper-left 40 percent must be a quiet uninterrupted shaded stone wall with subdued detail and generous negative space for overlaid white website heading. Archway and warm doorway occupy center-right, courtyard depth and a little natural greenery toward right edge. A mobile center crop must retain architectural atmosphere and lamp glow.
+Lighting: dusk ambient blue balanced against small amber pools of oil-lamp light, subtly dim and moody but stone and architecture remain clearly visible. Rich muted warm umber, sandstone, antique gold and evening blue.
+Constraints: no visible footwear required, no text, no logos, no watermark, no people, no fireworks, no garlands, no bright festival decorations, no strong artificial orange cast, no collage. Single continuous photographic scene.
