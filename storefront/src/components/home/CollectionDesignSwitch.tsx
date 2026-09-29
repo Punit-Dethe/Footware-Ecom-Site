@@ -15,7 +15,7 @@ export function CollectionDesignSwitch({
   first,
   second,
 }: CollectionDesignSwitchProps) {
-  const [design, setDesign] = useState<1 | 2>(1);
+  const [design, setDesign] = useState<1 | 2>(2);
 
   return (
     <>

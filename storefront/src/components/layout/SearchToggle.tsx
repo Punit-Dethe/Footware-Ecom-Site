@@ -42,90 +42,25 @@ export function SearchToggle({
   const [searchOpen, setSearchOpen] = useState(false);
   const headerRef = useRef<HTMLElement>(null);
   const isScrolledRef = useRef(false);
-  const isHiddenRef = useRef(false);
   const searchOpenRef = useRef(searchOpen);
   const searchTriggerRef = useRef<HTMLButtonElement>(null);
   searchOpenRef.current = searchOpen;
 
   useEffect(() => {
-    const header = headerRef.current;
-    if (!header) return;
-    let frame = 0;
-    let lastY = Math.max(0, window.scrollY);
-    let direction = 0;
-    let distance = 0;
-
-    const showHeader = () => {
-      isHiddenRef.current = false;
-      header.classList.remove("editorial-header--hidden");
-    };
     const updateScroll = () => {
-      frame = 0;
-      const maxY = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
-      const y = Math.max(0, Math.min(maxY, window.scrollY));
-      const delta = y - lastY;
-      lastY = y;
-      const isScrolled = y > 28;
+      const isScrolled = window.scrollY > 28;
+      if (isScrolled === isScrolledRef.current) return;
+
       isScrolledRef.current = isScrolled;
-      header.classList.toggle(
+      headerRef.current?.classList.toggle(
         "editorial-header--solid",
         isScrolled || searchOpenRef.current,
       );
-
-      const interactionOpen = searchOpenRef.current ||
-        header.matches(":focus-visible") ||
-        Boolean(header.querySelector(":focus-visible")) ||
-        Boolean(header.querySelector('[aria-expanded="true"], [data-state="open"]')) ||
-        document.body.hasAttribute("data-scroll-locked") ||
-        getComputedStyle(document.body).overflowY === "hidden" ||
-        getComputedStyle(document.documentElement).overflowY === "hidden";
-      if (y <= header.offsetHeight + 24 || interactionOpen) {
-        showHeader();
-        direction = 0;
-        distance = 0;
-        return;
-      }
-      if (delta === 0) return;
-      const nextDirection = delta > 0 ? 1 : -1;
-      if (nextDirection !== direction) {
-        direction = nextDirection;
-        distance = 0;
-      }
-      distance += Math.abs(delta);
-      if (distance >= (direction > 0 ? 12 : 8)) {
-        isHiddenRef.current = direction > 0;
-        header.classList.toggle("editorial-header--hidden", isHiddenRef.current);
-        distance = 0;
-      }
-    };
-    const schedule = () => {
-      if (!frame) frame = window.requestAnimationFrame(updateScroll);
     };
 
-    // Menu/popover triggers and scroll locks can change without a scroll event.
-    const observer = new MutationObserver(schedule);
-    observer.observe(header, {
-      subtree: true,
-      attributes: true,
-      attributeFilter: ["aria-expanded", "data-state"],
-    });
-    observer.observe(document.body, {
-      attributes: true,
-      attributeFilter: ["style", "class", "data-scroll-locked"],
-    });
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["style", "class"],
-    });
     updateScroll();
-    window.addEventListener("scroll", schedule, { passive: true });
-    window.addEventListener("resize", schedule);
-    return () => {
-      observer.disconnect();
-      window.cancelAnimationFrame(frame);
-      window.removeEventListener("scroll", schedule);
-      window.removeEventListener("resize", schedule);
-    };
+    window.addEventListener("scroll", updateScroll, { passive: true });
+    return () => window.removeEventListener("scroll", updateScroll);
   }, []);
 
   const closeSearch = useCallback(() => {
@@ -136,13 +71,9 @@ export function SearchToggle({
   return (
     <header
       ref={headerRef}
-      onFocusCapture={() => {
-        isHiddenRef.current = false;
-        headerRef.current?.classList.remove("editorial-header--hidden");
-      }}
       className={`editorial-header sticky top-0 z-50 h-[74px] border-b ${
         isScrolledRef.current || searchOpen ? "editorial-header--solid" : ""
-      } ${isHiddenRef.current ? "editorial-header--hidden" : ""}`}
+      }`}
     >
       {/* Normal header content */}
       <div

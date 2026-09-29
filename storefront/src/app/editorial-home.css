@@ -3,24 +3,7 @@
   border-color: #dcd7d1;
   color: #211b17;
   backdrop-filter: blur(12px);
-  transform: none;
-  transition: background-color .28s ease, border-color .28s ease, box-shadow .28s ease, backdrop-filter .28s ease, transform .3s cubic-bezier(.22, 1, .36, 1);
-}
-
-.editorial-header--hidden {
-  transform: translateY(-100%);
-}
-
-.editorial-header:focus-visible,
-.editorial-header:has(:focus-visible, [aria-expanded="true"], [data-state="open"]) {
-  transform: none;
-  transition-property: background-color, border-color, box-shadow, backdrop-filter;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .editorial-header {
-    transition-property: background-color, border-color, box-shadow, backdrop-filter;
-  }
+  transition: background-color .28s ease, border-color .28s ease, box-shadow .28s ease, backdrop-filter .28s ease;
 }
 
 /* The page surface covers the fixed footer until its real final section
