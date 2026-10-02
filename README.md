@@ -238,6 +238,7 @@ region      /api/perf/region gated behind PERF_DIAGNOSTICS=1 (404 otherwise)
 | `storefront/README.md` | Current | App-level setup and invariants |
 | `storefront/CLAUDE.md` | Current | Coding conventions |
 | `docs/PERFORMANCE-PAPER-EVIDENCE.md` | Research record | Methodology for R001–R012 |
+| `docs/RESEARCH-PAPER.md` | **Publication paper** | Complete academic research paper on architecture & experiments R001–R012 |
 | `docs/PERFORMANCE.md` | Historical | Pre-migration experiments 001–008/018 |
 | `docs/EXPERIMENTS.md` | Historical | Pre-migration experiments 001–006 |
 | `docs/BASELINE.md` | Historical | `baseline-v1`, Spree-era |
