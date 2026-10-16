@@ -462,6 +462,22 @@ describe("Admin Media Library Server Actions (Phase 5)", () => {
       });
     });
 
+    it("reports a committed attachment as success when catalog cache invalidation fails", async () => {
+      const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      mockUpdateTag.mockImplementationOnce(() => {
+        throw new Error("Cache unavailable");
+      });
+
+      try {
+        const result = await attachMediaAssetToProductAction(VALID_PROD_ID, VALID_ASSET_ID);
+        expect(result.success).toBe(true);
+        expect(result.warning).toContain("cache refresh failed");
+        expect(mockAttachMediaToProduct).toHaveBeenCalledTimes(1);
+      } finally {
+        consoleSpy.mockRestore();
+      }
+    });
+
     describe("attachMediaAssetsToProductAction (atomic batch)", () => {
       it("requires admin auth", async () => {
         mockRequireAdmin.mockRejectedValueOnce(new AdminAuthError("Admin authorization required.", "FORBIDDEN"));
