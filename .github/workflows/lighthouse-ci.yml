@@ -27,6 +27,13 @@ jobs:
       - name: Install dependencies
         run: pnpm --prefix storefront install --frozen-lockfile
 
+      - name: Run Admin Catalog Regression Tests
+        run: |
+          pnpm --dir storefront exec vitest run \
+            "src/lib/db/__tests__/admin-catalog.test.ts" \
+            "src/lib/actions/__tests__/admin-catalog.test.ts" \
+            "src/app/[country]/[locale]/(admin)/admin/products/__tests__/product-edit-phase7.test.tsx"
+
       - name: Build Storefront
         run: pnpm --prefix storefront run build
         env:
