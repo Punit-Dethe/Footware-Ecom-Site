@@ -405,6 +405,18 @@ export async function finalizeMediaLibraryUploadAction(
 export interface SimpleActionResult {
   success: boolean;
   error?: string;
+  warning?: string;
+}
+
+function invalidateCatalogAfterMediaWrite(): string | undefined {
+  try {
+    updateTag("catalog-public");
+    return undefined;
+  } catch (err) {
+    // Media has already committed, even if cache invalidation fails.
+    console.error("[admin-media-library] Media saved, cache refresh failed:", err);
+    return "Media saved, but storefront cache refresh failed. Changes may take time to appear.";
+  }
 }
 
 /**
@@ -453,8 +465,8 @@ export async function attachMediaAssetToProductAction(
       altText: options?.altText,
     });
 
-    updateTag("catalog-public");
-    return { success: true };
+    const warning = invalidateCatalogAfterMediaWrite();
+    return { success: true, ...(warning ? { warning } : {}) };
   } catch (err) {
     return handleMediaActionError(err);
   }
@@ -547,8 +559,8 @@ export async function attachMediaAssetsToProductAction(
       }
     });
 
-    updateTag("catalog-public");
-    return { success: true };
+    const warning = invalidateCatalogAfterMediaWrite();
+    return { success: true, ...(warning ? { warning } : {}) };
   } catch (err) {
     return handleMediaActionError(err);
   }
@@ -611,8 +623,8 @@ export async function detachMediaAssetFromProductAction(
 
     await detachMediaFromProduct(productId, mediaAssetId);
 
-    updateTag("catalog-public");
-    return { success: true };
+    const warning = invalidateCatalogAfterMediaWrite();
+    return { success: true, ...(warning ? { warning } : {}) };
   } catch (err) {
     return handleMediaActionError(err);
   }
@@ -645,8 +657,8 @@ export async function setProductMediaHeroAction(
 
     await setProductHeroMedia(productId, mediaAssetId);
 
-    updateTag("catalog-public");
-    return { success: true };
+    const warning = invalidateCatalogAfterMediaWrite();
+    return { success: true, ...(warning ? { warning } : {}) };
   } catch (err) {
     return handleMediaActionError(err);
   }
@@ -715,8 +727,8 @@ export async function reorderProductMediaActionV1(
 
     await reorderProductMediaV1(productId, mediaAssetIds);
 
-    updateTag("catalog-public");
-    return { success: true };
+    const warning = invalidateCatalogAfterMediaWrite();
+    return { success: true, ...(warning ? { warning } : {}) };
   } catch (err) {
     return handleMediaActionError(err);
   }
@@ -750,8 +762,8 @@ export async function updateProductMediaAltTextActionV1(
 
     await updateProductMediaAltTextV1(productId, mediaAssetId, altText);
 
-    updateTag("catalog-public");
-    return { success: true };
+    const warning = invalidateCatalogAfterMediaWrite();
+    return { success: true, ...(warning ? { warning } : {}) };
   } catch (err) {
     return handleMediaActionError(err);
   }
