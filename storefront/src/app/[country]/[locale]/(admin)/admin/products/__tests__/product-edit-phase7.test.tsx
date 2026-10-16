@@ -185,4 +185,83 @@ describe("ProductEditForm Phase 7 Workflow", () => {
       expect(mockRouter.refresh).toHaveBeenCalled();
     });
   });
+  it("shows a validation error, keeps edited values, and allows another save", async () => {
+    const user = userEvent.setup();
+    const message = "Active variant requires an INR price.";
+    mockActions.saveProductAction.mockResolvedValueOnce({
+      success: false,
+      error: message,
+      fieldErrors: { variants: message },
+    });
+
+    render(
+      <ProductEditForm
+        initialProduct={mockProduct}
+        availableCategories={mockAvailableCategories}
+        country="us"
+        locale="en"
+      />,
+    );
+
+    const price = screen.getByRole("spinbutton", { name: "Variant Price" });
+    await user.clear(price);
+    await user.type(price, "315");
+    await user.click(screen.getByRole("button", { name: "Save Changes" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert").textContent).toContain(message);
+    });
+    expect((price as HTMLInputElement).value).toBe("315");
+    expect(
+      (screen.getByRole("button", { name: "Save Changes" }) as HTMLButtonElement).disabled,
+    ).toBe(false);
+    expect(mockRouter.refresh).not.toHaveBeenCalled();
+    expect(mockActions.saveProductAction).toHaveBeenCalledWith(
+      mockProduct.id,
+      expect.objectContaining({
+        variants: [expect.objectContaining({ priceInCents: 31500 })],
+      }),
+    );
+  });
+
+  it("recovers from a rejected save request without claiming success", async () => {
+    const user = userEvent.setup();
+    const logSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    mockActions.saveProductAction.mockRejectedValueOnce(new Error("Network failure"));
+
+    try {
+      render(
+        <ProductEditForm
+          initialProduct={mockProduct}
+          availableCategories={mockAvailableCategories}
+          country="us"
+          locale="en"
+        />,
+      );
+
+      await user.click(screen.getByRole("button", { name: "Save Changes" }));
+
+      await waitFor(() => {
+        expect(screen.getByRole("alert").textContent).toContain(
+          "Could not confirm whether the changes were saved.",
+        );
+      });
+      expect(screen.queryByText("Changes saved")).toBeNull();
+      expect(mockRouter.refresh).not.toHaveBeenCalled();
+      expect(
+        (screen.getByRole("button", { name: "Save Changes" }) as HTMLButtonElement).disabled,
+      ).toBe(false);
+
+      mockActions.saveProductAction.mockResolvedValueOnce({ success: true });
+      await user.click(screen.getByRole("button", { name: "Save Changes" }));
+      await waitFor(() => {
+        expect(screen.getByText("Product saved successfully as active.")).toBeDefined();
+      });
+      expect(screen.queryByRole("alert")).toBeNull();
+      expect(mockRouter.refresh).toHaveBeenCalledTimes(1);
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+
 });

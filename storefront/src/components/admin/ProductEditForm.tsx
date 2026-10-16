@@ -256,16 +256,27 @@ export function ProductEditForm({
       variants: formattedVariants,
     };
 
-    const res = await saveProductAction(initialProduct.id, payload);
-    setSaving(false);
+    try {
+      const res = await saveProductAction(initialProduct.id, payload);
+      if (!res.success) {
+        setError(res.error || "Failed to save product.");
+        if (res.fieldErrors) setFieldErrors(res.fieldErrors);
+        return;
+      }
 
-    if (!res.success) {
-      setError(res.error || "Failed to save product.");
-      if (res.fieldErrors) setFieldErrors(res.fieldErrors);
-    } else {
       setStatus(newStatus);
       setSuccessMsg(`Product saved successfully as ${newStatus}.`);
       router.refresh();
+    } catch (err) {
+      // Requests can reject (e.g. connection lost) before an ActionState is returned.
+      // Avoid claiming the database definitely rolled back: the response may be lost
+      // after a successful commit.
+      console.error("[admin-product-edit] Unexpected product save failure:", err);
+      setError(
+        "Could not confirm whether the changes were saved. Reload the product to verify before retrying.",
+      );
+    } finally {
+      setSaving(false);
     }
   };
 
