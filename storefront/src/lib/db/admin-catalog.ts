@@ -1187,7 +1187,16 @@ async function syncVariants(
         [targetVariantId, priceInCents, compareAtPriceInCents],
       );
 
-      if (inrPrice != null) {
+      if (v.priceInInrPaise === null) {
+        // Explicitly clearing the INR price removes the authoritative row.
+        // Omitting the field (undefined) preserves the existing INR price
+        // for partial/legacy callers. Active-product invariants still prevent
+        // deleting a required market price from a published product.
+        await client.query(
+          `DELETE FROM public.variant_prices WHERE variant_id = $1 AND currency = 'INR';`,
+          [targetVariantId],
+        );
+      } else if (inrPrice != null) {
         await client.query(
           `INSERT INTO public.variant_prices (variant_id, currency, price_in_cents, compare_at_price_in_cents, created_at, updated_at)
            VALUES ($1, 'INR', $2, $3, NOW(), NOW())

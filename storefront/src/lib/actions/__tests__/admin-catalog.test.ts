@@ -135,6 +135,28 @@ describe("Admin Catalog Server Actions", () => {
       expect(mockCache.revalidatePath).toHaveBeenCalledWith("/admin/products/prod-1");
     });
 
+    it("does not report database save failure after cache invalidation throws", async () => {
+      const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+      mockAuth.requireAdmin.mockResolvedValue({ userId: "admin-1" });
+      mockDal.saveAdminProduct.mockResolvedValue({ id: "prod-1", name: "Saved Shoe" });
+      mockCache.updateTag.mockImplementationOnce(() => {
+        throw new Error("Cache service unavailable");
+      });
+
+      try {
+        const res = await saveProductAction("prod-1", {
+          name: "Saved Shoe",
+          slug: "saved-shoe",
+        });
+        expect(res.success).toBe(true);
+        expect(res.data).toEqual({ id: "prod-1", name: "Saved Shoe" });
+        expect(res.warning).toContain("Storefront refresh failed");
+        expect(mockDal.saveAdminProduct).toHaveBeenCalledTimes(1);
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
     it("invalidates 'catalog-public' tag after archiving a product", async () => {
       mockAuth.requireAdmin.mockResolvedValue({ userId: "admin-1" });
       mockDal.archiveAdminProduct.mockResolvedValue(undefined);

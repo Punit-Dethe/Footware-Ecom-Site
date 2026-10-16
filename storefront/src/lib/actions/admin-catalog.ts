@@ -13,6 +13,7 @@ import {
   updateAdminCategory,
   CatalogValidationError,
   type SaveProductInput,
+  type AdminProductDetail,
 } from "@/lib/db/admin-catalog";
 
 export interface ActionState<T = unknown> {
@@ -20,6 +21,7 @@ export interface ActionState<T = unknown> {
   data?: T;
   error?: string;
   fieldErrors?: Record<string, string>;
+  warning?: string;
 }
 
 /**
@@ -59,7 +61,7 @@ export async function createProductAction(
 export async function saveProductAction(
   productId: string,
   input: SaveProductInput,
-): Promise<ActionState<unknown>> {
+): Promise<ActionState<AdminProductDetail>> {
   try {
     await requireAdmin();
 
@@ -68,13 +70,23 @@ export async function saveProductAction(
     }
 
     const updated = await saveAdminProduct(productId, input);
-    updateTag("catalog-public");
-    revalidatePath("/admin/products");
-    revalidatePath(`/admin/products/${productId}`);
+
+    // The transaction is already committed. Cache failures must not be reported
+    // as a failed save, or an admin may repeat a successful mutation.
+    let warning: string | undefined;
+    try {
+      updateTag("catalog-public");
+      revalidatePath("/admin/products");
+      revalidatePath(`/admin/products/${productId}`);
+    } catch (cacheError) {
+      console.error("[admin-action] Product saved; cache refresh failed:", cacheError);
+      warning = "Storefront refresh failed; the new price may take time to appear.";
+    }
 
     return {
       success: true,
       data: updated,
+      ...(warning ? { warning } : {}),
     };
   } catch (err: any) {
     return handleActionError(err);

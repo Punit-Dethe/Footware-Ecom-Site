@@ -224,6 +224,85 @@ describe("ProductEditForm Phase 7 Workflow", () => {
     );
   });
 
+  it("adopts persisted IDs for new variants so a second save updates instead of inserts", async () => {
+    const user = userEvent.setup();
+    const addedVariantId = "88888888-8888-4888-8888-888888888888";
+    const persisted = {
+      ...mockProduct,
+      variants: [
+        mockProduct.variants[0],
+        {
+          ...mockProduct.variants[0],
+          id: addedVariantId,
+          sku: "SHOE-2026-09-001-2",
+          sizeOption: "9",
+          position: 1,
+          isDefault: false,
+          backorderable: true,
+          quantityOnHand: 10,
+        },
+      ],
+    };
+    mockActions.saveProductAction.mockResolvedValue({
+      success: true,
+      data: persisted,
+    });
+
+    render(
+      <ProductEditForm
+        initialProduct={mockProduct}
+        availableCategories={mockAvailableCategories}
+        country="us"
+        locale="en"
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /Add Variant/ }));
+    await user.click(screen.getByRole("button", { name: "Save Changes" }));
+    await waitFor(() => {
+      expect(screen.getByText("SHOE-2026-09-001-2")).toBeDefined();
+    });
+
+    // A repeated save uses the server-assigned UUID instead of re-inserting the SKU.
+    await user.click(screen.getByRole("button", { name: "Save Changes" }));
+    await waitFor(() => {
+      expect(mockActions.saveProductAction).toHaveBeenCalledTimes(2);
+    });
+    const secondPayload = mockActions.saveProductAction.mock.calls[1][1];
+    expect(secondPayload.variants[1]).toEqual(
+      expect.objectContaining({
+        id: addedVariantId,
+        sku: "SHOE-2026-09-001-2",
+      }),
+    );
+  });
+
+  it("reports cache-refresh warnings as a successful database save", async () => {
+    const user = userEvent.setup();
+    mockActions.saveProductAction.mockResolvedValueOnce({
+      success: true,
+      data: mockProduct,
+      warning: "Storefront refresh failed; the new price may take time to appear.",
+    });
+
+    render(
+      <ProductEditForm
+        initialProduct={mockProduct}
+        availableCategories={mockAvailableCategories}
+        country="us"
+        locale="en"
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Save Changes" }));
+    await waitFor(() => {
+      expect(screen.getByRole("status").textContent).toContain(
+        "Storefront refresh failed",
+      );
+    });
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
   it("recovers from a rejected save request without claiming success", async () => {
     const user = userEvent.setup();
     const logSpy = vi.spyOn(console, "error").mockImplementation(() => {});

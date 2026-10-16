@@ -38,6 +38,29 @@ interface FormVariant {
   isNew?: boolean;
 }
 
+function toFormVariants(product: AdminProductDetail): FormVariant[] {
+  return product.variants.map((v) => ({
+    id: v.id,
+    sku: v.sku,
+    sizeOption: v.sizeOption || "",
+    priceDollars:
+      v.priceInCents != null ? (v.priceInCents / 100).toFixed(2) : "",
+    compareAtDollars:
+      v.compareAtPriceInCents != null ? (v.compareAtPriceInCents / 100).toFixed(2) : "",
+    priceInr:
+      v.priceInInrPaise != null ? (v.priceInInrPaise / 100).toFixed(2) : "",
+    compareAtInr:
+      v.compareAtPriceInInrPaise != null
+        ? (v.compareAtPriceInInrPaise / 100).toFixed(2)
+        : "",
+    quantityOnHand: v.quantityOnHand,
+    backorderable: v.backorderable,
+    isDefault: v.isDefault,
+    active: v.active,
+    isNew: false,
+  }));
+}
+
 export function ProductEditForm({
   initialProduct,
   availableCategories,
@@ -63,29 +86,8 @@ export function ProductEditForm({
   );
 
   // Variants state
-  const [variants, setVariants] = useState<FormVariant[]>(
-    initialProduct.variants.map((v) => ({
-      id: v.id,
-      sku: v.sku,
-      sizeOption: v.sizeOption || "",
-      priceDollars:
-        v.priceInCents != null ? (v.priceInCents / 100).toFixed(2) : "",
-      compareAtDollars:
-        v.compareAtPriceInCents != null ? (v.compareAtPriceInCents / 100).toFixed(2) : "",
-      priceInr:
-        v.priceInInrPaise != null
-          ? (v.priceInInrPaise / 100).toFixed(2)
-          : "",
-      compareAtInr:
-        v.compareAtPriceInInrPaise != null
-          ? (v.compareAtPriceInInrPaise / 100).toFixed(2)
-          : "",
-      quantityOnHand: v.quantityOnHand,
-      backorderable: v.backorderable,
-      isDefault: v.isDefault,
-      active: v.active,
-      isNew: false,
-    })),
+  const [variants, setVariants] = useState<FormVariant[]>(() =>
+    toFormVariants(initialProduct),
   );
 
   const [saving, setSaving] = useState(false);
@@ -264,8 +266,27 @@ export function ProductEditForm({
         return;
       }
 
-      setStatus(newStatus);
-      setSuccessMsg(`Product saved successfully as ${newStatus}.`);
+      // Reconcile with the committed database values. New variants now have
+      // persisted IDs; retaining the pre-save "isNew" state would insert them
+      // again on the next save (duplicate SKU).
+      if (res.data) {
+        const saved = res.data;
+        setName(saved.name);
+        setSlug(saved.slug);
+        setSku(saved.sku || "");
+        setDescription(saved.description || "");
+        setMetaTitle(saved.metaTitle || "");
+        setMetaDescription(saved.metaDescription || "");
+        setMetaKeywords(saved.metaKeywords || "");
+        setSelectedCategoryIds(saved.categories.map((c) => c.id));
+        setVariants(toFormVariants(saved));
+        setStatus(saved.status);
+      } else {
+        setStatus(newStatus);
+      }
+      setSuccessMsg(
+        `Product saved successfully as ${newStatus}.${res.warning ? ` ${res.warning}` : ""}`,
+      );
       router.refresh();
     } catch (err) {
       // Requests can reject (e.g. connection lost) before an ActionState is returned.
