@@ -63,14 +63,15 @@ afterEach(() => {
 describe("Product media upload completion", () => {
   async function selectImage() {
     const user = userEvent.setup();
-    const { container } = render(
+    render(
       <MediaUploadModal
         isOpen={true}
         onClose={onClose}
         onUploadSuccess={onUploadSuccess}
       />,
     );
-    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    // Radix portals the upload dialog outside React Testing Library's render container.
+    const fileInput = document.body.querySelector('input[type="file"]') as HTMLInputElement;
     expect(fileInput).not.toBeNull();
     await user.upload(
       fileInput,
