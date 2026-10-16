@@ -584,7 +584,7 @@ export async function listAdminProductsPage(
       FROM public.variants v
       JOIN filtered_products fp ON fp.id = v.product_id
       LEFT JOIN public.variant_prices vp
-        ON vp.variant_id = v.id AND vp.currency = ${currencyIdx}
+        ON vp.variant_id = v.id AND vp.currency = $${currencyIdx}
       GROUP BY v.product_id
     ),
     ranked_products AS (
