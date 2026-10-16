@@ -54,15 +54,29 @@ export function ProductMediaManager({
   const galleryMedia = managedMedia.filter((m) => m.id !== heroMedia?.id);
 
   // Helper to refresh only media state without re-rendering parent form
-  const refreshMedia = async () => {
+  const refreshMedia = async (): Promise<boolean> => {
     try {
       const res = await getProductMediaV1Action(productId);
       if (res.success && res.media) {
         setMediaList(res.media);
+        return true;
       }
-    } catch {
-      // Quiet failover
+    } catch (err) {
+      console.error("[admin-media] Media refresh failed:", err);
     }
+    return false;
+  };
+
+  const reportCommittedChange = async (successText: string, warning?: string) => {
+    const refreshed = await refreshMedia();
+    setStatusMessage(
+      warning || !refreshed
+        ? {
+            type: "error",
+            text: warning || "Change saved, but the media list could not refresh. Reload the page to see it.",
+          }
+        : { type: "success", text: successText },
+    );
   };
 
   // Actions
@@ -72,8 +86,7 @@ export function ProductMediaManager({
     try {
       const res = await setProductMediaHeroAction(productId, assetId);
       if (res.success) {
-        await refreshMedia();
-        setStatusMessage({ type: "success", text: "Hero image updated." });
+        await reportCommittedChange("Hero image updated.", res.warning);
       } else {
         setStatusMessage({
           type: "error",
@@ -115,11 +128,7 @@ export function ProductMediaManager({
     try {
       const res = await detachMediaAssetFromProductAction(productId, assetId);
       if (res.success) {
-        await refreshMedia();
-        setStatusMessage({
-          type: "success",
-          text: "Media removed from product.",
-        });
+        await reportCommittedChange("Media removed from product.", res.warning);
       } else {
         setStatusMessage({
           type: "error",
@@ -154,7 +163,7 @@ export function ProductMediaManager({
     try {
       const res = await reorderProductMediaActionV1(productId, mediaAssetIds);
       if (res.success) {
-        await refreshMedia();
+        await reportCommittedChange("Gallery order updated.", res.warning);
       } else {
         setStatusMessage({
           type: "error",
@@ -171,29 +180,23 @@ export function ProductMediaManager({
     }
   };
 
-  const handleUploadSuccess = async (newAssetId: string) => {
+  const handleUploadSuccess = async (newAssetId: string): Promise<void> => {
     setIsPending(true);
     setStatusMessage(null);
     try {
-      // Step 2 of Product Edit intake: explicitly attach finalized asset
       const res = await attachMediaAssetToProductAction(productId, newAssetId);
-      if (res.success) {
-        await refreshMedia();
-        setStatusMessage({
-          type: "success",
-          text: "New asset uploaded and attached.",
-        });
-      } else {
-        setStatusMessage({
-          type: "error",
-          text: res.error || "Asset created but failed to attach to product.",
-        });
+      if (!res.success) {
+        // A lost server response after commit may look like a failed attach.
+        // Check the authoritative placements before attempting the same insert again.
+        const current = await getProductMediaV1Action(productId);
+        if (current.success && current.media?.some((m) => m.mediaAssetId === newAssetId)) {
+          setMediaList(current.media);
+          setStatusMessage({ type: "success", text: "Image was already attached to this product." });
+          return;
+        }
+        throw new Error(res.error || "Asset uploaded, but failed to attach to product.");
       }
-    } catch {
-      setStatusMessage({
-        type: "error",
-        text: "Failed to attach newly uploaded asset.",
-      });
+      await reportCommittedChange("New asset uploaded and attached.", res.warning);
     } finally {
       setIsPending(false);
     }
@@ -236,6 +239,7 @@ export function ProductMediaManager({
       {/* Notification Banner */}
       {statusMessage && (
         <div
+          role={statusMessage.type === "error" ? "alert" : "status"}
           className={`p-3 text-xs rounded-[2px] border ${
             statusMessage.type === "success"
               ? "bg-[#edf6ee] border-[#b8dfbc] text-[#24632b]"
@@ -478,7 +482,9 @@ export function ProductMediaManager({
         isOpen={isPickerOpen}
         onClose={() => setIsPickerOpen(false)}
         attachedAssetIds={mediaList.map((m) => m.mediaAssetId)}
-        onAttachSuccess={refreshMedia}
+        onAttachSuccess={async (warning) => {
+          await reportCommittedChange("Library images attached to product.", warning);
+        }}
         triggerRef={pickerTriggerRef}
       />
 
