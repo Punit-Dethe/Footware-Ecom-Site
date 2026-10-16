@@ -328,6 +328,35 @@ describe("Phase 6B: Product ↔ Media Library Integration Suite", () => {
     });
   });
 
+  it("reports refresh failure after media removal instead of silently claiming success", async () => {
+    const user = userEvent.setup();
+    mockActions.getProductMediaV1Action.mockResolvedValueOnce({
+      success: false,
+      error: "Database temporarily unavailable",
+    });
+
+    render(
+      <ProductMediaManager
+        productId="prod-1"
+        productStatus="active"
+        initialMedia={[SAMPLE_HERO_PLACEMENT, SAMPLE_GALLERY_PLACEMENT]}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Remove" }));
+    expect(mockActions.detachMediaAssetFromProductAction).toHaveBeenCalledWith(
+      "prod-1",
+      SAMPLE_GALLERY_PLACEMENT.mediaAssetId,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert").textContent).toContain(
+        "Change saved, but the media list could not refresh.",
+      );
+    });
+    expect(screen.queryByText("Media removed from product.")).toBeNull();
+  });
+
   describe("4. Safety Invariants (Active Last-Media & Hero Detach Confirmation)", () => {
     it("blocks detaching final managed asset on active product", async () => {
       const user = userEvent.setup();
