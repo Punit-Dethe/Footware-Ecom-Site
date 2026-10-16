@@ -14,7 +14,7 @@ interface ProductMediaLibraryPickerProps {
   isOpen: boolean;
   onClose: () => void;
   attachedAssetIds: string[];
-  onAttachSuccess: () => void;
+  onAttachSuccess: (warning?: string) => void | Promise<void>;
   triggerRef?: React.RefObject<HTMLElement | null>;
 }
 
@@ -131,7 +131,7 @@ export function ProductMediaLibraryPicker({
       );
 
       if (res.success) {
-        onAttachSuccess();
+        await onAttachSuccess(res.warning);
         onClose();
       } else {
         setErrorMessage(res.error || "Failed to attach media assets.");

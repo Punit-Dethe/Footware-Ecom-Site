@@ -32,7 +32,10 @@ jobs:
           pnpm --dir storefront exec vitest run \
             "src/lib/db/__tests__/admin-catalog.test.ts" \
             "src/lib/actions/__tests__/admin-catalog.test.ts" \
-            "src/app/[country]/[locale]/(admin)/admin/products/__tests__/product-edit-phase7.test.tsx"
+            "src/app/[country]/[locale]/(admin)/admin/products/__tests__/product-edit-phase7.test.tsx" \
+            "src/lib/actions/__tests__/admin-media-library.test.ts" \
+            "src/app/[country]/[locale]/(admin)/admin/products/__tests__/product-media-integration.test.tsx" \
+            "src/components/admin/media/__tests__/MediaUploadModal.test.tsx"
 
       - name: Build Storefront
         run: pnpm --prefix storefront run build
