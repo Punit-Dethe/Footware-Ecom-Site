@@ -21,7 +21,7 @@ const MAX_BYTES = 10 * 1024 * 1024; // 10 MB
 interface MediaUploadModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onUploadSuccess: (newAssetId: string) => void;
+  onUploadSuccess: (newAssetId: string) => void | Promise<void>;
   triggerRef?: React.RefObject<HTMLElement | null>;
 }
 
@@ -32,10 +32,12 @@ export function MediaUploadModal({
   triggerRef,
 }: MediaUploadModalProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  // Finalized assets remain available for an attachment-only retry.
+  const [finalizedAssetId, setFinalizedAssetId] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [status, setStatus] = useState<
-    "idle" | "uploading" | "validating" | "success" | "error"
+    "idle" | "uploading" | "validating" | "attaching" | "success" | "error"
   >("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -55,6 +57,7 @@ export function MediaUploadModal({
   useEffect(() => {
     if (!isOpen) {
       setSelectedFile(null);
+      setFinalizedAssetId(null);
       setPreviewUrl((prev) => {
         if (prev) URL.revokeObjectURL(prev);
         return null;
@@ -114,6 +117,7 @@ export function MediaUploadModal({
     }
 
     setSelectedFile(file);
+    setFinalizedAssetId(null);
     setStatus("idle");
   }
 
@@ -121,72 +125,78 @@ export function MediaUploadModal({
     if (!selectedFile) return;
 
     try {
-      setStatus("uploading");
       setErrorMessage(null);
+      let assetId = finalizedAssetId;
 
-      // Step 1: Request signed upload credentials from server
-      const reqRes = await requestMediaLibraryUploadAction(
-        selectedFile.name,
-        selectedFile.type,
-        selectedFile.size,
-      );
+      if (!assetId) {
+        setStatus("uploading");
+        // Step 1: authorize upload; no image bytes pass through Vercel.
+        const reqRes = await requestMediaLibraryUploadAction(
+          selectedFile.name,
+          selectedFile.type,
+          selectedFile.size,
+        );
 
-      if (!reqRes.success || !reqRes.signedUrl || !reqRes.token || !reqRes.storagePath || !reqRes.assetId) {
-        throw new Error(reqRes.error || "Failed to authorize upload.");
-      }
+        if (!reqRes.success || !reqRes.signedUrl || !reqRes.token || !reqRes.storagePath || !reqRes.assetId) {
+          throw new Error(reqRes.error || "Failed to authorize upload.");
+        }
 
-      const { assetId, storagePath, token } = reqRes;
+        const { storagePath, token } = reqRes;
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+        if (!supabaseUrl || !supabaseAnonKey) {
+          throw new Error("Client storage configuration is missing.");
+        }
 
-      // Step 2: Direct client upload to Supabase Storage endpoint (zero binary bytes through Vercel)
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-
-      if (!supabaseUrl || !supabaseAnonKey) {
-        throw new Error("Client storage configuration is missing.");
-      }
-
-      const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-        auth: { persistSession: false, autoRefreshToken: false },
-      });
-
-      const { error: uploadError } = await supabase.storage
-        .from("product-media")
-        .uploadToSignedUrl(storagePath, token, selectedFile, {
-          contentType: selectedFile.type,
-          upsert: false,
+        const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+          auth: { persistSession: false, autoRefreshToken: false },
         });
 
-      if (uploadError) {
-        throw new Error(`Direct storage upload failed: ${uploadError.message}`);
+        const { error: uploadError } = await supabase.storage
+          .from("product-media")
+          .uploadToSignedUrl(storagePath, token, selectedFile, {
+            contentType: selectedFile.type,
+            upsert: false,
+          });
+
+        if (uploadError) {
+          throw new Error(`Direct storage upload failed: ${uploadError.message}`);
+        }
+
+        setStatus("validating");
+        const finalRes = await finalizeMediaLibraryUploadAction({
+          assetId: reqRes.assetId,
+          storagePath,
+          originalFilename: selectedFile.name,
+          mimeType: selectedFile.type,
+        });
+
+        if (!finalRes.success || !finalRes.asset) {
+          throw new Error(finalRes.error || "Server validation and asset finalization failed.");
+        }
+
+        assetId = finalRes.asset.id;
+        setFinalizedAssetId(assetId);
       }
 
-      // Step 3: Finalize upload server-side (Sharp format & dimension verification, LQIP, SHA-256)
-      setStatus("validating");
-
-      const finalRes = await finalizeMediaLibraryUploadAction({
-        assetId,
-        storagePath,
-        originalFilename: selectedFile.name,
-        mimeType: selectedFile.type,
-      });
-
-      if (!finalRes.success || !finalRes.asset) {
-        throw new Error(finalRes.error || "Server validation and asset finalization failed.");
-      }
-
-      // Step 4: Success
+      // Product Edit requires attachment to finish BEFORE reporting success
+      // and closing this dialog. On failure, retry only the attachment.
+      setStatus("attaching");
+      await onUploadSuccess(assetId);
       setStatus("success");
-      onUploadSuccess(finalRes.asset.id);
       onClose();
     } catch (err: unknown) {
       setStatus("error");
+      const reason = err instanceof Error ? err.message : "An unexpected upload error occurred.";
       setErrorMessage(
-        err instanceof Error ? err.message : "An unexpected upload error occurred.",
+        finalizedAssetId
+          ? `Image is already in the Media Library but could not be attached. Retry attaching or select it later from the library. ${reason}`
+          : reason,
       );
     }
   }
 
-  const isWorking = status === "uploading" || status === "validating";
+  const isWorking = status === "uploading" || status === "validating" || status === "attaching";
 
   return (
     <DialogPrimitive.Root
@@ -314,12 +324,18 @@ export function MediaUploadModal({
                     Verifying format &amp; computing SHA-256 with Sharp...
                   </p>
                 )}
+                {status === "attaching" && (
+                  <p className="text-[11px] text-[#706257] mt-1 animate-pulse">
+                    Attaching image to product...
+                  </p>
+                )}
               </div>
               {!isWorking && (
                 <button
                   type="button"
                   onClick={() => {
                     setSelectedFile(null);
+                    setFinalizedAssetId(null);
                     setStatus("idle");
                   }}
                   className="text-xs text-[#706257] hover:text-[#30261f] underline"
@@ -356,8 +372,12 @@ export function MediaUploadModal({
               {isWorking
                 ? status === "uploading"
                   ? "Uploading..."
-                  : "Validating..."
-                : "Upload Asset"}
+                  : status === "attaching"
+                    ? "Attaching..."
+                    : "Validating..."
+                : finalizedAssetId
+                  ? "Retry Attachment"
+                  : "Upload Asset"}
             </button>
           </div>
         </DialogPrimitive.Content>
