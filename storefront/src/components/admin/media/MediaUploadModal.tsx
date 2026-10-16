@@ -124,9 +124,9 @@ export function MediaUploadModal({
   async function handleUpload() {
     if (!selectedFile) return;
 
+    let assetId = finalizedAssetId;
     try {
       setErrorMessage(null);
-      let assetId = finalizedAssetId;
 
       if (!assetId) {
         setStatus("uploading");
@@ -189,7 +189,7 @@ export function MediaUploadModal({
       setStatus("error");
       const reason = err instanceof Error ? err.message : "An unexpected upload error occurred.";
       setErrorMessage(
-        finalizedAssetId
+        assetId
           ? `Image is already in the Media Library but could not be attached. Retry attaching or select it later from the library. ${reason}`
           : reason,
       );
