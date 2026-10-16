@@ -155,11 +155,15 @@ describe("Admin Catalog Phase 7 DAL Tests", () => {
       expect(params).toContain(TEST_CATEGORY_ID);
       expect(params).toContain(30); // limit
       expect(params).toContain(0);  // offset
+      expect(params).toContain("USD"); // default market price
 
       // Check SQL structure
       expect(sql).not.toContain("storage_provider != 'legacy_public'");
       expect(sql).toContain("FROM public.product_media pm");
       expect(sql).not.toContain("product_images");
+      expect(sql).toContain("LEFT JOIN public.variant_prices vp");
+      expect(sql).toContain("MIN(vp.price_in_cents)");
+      expect(sql).not.toContain("MIN(v.price_in_cents)");
 
       // Check mapped result
       expect(result.totalCount).toBe(45);
@@ -171,6 +175,57 @@ describe("Admin Catalog Phase 7 DAL Tests", () => {
       expect(result.products[0].name).toBe("Classic Derby");
       expect(result.products[0].minPriceInCents).toBe(18000);
       expect(result.products[0].maxPriceInCents).toBe(22000);
+    });
+
+    it("reads authoritative INR prices without multiplying variant count or stock", async () => {
+      mockDb.query.mockResolvedValueOnce({
+        rows: [{
+          id: TEST_PRODUCT_ID,
+          name: "Classic Derby",
+          slug: "classic-derby",
+          sku: "DRB-001",
+          status: "active",
+          created_at: new Date(),
+          updated_at: new Date(),
+          variant_count: 6,
+          min_price_in_cents: 2500000,
+          max_price_in_cents: 3000000,
+          total_stock: 60,
+          total_count: 1,
+          categories: [],
+          hero_storage_path: null,
+        }],
+      });
+
+      const result = await listAdminProductsPage({ currency: "INR" });
+      const [sql, params] = mockDb.query.mock.calls[0];
+      expect(sql).toContain("MIN(vp.price_in_cents)");
+      expect(sql).toContain("MAX(vp.price_in_cents)");
+      expect(sql).toContain("vp.currency = $1");
+      expect(params).toEqual(["INR", 30, 0]);
+      expect(result.products[0].minPriceInCents).toBe(2500000);
+      expect(result.products[0].maxPriceInCents).toBe(3000000);
+      expect(result.products[0].variantCount).toBe(6);
+      expect(result.products[0].totalStock).toBe(60);
+    });
+
+    it("excludes the currency parameter from the fallback count query", async () => {
+      mockDb.query
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [{ count: 12 }] });
+
+      await listAdminProductsPage({
+        query: "derby",
+        currency: "INR",
+        page: 5,
+        pageSize: 30,
+      });
+      const [pageSql, pageParams] = mockDb.query.mock.calls[0];
+      const [countSql, countParams] = mockDb.query.mock.calls[1];
+      expect(pageSql).toContain("vp.currency = $2");
+      expect(pageParams).toEqual(["%derby%", "INR", 30, 120]);
+      expect(countSql).toContain("p.name ILIKE $1");
+      expect(countParams).toEqual(["%derby%"]);
     });
 
     it("falls back to count query if offset exceeds row count on deep page", async () => {
