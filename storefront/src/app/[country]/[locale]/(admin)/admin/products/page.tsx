@@ -7,6 +7,7 @@ import {
   listAdminProductsPage,
 } from "@/lib/db/admin-catalog";
 import { ProductFilterBar } from "@/components/admin/ProductFilterBar";
+import { formatMoney, resolveCountryCurrency } from "@/lib/data/pricing";
 
 interface AdminProductsPageProps {
   params: Promise<{ country: string; locale: string }>;
@@ -58,10 +59,12 @@ export default async function AdminProductsPage({
       sort,
       page,
       pageSize,
+      currency: resolveCountryCurrency(country),
     }),
   ]);
 
   const { products, totalCount, totalPages } = pageResult;
+  const displayCurrency = resolveCountryCurrency(country);
   const basePath = `/${country}/${locale}/admin`;
 
   const startRecord = totalCount === 0 ? 0 : (page - 1) * pageSize + 1;
@@ -150,9 +153,9 @@ export default async function AdminProductsPage({
                 let priceDisplay = "—";
                 if (p.minPriceInCents != null && p.maxPriceInCents != null) {
                   if (p.minPriceInCents === p.maxPriceInCents) {
-                    priceDisplay = `$${(p.minPriceInCents / 100).toFixed(2)}`;
+                    priceDisplay = formatMoney(p.minPriceInCents, displayCurrency);
                   } else {
-                    priceDisplay = `$${(p.minPriceInCents / 100).toFixed(2)} – $${(p.maxPriceInCents / 100).toFixed(2)}`;
+                    priceDisplay = `${formatMoney(p.minPriceInCents, displayCurrency)} – ${formatMoney(p.maxPriceInCents, displayCurrency)}`;
                   }
                 }
 

@@ -40,6 +40,7 @@ export interface ListAdminProductsPageInput {
   sort?: "updated_desc" | "name_asc" | "stock_asc" | "stock_desc";
   page?: number;
   pageSize?: number;
+  currency?: "USD" | "INR";
 }
 
 export interface AdminCatalogOverview {
@@ -519,6 +520,8 @@ export async function listAdminProductsPage(
   const page = Math.max(1, Number(input.page) || 1);
   const pageSize = Math.min(100, Math.max(1, Number(input.pageSize) || 30));
   const offset = (page - 1) * pageSize;
+  // Read the same authoritative market-specific price rows as the storefront.
+  const currency = input.currency === "INR" ? "INR" : "USD";
 
   const whereClauses: string[] = ["1=1"];
   const params: unknown[] = [];
@@ -556,6 +559,10 @@ export async function listAdminProductsPage(
     outerOrderBy = "rp.total_stock DESC, rp.updated_at DESC, rp.id DESC";
   }
 
+  // Pagination count needs only the product filters, not currency or page bounds.
+  const countParams = [...params];
+  params.push(currency);
+  const currencyIdx = params.length;
   params.push(pageSize);
   const limitIdx = params.length;
   params.push(offset);
@@ -571,11 +578,13 @@ export async function listAdminProductsPage(
       SELECT
         v.product_id,
         COUNT(v.id)::int AS variant_count,
-        MIN(v.price_in_cents) AS min_price_in_cents,
-        MAX(v.price_in_cents) AS max_price_in_cents,
+        MIN(vp.price_in_cents) AS min_price_in_cents,
+        MAX(vp.price_in_cents) AS max_price_in_cents,
         COALESCE(SUM(v.quantity_on_hand), 0)::int AS total_stock
       FROM public.variants v
       JOIN filtered_products fp ON fp.id = v.product_id
+      LEFT JOIN public.variant_prices vp
+        ON vp.variant_id = v.id AND vp.currency = $${currencyIdx}
       GROUP BY v.product_id
     ),
     ranked_products AS (
@@ -656,8 +665,7 @@ export async function listAdminProductsPage(
       FROM public.products p
       WHERE ${whereClauses.join(" AND ")};
     `;
-    // params without limit and offset
-    const countParams = params.slice(0, -2);
+    // Exclude currency and pagination bindings from the count query.
     const countRes = await query<{ count: number }>(countSql, countParams);
     totalCount = Number(countRes.rows[0]?.count) || 0;
   }
