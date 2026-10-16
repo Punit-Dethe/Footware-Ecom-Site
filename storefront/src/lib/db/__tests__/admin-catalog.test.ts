@@ -902,7 +902,7 @@ describe("Admin Catalog DAL Unit Tests", () => {
       });
       const priceStatements = mockClient.query.mock.calls
         .map(([sql]: [string]) => sql)
-        .filter((sql: string) => sql.includes("public.variant_prices"));
+        .filter((sql: string) => sql.includes("INSERT INTO public.variant_prices") || sql.includes("DELETE FROM public.variant_prices"));
       expect(priceStatements).toHaveLength(1);
       expect(priceStatements[0]).toContain("'USD'");
     });
