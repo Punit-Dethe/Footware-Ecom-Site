@@ -831,6 +831,82 @@ describe("Admin Catalog DAL Unit Tests", () => {
       return mockClient;
     }
 
+    it("updates USD and INR authoritative prices together for a submitted variant", async () => {
+      const mockClient = setupVariantSwitchClient();
+      await saveAdminProduct(TEST_PRODUCT_ID, {
+        name: "Test Shoe",
+        slug: "test-shoe",
+        sku: "TEST-001",
+        variants: [{
+          id: TEST_VARIANT_ID_1,
+          sku: "SKU-1",
+          priceInCents: 12900,
+          priceInInrPaise: 990000,
+          quantityOnHand: 5,
+          backorderable: false,
+          isDefault: true,
+          active: true,
+        }],
+      });
+
+      const usdWrite = mockClient.query.mock.calls.find(
+        ([sql]: [string]) => sql.includes("INSERT INTO public.variant_prices") && sql.includes("'USD'"),
+      );
+      const inrWrite = mockClient.query.mock.calls.find(
+        ([sql]: [string]) => sql.includes("INSERT INTO public.variant_prices") && sql.includes("'INR'"),
+      );
+      expect(usdWrite?.[1]).toEqual([TEST_VARIANT_ID_1, 12900, null]);
+      expect(inrWrite?.[1]).toEqual([TEST_VARIANT_ID_1, 990000, null]);
+    });
+
+    it("removes an explicitly cleared INR draft price instead of keeping its old value", async () => {
+      const mockClient = setupVariantSwitchClient();
+      await saveAdminProduct(TEST_PRODUCT_ID, {
+        name: "Test Shoe",
+        slug: "test-shoe",
+        sku: "TEST-001",
+        variants: [{
+          id: TEST_VARIANT_ID_1,
+          sku: "SKU-1",
+          priceInCents: 12900,
+          priceInInrPaise: null,
+          quantityOnHand: 5,
+          backorderable: false,
+          isDefault: true,
+          active: true,
+        }],
+      });
+
+      const deleted = mockClient.query.mock.calls.find(
+        ([sql]: [string]) => sql.includes("DELETE FROM public.variant_prices"),
+      );
+      expect(deleted?.[1]).toEqual([TEST_VARIANT_ID_1]);
+      expect(deleted?.[0]).toContain("currency = 'INR'");
+    });
+
+    it("preserves existing INR price when a partial caller omits the field", async () => {
+      const mockClient = setupVariantSwitchClient();
+      await saveAdminProduct(TEST_PRODUCT_ID, {
+        name: "Test Shoe",
+        slug: "test-shoe",
+        sku: "TEST-001",
+        variants: [{
+          id: TEST_VARIANT_ID_1,
+          sku: "SKU-1",
+          priceInCents: 12900,
+          quantityOnHand: 5,
+          backorderable: false,
+          isDefault: true,
+          active: true,
+        }],
+      });
+      const priceStatements = mockClient.query.mock.calls
+        .map(([sql]: [string]) => sql)
+        .filter((sql: string) => sql.includes("public.variant_prices"));
+      expect(priceStatements).toHaveLength(1);
+      expect(priceStatements[0]).toContain("'USD'");
+    });
+
     it("clears product defaults inside transaction when switching default (old-before-new)", async () => {
       const mockClient = setupVariantSwitchClient();
 
