@@ -22,9 +22,9 @@ const mockVariants: ResponsiveVariantsSchema = {
   },
 };
 
-describe("ProductImage Direct Responsive Picture", () => {
+describe("ProductImage direct responsive delivery", () => {
   describe("variants present", () => {
-    it("renders <picture> element when responsive variants are provided", () => {
+    it("renders a direct WebP img/srcset without a picture/AVIF selection layer", () => {
       const { container } = render(
         <ProductImage
           src="https://example.com/original.webp"
@@ -34,71 +34,21 @@ describe("ProductImage Direct Responsive Picture", () => {
         />,
       );
 
-      const picture = container.querySelector("picture");
-      expect(picture).toBeInTheDocument();
-    });
+      expect(container.querySelector("picture")).not.toBeInTheDocument();
+      expect(container.querySelector('source[type="image/avif"]')).not.toBeInTheDocument();
 
-    it("includes both AVIF and WebP <source> elements", () => {
-      const { container } = render(
-        <ProductImage
-          src="https://example.com/original.webp"
-          variants={mockVariants}
-          alt="Test Shoe"
-          sizes="(max-width: 768px) 100vw, 600px"
-        />,
-      );
-
-      const avifSource = container.querySelector('source[type="image/avif"]');
-      const webpSource = container.querySelector('source[type="image/webp"]');
-
-      expect(avifSource).toBeInTheDocument();
-      expect(webpSource).toBeInTheDocument();
-    });
-
-    it("contains 320, 640, 960, 1200 widths in srcset for both formats", () => {
-      const { container } = render(
-        <ProductImage
-          src="https://example.com/original.webp"
-          variants={mockVariants}
-          alt="Test Shoe"
-        />,
-      );
-
-      const avifSource = container.querySelector('source[type="image/avif"]');
-      const webpSource = container.querySelector('source[type="image/webp"]');
-
-      const avifSrcSet = avifSource?.getAttribute("srcset") || "";
-      const webpSrcSet = webpSource?.getAttribute("srcset") || "";
-
+      const img = screen.getByRole("img");
+      const srcset = img.getAttribute("srcset") || "";
       for (const width of [320, 640, 960, 1200]) {
-        expect(avifSrcSet).toContain(`${width}w`);
-        expect(webpSrcSet).toContain(`${width}w`);
+        expect(srcset).toContain(`${width}w`);
       }
+      expect(srcset).not.toContain(".avif");
     });
 
-    it("has no source width greater than 1200", () => {
-      const { container } = render(
-        <ProductImage
-          src="https://example.com/original.webp"
-          variants={mockVariants}
-          alt="Test Shoe"
-        />,
-      );
-
-      const sources = container.querySelectorAll("source");
-      for (const source of sources) {
-        const srcset = source.getAttribute("srcset") || "";
-        const matches = srcset.match(/(\d+)w/g) || [];
-        const widths = matches.map((m) => parseInt(m.replace("w", ""), 10));
-        for (const w of widths) {
-          expect(w).toBeLessThanOrEqual(1200);
-        }
-      }
-    });
-
-    it("forwards the correct sizes attribute to both <source> elements", () => {
-      const expectedSizes = "(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 600px";
-      const { container } = render(
+    it("forwards the responsive sizes attribute directly to img", () => {
+      const expectedSizes =
+        "(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 600px";
+      render(
         <ProductImage
           src="https://example.com/original.webp"
           variants={mockVariants}
@@ -107,14 +57,10 @@ describe("ProductImage Direct Responsive Picture", () => {
         />,
       );
 
-      const avifSource = container.querySelector('source[type="image/avif"]');
-      const webpSource = container.querySelector('source[type="image/webp"]');
-
-      expect(avifSource).toHaveAttribute("sizes", expectedSizes);
-      expect(webpSource).toHaveAttribute("sizes", expectedSizes);
+      expect(screen.getByRole("img")).toHaveAttribute("sizes", expectedSizes);
     });
 
-    it("uses bounded fallback src (1200 webp variant) for the inner <img>", () => {
+    it("has no responsive candidate wider than 1200", () => {
       render(
         <ProductImage
           src="https://example.com/original.webp"
@@ -123,11 +69,28 @@ describe("ProductImage Direct Responsive Picture", () => {
         />,
       );
 
-      const img = screen.getByRole("img");
-      expect(img).toHaveAttribute("src", "https://example.com/variants/1200-def123456789.webp");
+      const srcset = screen.getByRole("img").getAttribute("srcset") || "";
+      const matches = srcset.match(/(\d+)w/g) || [];
+      const widths = matches.map((m) => Number.parseInt(m.replace("w", ""), 10));
+      expect(Math.max(...widths)).toBeLessThanOrEqual(1200);
     });
 
-    it("sets loading='eager' when priority or loading='eager' is requested", () => {
+    it("uses the bounded 1200 WebP variant as fallback src", () => {
+      render(
+        <ProductImage
+          src="https://example.com/original.webp"
+          variants={mockVariants}
+          alt="Test Shoe"
+        />,
+      );
+
+      expect(screen.getByRole("img")).toHaveAttribute(
+        "src",
+        "https://example.com/variants/1200-def123456789.webp",
+      );
+    });
+
+    it("sets eager loading for a priority image", () => {
       render(
         <ProductImage
           src="https://example.com/original.webp"
@@ -137,13 +100,26 @@ describe("ProductImage Direct Responsive Picture", () => {
         />,
       );
 
+      expect(screen.getByRole("img")).toHaveAttribute("loading", "eager");
+    });
+
+    it("preserves fill positioning for the plain direct img path", () => {
+      render(
+        <ProductImage
+          src="https://example.com/original.webp"
+          variants={mockVariants}
+          alt="Test Shoe"
+          fill
+        />,
+      );
+
       const img = screen.getByRole("img");
-      expect(img).toHaveAttribute("loading", "eager");
+      expect(img).toHaveStyle({ position: "absolute", inset: "0" });
     });
   });
 
   describe("variants absent", () => {
-    it("falls back to Next Image without rendering a <picture> element", () => {
+    it("falls back to Next Image", () => {
       const { container } = render(
         <ProductImage
           src="https://example.com/original.webp"
@@ -152,12 +128,8 @@ describe("ProductImage Direct Responsive Picture", () => {
         />,
       );
 
-      const picture = container.querySelector("picture");
-      expect(picture).not.toBeInTheDocument();
-
-      const img = screen.getByRole("img");
-      expect(img).toBeInTheDocument();
-      expect(img).toHaveAttribute("alt", "Test Shoe");
+      expect(container.querySelector("picture")).not.toBeInTheDocument();
+      expect(screen.getByRole("img")).toHaveAttribute("alt", "Test Shoe");
     });
 
     it("renders fallback placeholder icon when src is null", () => {
@@ -170,8 +142,7 @@ describe("ProductImage Direct Responsive Picture", () => {
       );
 
       expect(screen.queryByRole("img")).not.toBeInTheDocument();
-      const svg = container.querySelector("svg");
-      expect(svg).toBeInTheDocument();
+      expect(container.querySelector("svg")).toBeInTheDocument();
     });
   });
 });
