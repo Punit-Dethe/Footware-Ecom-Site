@@ -1,7 +1,6 @@
 "use server";
 
-import { updateTag } from "next/cache";
-import { revalidatePath } from "next/cache";
+import { refreshCatalogTag } from "@/lib/cache/catalog-refresh";
 import { requireAdmin, AdminAuthError } from "@/lib/auth/admin";
 import {
   archiveAdminProduct,
@@ -46,8 +45,7 @@ export async function createProductAction(
     // The product row is committed; a cache failure must not be reported as
     // a failed create (a retry would then hit the unique slug constraint).
     try {
-      updateTag("catalog-public");
-      revalidatePath("/admin/products");
+      refreshCatalogTag("catalog-public");
     } catch (cacheError) {
       console.error("[admin-action] Product created; cache refresh failed:", cacheError);
     }
@@ -82,9 +80,7 @@ export async function saveProductAction(
     // as a failed save, or an admin may repeat a successful mutation.
     let warning: string | undefined;
     try {
-      updateTag("catalog-public");
-      revalidatePath("/admin/products");
-      revalidatePath(`/admin/products/${productId}`);
+      refreshCatalogTag("catalog-public");
     } catch (cacheError) {
       console.error("[admin-action] Product saved; cache refresh failed:", cacheError);
       warning = "Storefront refresh failed; the new price may take time to appear.";
@@ -114,9 +110,7 @@ export async function archiveProductAction(
     }
 
     await archiveAdminProduct(productId);
-    updateTag("catalog-public");
-    revalidatePath("/admin/products");
-    revalidatePath(`/admin/products/${productId}`);
+    refreshCatalogTag("catalog-public");
 
     return { success: true };
   } catch (err: any) {
@@ -138,9 +132,7 @@ export async function restoreProductAction(
     }
 
     await restoreAdminProduct(productId);
-    updateTag("catalog-public");
-    revalidatePath("/admin/products");
-    revalidatePath(`/admin/products/${productId}`);
+    refreshCatalogTag("catalog-public");
 
     return { success: true };
   } catch (err: any) {
@@ -162,8 +154,7 @@ export async function createCategoryAction(data: {
     await requireAdmin();
 
     const categoryId = await createAdminCategory(data);
-    updateTag("catalog-public");
-    revalidatePath("/admin/categories");
+    refreshCatalogTag("catalog-public");
 
     return {
       success: true,
@@ -195,8 +186,7 @@ export async function updateCategoryAction(
     }
 
     await updateAdminCategory(categoryId, data);
-    updateTag("catalog-public");
-    revalidatePath("/admin/categories");
+    refreshCatalogTag("catalog-public");
 
     return { success: true };
   } catch (err: any) {
@@ -218,8 +208,7 @@ export async function deleteCategoryAction(
     }
 
     await deleteAdminCategoryIfSafe(categoryId);
-    updateTag("catalog-public");
-    revalidatePath("/admin/categories");
+    refreshCatalogTag("catalog-public");
 
     return { success: true };
   } catch (err: any) {
@@ -234,8 +223,7 @@ export async function deleteCategoryAction(
 export async function revalidatePublicCatalogAction(): Promise<ActionState<{ invalidated: boolean }>> {
   try {
     await requireAdmin();
-    updateTag("catalog-public");
-    revalidatePath("/", "layout");
+    refreshCatalogTag("catalog-public");
     return {
       success: true,
       data: { invalidated: true },

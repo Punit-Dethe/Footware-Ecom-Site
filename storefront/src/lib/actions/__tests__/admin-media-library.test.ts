@@ -40,8 +40,8 @@ const {
   mockSharp: vi.fn(),
 }));
 
-vi.mock("next/cache", () => ({
-  updateTag: mockUpdateTag,
+vi.mock("@/lib/cache/catalog-refresh", () => ({
+  refreshCatalogTag: mockUpdateTag,
   revalidatePath: vi.fn(),
 }));
 

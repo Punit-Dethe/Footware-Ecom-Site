@@ -2,7 +2,7 @@
 
 import crypto from "node:crypto";
 import path from "node:path";
-import { updateTag } from "next/cache";
+import { refreshCatalogTag } from "@/lib/cache/catalog-refresh";
 import sharp, { type Metadata as SharpMetadata } from "sharp";
 import { AdminAuthError, requireAdmin } from "@/lib/auth/admin";
 import { query, transaction } from "@/lib/db";
@@ -410,7 +410,7 @@ export interface SimpleActionResult {
 
 function invalidateCatalogAfterMediaWrite(): string | undefined {
   try {
-    updateTag("catalog-public");
+    refreshCatalogTag("catalog-public");
     return undefined;
   } catch (err) {
     // Media has already committed, even if cache invalidation fails.
@@ -901,7 +901,7 @@ export async function deleteMediaLibraryAssetAction(
     // 5. Clean up Storage object
     const storageRes = await deleteStorageObjects([asset.storage_path]);
 
-    updateTag("catalog-public");
+    refreshCatalogTag("catalog-public");
 
     if (!storageRes.success) {
       const msg = `[admin-media-library] Storage cleanup warning: Asset record '${assetId}' was deleted from database, but storage cleanup failed for path '${asset.storage_path}'.`;
