@@ -22,6 +22,7 @@ const mockActions = vi.hoisted(() => ({
   deleteCategoryAction: vi.fn(),
 }));
 
+vi.mock("@/lib/admin/rpc-client", async () => ({ ...(await import("@/lib/actions/admin-catalog")) }));
 vi.mock("@/lib/actions/admin-catalog", () => ({
   createCategoryAction: mockActions.createCategoryAction,
   updateCategoryAction: mockActions.updateCategoryAction,

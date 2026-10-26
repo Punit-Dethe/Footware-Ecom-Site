@@ -34,6 +34,7 @@ vi.mock("@/lib/admin/catalog-api", () => ({
   createProductRequest: vi.fn(),
 }));
 
+vi.mock("@/lib/admin/rpc-client", async () => ({ ...(await import("@/lib/actions/admin-catalog")) }));
 vi.mock("@/lib/actions/admin-catalog", () => ({
   saveProductAction: mockActions.saveProductAction,
   archiveProductAction: mockActions.archiveProductAction,

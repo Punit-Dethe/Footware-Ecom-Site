@@ -6,7 +6,7 @@ import { Dialog as DialogPrimitive } from "radix-ui";
 import {
   listMediaLibraryAssetsAction,
   attachMediaAssetsToProductAction,
-} from "@/lib/actions/admin-media-library";
+} from "@/lib/admin/rpc-client";
 import type { MediaLibraryAssetItem } from "@/lib/db/media-v1";
 
 interface ProductMediaLibraryPickerProps {

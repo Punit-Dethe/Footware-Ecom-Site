@@ -7,7 +7,7 @@ import { createClient } from "@supabase/supabase-js";
 import {
   requestMediaLibraryUploadAction,
   finalizeMediaLibraryUploadAction,
-} from "@/lib/actions/admin-media-library";
+} from "@/lib/admin/rpc-client";
 
 const ALLOWED_MIME_TYPES = new Set([
   "image/jpeg",

@@ -9,6 +9,7 @@ const mockMedia = vi.hoisted(() => ({
   upload: vi.fn(),
 }));
 
+vi.mock("@/lib/admin/rpc-client", async () => ({ ...(await import("@/lib/actions/admin-media-library")) }));
 vi.mock("@/lib/actions/admin-media-library", () => ({
   requestMediaLibraryUploadAction: mockMedia.request,
   finalizeMediaLibraryUploadAction: mockMedia.finalize,

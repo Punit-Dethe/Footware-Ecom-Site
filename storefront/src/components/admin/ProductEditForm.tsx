@@ -7,7 +7,7 @@ import { Dialog as DialogPrimitive } from "radix-ui";
 import {
   archiveProductAction,
   restoreProductAction,
-} from "@/lib/actions/admin-catalog";
+} from "@/lib/admin/rpc-client";
 import { saveProductRequest as saveProductAction } from "@/lib/admin/catalog-api";
 import type {
   AdminCategoryRecord,

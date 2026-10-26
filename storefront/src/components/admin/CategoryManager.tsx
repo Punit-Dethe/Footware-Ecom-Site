@@ -7,7 +7,7 @@ import {
   createCategoryAction,
   deleteCategoryAction,
   updateCategoryAction,
-} from "@/lib/actions/admin-catalog";
+} from "@/lib/admin/rpc-client";
 import type { AdminCategoryRecord } from "@/lib/db/admin-catalog";
 
 interface CategoryManagerProps {

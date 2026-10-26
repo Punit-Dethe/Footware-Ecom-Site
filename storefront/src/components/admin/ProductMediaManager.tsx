@@ -10,7 +10,7 @@ import {
   updateProductMediaAltTextActionV1,
   attachMediaAssetToProductAction,
   getProductMediaV1Action,
-} from "@/lib/actions/admin-media-library";
+} from "@/lib/admin/rpc-client";
 import type { AdminProductMediaPlacement } from "@/lib/db/admin-catalog";
 import { ProductMediaLibraryPicker } from "./ProductMediaLibraryPicker";
 import { MediaUploadModal } from "./media/MediaUploadModal";
