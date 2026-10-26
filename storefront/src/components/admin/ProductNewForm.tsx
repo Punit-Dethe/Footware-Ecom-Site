@@ -47,14 +47,25 @@ export function ProductNewForm({
     setError(null);
     setFieldErrors({});
 
-    const res = await createProductAction({
-      name: name.trim(),
-      slug: slug.trim(),
-      sku: sku.trim() || null,
-      description: description.trim() || null,
-      status: "draft",
-      categoryIds: selectedCategoryIds,
-    });
+    let res: Awaited<ReturnType<typeof createProductAction>>;
+    try {
+      res = await createProductAction({
+        name: name.trim(),
+        slug: slug.trim(),
+        sku: sku.trim() || null,
+        description: description.trim() || null,
+        status: "draft",
+        categoryIds: selectedCategoryIds,
+      });
+    } catch (err) {
+      console.error("[admin-product-new] Unexpected create failure:", err);
+      setSaving(false);
+      const reason = err instanceof Error && err.message ? ` Reason: ${err.message}` : "";
+      setError(
+        `Could not confirm whether the product was created. Check the product list before retrying.${reason}`,
+      );
+      return;
+    }
 
     setSaving(false);
 
@@ -152,11 +163,10 @@ export function ProductNewForm({
               return (
                 <label
                   key={c.id}
-                  className={`flex items-center gap-3 p-3 border rounded-[2px] cursor-pointer transition-colors ${
-                    isSelected
+                  className={`flex items-center gap-3 p-3 border rounded-[2px] cursor-pointer transition-colors ${isSelected
                       ? "bg-[#e9e2d6]/60 border-[#30261f]"
                       : "bg-[#fffefc] border-[#cfc4b6] hover:bg-[#ece7de]/30"
-                  }`}
+                    }`}
                 >
                   <input
                     type="checkbox"

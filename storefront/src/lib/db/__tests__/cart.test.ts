@@ -368,7 +368,7 @@ describe("Database Cart Repository - CTE Atomic Mutations", () => {
       );
 
       expect(success).toBe(false);
-      expect(mockQuery).toHaveBeenCalledTimes(1);
+      expect(mockQuery).toHaveBeenCalledTimes(2);
     });
 
     it("delegates to removeCartItem when quantity <= 0", async () => {

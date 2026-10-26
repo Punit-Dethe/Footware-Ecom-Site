@@ -198,14 +198,24 @@ export async function addOrIncrementCartItem(
     throw new Error("Quantity must be a positive integer");
   }
 
+  // Stock guard: a non-backorderable variant can never be in a cart in a
+  // larger quantity than is on hand (new line or increment of existing line).
   const res = await query<Record<string, unknown>>(
     `WITH mutated AS (
        INSERT INTO public.cart_items (cart_id, variant_id, variant_sku, quantity, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, NOW(), NOW())
+       SELECT $1, $2, $3, $4, NOW(), NOW()
+       FROM public.variants v
+       WHERE v.id = $2
+         AND (v.backorderable OR v.quantity_on_hand >= $4)
        ON CONFLICT (cart_id, variant_sku) DO UPDATE
        SET variant_id = EXCLUDED.variant_id,
            quantity = public.cart_items.quantity + EXCLUDED.quantity,
            updated_at = NOW()
+       WHERE EXISTS (
+         SELECT 1 FROM public.variants v2
+         WHERE v2.id = EXCLUDED.variant_id
+           AND (v2.backorderable OR v2.quantity_on_hand >= public.cart_items.quantity + EXCLUDED.quantity)
+       )
        RETURNING id, cart_id, variant_id, variant_sku, quantity, created_at, updated_at
      ),
      touched AS (
@@ -218,6 +228,10 @@ export async function addOrIncrementCartItem(
     [cartId, variantId, sku, quantity],
     "cart.mutate.add",
   );
+
+  if (!res.rows[0]) {
+    throw new Error("Not enough stock available for the requested quantity");
+  }
 
   return mapCartItemRow(res.rows[0]);
 }
@@ -235,11 +249,19 @@ export async function updateCartItemQuantity(
     return removeCartItem(cartId, lineItemId);
   }
 
+  // Stock guard: non-backorderable variants cannot exceed quantity on hand.
   const res = await query(
     `WITH mutated AS (
        UPDATE public.cart_items
        SET quantity = $3, updated_at = NOW()
        WHERE id = $1 AND cart_id = $2
+         AND (
+           variant_id IS NULL OR EXISTS (
+             SELECT 1 FROM public.variants v
+             WHERE v.id = public.cart_items.variant_id
+               AND (v.backorderable OR v.quantity_on_hand >= $3)
+           )
+         )
        RETURNING id, cart_id
      ),
      touched AS (
@@ -253,7 +275,17 @@ export async function updateCartItemQuantity(
     "cart.mutate.update",
   );
 
-  return (res.rowCount ?? 0) > 0;
+  if ((res.rowCount ?? 0) > 0) return true;
+
+  // Distinguish "line item missing" from "not enough stock".
+  const existing = await query<{ id: string }>(
+    `SELECT id FROM public.cart_items WHERE id = $1 AND cart_id = $2;`,
+    [lineItemId, cartId],
+  );
+  if (existing?.rows?.[0]) {
+    throw new Error("Not enough stock available for the requested quantity");
+  }
+  return false;
 }
 
 /**

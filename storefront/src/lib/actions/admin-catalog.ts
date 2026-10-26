@@ -42,8 +42,15 @@ export async function createProductAction(
     }
 
     const productId = await createAdminProduct(input);
-    updateTag("catalog-public");
-    revalidatePath("/admin/products");
+
+    // The product row is committed; a cache failure must not be reported as
+    // a failed create (a retry would then hit the unique slug constraint).
+    try {
+      updateTag("catalog-public");
+      revalidatePath("/admin/products");
+    } catch (cacheError) {
+      console.error("[admin-action] Product created; cache refresh failed:", cacheError);
+    }
 
     return {
       success: true,
@@ -268,8 +275,14 @@ function handleActionError(err: any): ActionState<any> {
   // Log unexpected database / network error server-side
   console.error("[admin-action] Internal error:", err);
 
+  // Keep raw database text out of the client, but say which kind of failure
+  // happened so admins can tell a busy/unreachable database from a bug.
+  const msg = err instanceof Error ? err.message.toLowerCase() : "";
+  let category = "";
+  if (msg.includes("timeout")) category = " (database timed out, please retry)";
+  else if (msg.includes("connect") || msg.includes("econn")) category = " (database unreachable)";
   return {
     success: false,
-    error: "An unexpected system error occurred. Changes were not saved.",
+    error: `An unexpected system error occurred. Changes were not saved.${category}`,
   };
 }

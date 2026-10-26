@@ -180,7 +180,7 @@ export function ProductEditForm({
         priceInr: variants[0]?.priceInr || "",
         compareAtInr: "",
         quantityOnHand: 10,
-        backorderable: true,
+        backorderable: false,
         isDefault: variants.length === 0,
         active: true,
         isNew: true,
@@ -293,8 +293,9 @@ export function ProductEditForm({
       // Avoid claiming the database definitely rolled back: the response may be lost
       // after a successful commit.
       console.error("[admin-product-edit] Unexpected product save failure:", err);
+      const reason = err instanceof Error && err.message ? ` Reason: ${err.message}` : "";
       setError(
-        "Could not confirm whether the changes were saved. Reload the product to verify before retrying.",
+        `Could not confirm whether the changes were saved. Reload the product to verify before retrying.${reason}`,
       );
     } finally {
       setSaving(false);
@@ -575,11 +576,10 @@ export function ProductEditForm({
             return (
               <label
                 key={cat.id}
-                className={`flex items-center gap-3 p-3 border rounded-[2px] cursor-pointer transition-colors ${
-                  isSelected
-                    ? "bg-[#e9e2d6]/60 border-[#30261f]"
-                    : "bg-[#fffefc] border-[#cfc4b6] hover:bg-[#ece7de]/30"
-                }`}
+                className={`flex items-center gap-3 p-3 border rounded-[2px] cursor-pointer transition-colors ${isSelected
+                  ? "bg-[#e9e2d6]/60 border-[#30261f]"
+                  : "bg-[#fffefc] border-[#cfc4b6] hover:bg-[#ece7de]/30"
+                  }`}
               >
                 <input
                   type="checkbox"
