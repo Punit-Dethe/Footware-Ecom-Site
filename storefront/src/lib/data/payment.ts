@@ -385,6 +385,10 @@ export async function verifyRazorpayPaymentAndCompleteOrder(
     const adaptedOrder = adaptDbOrderToCommerceOrder(order, items);
     updateTag(checkoutTag(surface));
     updateTag(cartTag(surface));
+    if (created) {
+      // Stock was decremented; refresh storefront availability.
+      updateTag("catalog-public");
+    }
 
     // Fast checkout: schedule order confirmation email ONLY when created === true
     if (created) {

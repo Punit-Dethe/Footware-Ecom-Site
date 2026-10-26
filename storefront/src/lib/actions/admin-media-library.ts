@@ -282,7 +282,7 @@ export async function finalizeMediaLibraryUploadAction(
         "[admin-media-library] Storage retrieval failure:",
         downloadErr,
       );
-      await deleteStorageObjects([storagePath]).catch(() => {});
+      await deleteStorageObjects([storagePath]).catch(() => { });
       throw new MediaValidationError(
         "Uploaded image could not be retrieved from storage. Please retry the upload.",
       );
@@ -340,7 +340,7 @@ export async function finalizeMediaLibraryUploadAction(
         const stats = await image.stats();
         const d = stats.dominant;
         dominantHex = `#${((1 << 24) + (d.r << 16) + (d.g << 8) + d.b).toString(16).slice(1)}`;
-      } catch {}
+      } catch { }
 
       // Compute LQIP WebP
       try {
@@ -349,7 +349,7 @@ export async function finalizeMediaLibraryUploadAction(
           .webp({ quality: 20 })
           .toBuffer();
         lqip = `data:image/webp;base64,${lqipBuffer.toString("base64")}`;
-      } catch {}
+      } catch { }
 
       // Compute cryptographic integrity hash
       contentSha256 = crypto.createHash("sha256").update(buffer).digest("hex");
@@ -795,9 +795,10 @@ export async function listMediaLibraryAssetsAction(
     const limit = Math.min(Math.max(1, params?.limit ?? 12), 48);
     const offset = (page - 1) * limit;
 
+    // List every asset the Media Library page shows. Filtering to 'supabase'
+    // hid migrated/legacy assets, so the picker appeared empty.
     const result = await listMediaLibraryAssets({
       query: params?.q,
-      provider: "supabase",
       sort: params?.sort || "created_desc",
       limit,
       offset,

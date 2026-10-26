@@ -348,7 +348,7 @@ export async function placeOrderFromCart(params: {
        JOIN public.products p ON p.id = v.product_id
        LEFT JOIN public.variant_prices vp ON vp.variant_id = v.id AND vp.currency = $2
        WHERE ci.cart_id = $1
-       FOR UPDATE OF ci;`,
+       FOR UPDATE OF ci, v;`,
       [cartId, cartCurrency],
     );
 
@@ -394,6 +394,11 @@ export async function placeOrderFromCart(params: {
       const backorderable = Boolean(row.backorderable);
       if (qoh <= 0 && !backorderable) {
         throw new Error(`Cannot place order: variant '${sku}' is out of stock`);
+      }
+      if (!backorderable && quantity > qoh) {
+        throw new Error(
+          `Cannot place order: only ${qoh} unit(s) of '${sku}' in stock, ${quantity} requested`,
+        );
       }
 
       const priceRaw = row.authoritative_price_in_cents;
@@ -574,6 +579,17 @@ export async function placeOrderFromCart(params: {
       insertedItems.push(mapOrderItemRow(itemRes.rows[0]));
     }
 
+    // 9b. Decrement stock for the placed order (variant rows are locked above).
+    for (const snap of snapshottedItems) {
+      if (!snap.variant_id) continue;
+      await client.query(
+        `UPDATE public.variants
+         SET quantity_on_hand = GREATEST(quantity_on_hand - $2, 0), updated_at = NOW()
+         WHERE id = $1;`,
+        [snap.variant_id, snap.quantity],
+      );
+    }
+
     // 10. Mark cart converted (RETAIN guest_token_hash for confirmation authorization)
     await client.query(
       `UPDATE public.carts
@@ -671,13 +687,13 @@ export async function getOrderForUser(
 
   const orderRes = isUuid
     ? await query<Record<string, unknown>>(
-        `SELECT * FROM public.orders WHERE id = $1 AND user_id = $2;`,
-        [orderIdOrNumber, userId],
-      )
+      `SELECT * FROM public.orders WHERE id = $1 AND user_id = $2;`,
+      [orderIdOrNumber, userId],
+    )
     : await query<Record<string, unknown>>(
-        `SELECT * FROM public.orders WHERE order_number = $1 AND user_id = $2;`,
-        [orderIdOrNumber, userId],
-      );
+      `SELECT * FROM public.orders WHERE order_number = $1 AND user_id = $2;`,
+      [orderIdOrNumber, userId],
+    );
 
   const row = orderRes.rows[0];
   if (!row) return null;

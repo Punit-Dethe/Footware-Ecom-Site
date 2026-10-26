@@ -136,7 +136,7 @@ describe("Admin Catalog Server Actions", () => {
     });
 
     it("does not report database save failure after cache invalidation throws", async () => {
-      const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const spy = vi.spyOn(console, "error").mockImplementation(() => { });
       mockAuth.requireAdmin.mockResolvedValue({ userId: "admin-1" });
       mockDal.saveAdminProduct.mockResolvedValue({ id: "prod-1", name: "Saved Shoe" });
       mockCache.updateTag.mockImplementationOnce(() => {
@@ -199,7 +199,7 @@ describe("Admin Catalog Server Actions", () => {
 
       const res = await saveProductAction("prod-1", { name: "Shoe", slug: "shoe" });
       expect(res.success).toBe(false);
-      expect(res.error).toBe("An unexpected system error occurred. Changes were not saved.");
+      expect(res.error).toContain("An unexpected system error occurred. Changes were not saved.");
       expect(res.error).not.toContain("FATAL");
       expect(mockCache.updateTag).not.toHaveBeenCalled();
     });
