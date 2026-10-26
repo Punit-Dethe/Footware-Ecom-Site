@@ -315,16 +315,6 @@ export async function finalizeMediaLibraryUploadAction(
     }
 
     try {
-      if (!sharpFn) {
-        const probed = probeImage(buffer);
-        if (!probed) {
-          throw new Error("Invalid or unreadable image format.");
-        }
-        if (probed.width * probed.height > 268402689) {
-          throw new Error("Image dimensions are too large.");
-        }
-        metadata = { format: probed.format, width: probed.width, height: probed.height } as SharpMetadata;
-      }
       const image = sharpFn
         ? sharpFn(buffer, {
           failOn: "error",
@@ -333,6 +323,15 @@ export async function finalizeMediaLibraryUploadAction(
         : null;
       if (image) {
         metadata = await image.metadata();
+      } else {
+        const probed = probeImage(buffer);
+        if (!probed) {
+          throw new Error("Invalid or unreadable image format.");
+        }
+        if (probed.width * probed.height > 268402689) {
+          throw new Error("Image dimensions are too large.");
+        }
+        metadata = { format: probed.format, width: probed.width, height: probed.height } as SharpMetadata;
       }
 
       if (!metadata.width || !metadata.height || !metadata.format) {
