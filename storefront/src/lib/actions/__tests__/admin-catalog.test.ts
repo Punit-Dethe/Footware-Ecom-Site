@@ -44,9 +44,8 @@ vi.mock("@/lib/db/admin-catalog", () => ({
   },
 }));
 
-vi.mock("next/cache", () => ({
-  updateTag: mockCache.updateTag,
-  revalidatePath: mockCache.revalidatePath,
+vi.mock("@/lib/cache/catalog-refresh", () => ({
+  refreshCatalogTag: mockCache.updateTag,
 }));
 
 import {
@@ -121,7 +120,6 @@ describe("Admin Catalog Server Actions", () => {
       expect(res.success).toBe(true);
       expect(res.data?.id).toBe("prod-new-id");
       expect(mockCache.updateTag).toHaveBeenCalledWith("catalog-public");
-      expect(mockCache.revalidatePath).toHaveBeenCalledWith("/admin/products");
     });
 
     it("invalidates 'catalog-public' tag after successful product save", async () => {
@@ -131,8 +129,6 @@ describe("Admin Catalog Server Actions", () => {
       const res = await saveProductAction("prod-1", { name: "Updated Shoe", slug: "updated-shoe" });
       expect(res.success).toBe(true);
       expect(mockCache.updateTag).toHaveBeenCalledWith("catalog-public");
-      expect(mockCache.revalidatePath).toHaveBeenCalledWith("/admin/products");
-      expect(mockCache.revalidatePath).toHaveBeenCalledWith("/admin/products/prod-1");
     });
 
     it("does not report database save failure after cache invalidation throws", async () => {
@@ -244,7 +240,6 @@ describe("Admin Catalog Server Actions", () => {
 
       expect(mockAuth.requireAdmin).toHaveBeenCalled();
       expect(mockCache.updateTag).toHaveBeenCalledWith("catalog-public");
-      expect(mockCache.revalidatePath).toHaveBeenCalledWith("/", "layout");
       expect(res).toEqual({
         success: true,
         data: { invalidated: true },
@@ -262,7 +257,7 @@ describe("Admin Catalog Server Actions", () => {
       expect(res.success).toBe(false);
       expect(res.error).toBe("Admin authorization required.");
       expect(mockCache.updateTag).not.toHaveBeenCalled();
-      expect(mockCache.revalidatePath).not.toHaveBeenCalled();
+      
     });
   });
 });

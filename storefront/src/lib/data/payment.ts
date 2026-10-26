@@ -2,6 +2,7 @@
 
 import crypto from "node:crypto";
 import { updateTag } from "next/cache";
+import { refreshCatalogTag } from "@/lib/cache/catalog-refresh";
 import {
   cacheTagSuffix,
   getCartToken,
@@ -386,8 +387,9 @@ export async function verifyRazorpayPaymentAndCompleteOrder(
     updateTag(checkoutTag(surface));
     updateTag(cartTag(surface));
     if (created) {
-      // Stock was decremented; refresh storefront availability.
-      updateTag("catalog-public");
+      // Stock was decremented; refresh storefront availability after the
+      // response so cache plumbing can never fail a paid checkout.
+      refreshCatalogTag("catalog-public");
     }
 
     // Fast checkout: schedule order confirmation email ONLY when created === true
