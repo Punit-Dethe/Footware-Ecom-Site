@@ -3,7 +3,7 @@
 import crypto from "node:crypto";
 import path from "node:path";
 import { refreshCatalogTag } from "@/lib/cache/catalog-refresh";
-import sharp, { type Metadata as SharpMetadata } from "sharp";
+import type { Metadata as SharpMetadata } from "sharp";
 import { AdminAuthError, requireAdmin } from "@/lib/auth/admin";
 import { query, transaction } from "@/lib/db";
 import {
@@ -303,6 +303,11 @@ export async function finalizeMediaLibraryUploadAction(
     let contentSha256: string;
 
     try {
+      // Loaded lazily: a top-level native import made every module that
+      // imports these actions (including /api/admin/rpc) fail to load when
+      // the sharp binary is unavailable, even for operations that never
+      // process images.
+      const { default: sharp } = await import("sharp");
       const image = sharp(buffer, {
         failOn: "error",
         limitInputPixels: 268402689,
