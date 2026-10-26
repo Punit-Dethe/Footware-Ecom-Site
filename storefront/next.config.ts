@@ -41,18 +41,6 @@ function supabaseImagePatterns(): RemotePattern[] {
 
 const nextConfig: NextConfig = {
   output: "standalone",
-  // sharp's native addon loads libvips via an rpath that file tracing does
-  // not follow, so the .so files were missing from the deployed function
-  // ("libvips-cpp.so... cannot open shared object file"). Include them for
-  // the admin endpoint that validates uploads.
-  outputFileTracingIncludes: {
-    "/api/admin/rpc": [
-      "./node_modules/.pnpm/@img+sharp-libvips-linux*/**/*",
-      "./node_modules/.pnpm/@img+sharp-linux*/**/*",
-      "./node_modules/@img/sharp-libvips-linux*/**/*",
-      "./node_modules/@img/sharp-linux*/**/*",
-    ],
-  },
   allowedDevOrigins: ["shop.lvh.me", "*.trycloudflare.com", "192.168.33.13"],
   env: {
     NEXT_PUBLIC_SENTRY_DSN: process.env.SENTRY_DSN || "",
@@ -100,23 +88,23 @@ const nextConfig: NextConfig = {
 const configWithIntl = withNextIntl(nextConfig);
 const finalConfig = process.env.SENTRY_DSN
   ? withSentryConfig(configWithIntl, {
-    org: process.env.SENTRY_ORG,
-    project: process.env.SENTRY_PROJECT,
-    authToken: process.env.SENTRY_AUTH_TOKEN,
-    silent: !process.env.CI,
+      org: process.env.SENTRY_ORG,
+      project: process.env.SENTRY_PROJECT,
+      authToken: process.env.SENTRY_AUTH_TOKEN,
+      silent: !process.env.CI,
 
-    // Upload a larger set of source maps for prettier stack traces (increases build time)
-    widenClientFileUpload: true,
+      // Upload a larger set of source maps for prettier stack traces (increases build time)
+      widenClientFileUpload: true,
 
-    // Automatically delete source maps after uploading to Sentry
-    // so they are not served publicly
-    sourcemaps: {
-      deleteSourcemapsAfterUpload: true,
-    },
+      // Automatically delete source maps after uploading to Sentry
+      // so they are not served publicly
+      sourcemaps: {
+        deleteSourcemapsAfterUpload: true,
+      },
 
-    // Disables the Sentry SDK build-time telemetry
-    telemetry: false,
-  })
+      // Disables the Sentry SDK build-time telemetry
+      telemetry: false,
+    })
   : configWithIntl;
 
 export default withBundleAnalyzer(finalConfig);
