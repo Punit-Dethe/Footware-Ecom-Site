@@ -44,6 +44,7 @@ const mockActions = vi.hoisted(() => ({
   deleteMediaLibraryAssetAction: vi.fn(),
 }));
 
+vi.mock("@/lib/admin/rpc-client", async () => ({ ...(await import("@/lib/actions/admin-media-library")) }));
 vi.mock("@/lib/actions/admin-media-library", () => ({
   requestMediaLibraryUploadAction: mockActions.requestMediaLibraryUploadAction,
   finalizeMediaLibraryUploadAction: mockActions.finalizeMediaLibraryUploadAction,

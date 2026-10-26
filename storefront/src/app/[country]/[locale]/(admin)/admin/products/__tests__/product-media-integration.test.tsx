@@ -42,6 +42,7 @@ const mockActions = vi.hoisted(() => ({
   restoreProductAction: vi.fn(),
 }));
 
+vi.mock("@/lib/admin/rpc-client", async () => ({ ...(await import("@/lib/actions/admin-media-library")), ...(await import("@/lib/actions/admin-catalog")) }));
 vi.mock("@/lib/actions/admin-media-library", () => ({
   setProductMediaHeroAction: mockActions.setProductMediaHeroAction,
   detachMediaAssetFromProductAction: mockActions.detachMediaAssetFromProductAction,

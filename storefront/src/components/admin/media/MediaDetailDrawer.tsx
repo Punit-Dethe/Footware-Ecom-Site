@@ -8,7 +8,7 @@ import type { MediaLibraryAssetItem, MediaLibraryAssetDetail } from "@/lib/db/me
 import {
   getMediaLibraryAssetDetailAction,
   deleteMediaLibraryAssetAction,
-} from "@/lib/actions/admin-media-library";
+} from "@/lib/admin/rpc-client";
 
 interface MediaDetailDrawerProps {
   asset: MediaLibraryAssetItem | null;
