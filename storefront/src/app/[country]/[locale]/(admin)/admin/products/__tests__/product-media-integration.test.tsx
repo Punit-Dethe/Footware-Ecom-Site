@@ -53,6 +53,11 @@ vi.mock("@/lib/actions/admin-media-library", () => ({
   listMediaLibraryAssetsAction: mockActions.listMediaLibraryAssetsAction,
 }));
 
+vi.mock("@/lib/admin/catalog-api", () => ({
+  saveProductRequest: mockActions.saveProductAction,
+  createProductRequest: vi.fn(),
+}));
+
 vi.mock("@/lib/actions/admin-catalog", () => ({
   saveProductAction: mockActions.saveProductAction,
   archiveProductAction: mockActions.archiveProductAction,

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createProductAction } from "@/lib/actions/admin-catalog";
+import { createProductRequest as createProductAction } from "@/lib/admin/catalog-api";
 import type { AdminCategoryRecord } from "@/lib/db/admin-catalog";
 
 interface ProductNewFormProps {
@@ -164,8 +164,8 @@ export function ProductNewForm({
                 <label
                   key={c.id}
                   className={`flex items-center gap-3 p-3 border rounded-[2px] cursor-pointer transition-colors ${isSelected
-                      ? "bg-[#e9e2d6]/60 border-[#30261f]"
-                      : "bg-[#fffefc] border-[#cfc4b6] hover:bg-[#ece7de]/30"
+                    ? "bg-[#e9e2d6]/60 border-[#30261f]"
+                    : "bg-[#fffefc] border-[#cfc4b6] hover:bg-[#ece7de]/30"
                     }`}
                 >
                   <input

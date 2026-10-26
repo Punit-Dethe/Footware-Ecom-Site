@@ -29,6 +29,11 @@ const mockActions = vi.hoisted(() => ({
   restoreProductAction: vi.fn(),
 }));
 
+vi.mock("@/lib/admin/catalog-api", () => ({
+  saveProductRequest: mockActions.saveProductAction,
+  createProductRequest: vi.fn(),
+}));
+
 vi.mock("@/lib/actions/admin-catalog", () => ({
   saveProductAction: mockActions.saveProductAction,
   archiveProductAction: mockActions.archiveProductAction,
