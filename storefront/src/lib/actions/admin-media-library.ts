@@ -25,6 +25,7 @@ import {
 } from "@/lib/db/media-v1";
 import type { AdminProductMediaPlacement } from "@/lib/db/admin-catalog";
 import { getStoragePublicUrl } from "@/lib/media/delivery";
+import { probeImage } from "@/lib/media/image-probe";
 import { MediaDomainError, MediaValidationError } from "@/lib/media/errors";
 import {
   createSignedMediaUploadUrl,
@@ -302,17 +303,36 @@ export async function finalizeMediaLibraryUploadAction(
     let decodedMime: string;
     let contentSha256: string;
 
+    // Loaded lazily: a top-level native import made every module that imports
+    // these actions (including /api/admin/rpc) fail to load when the sharp
+    // binary is unavailable. If sharp cannot load on this server (missing
+    // libvips), fall back to a header-only probe so uploads still work.
+    let sharpFn: typeof import("sharp").default | null = null;
     try {
-      // Loaded lazily: a top-level native import made every module that
-      // imports these actions (including /api/admin/rpc) fail to load when
-      // the sharp binary is unavailable, even for operations that never
-      // process images.
-      const { default: sharp } = await import("sharp");
-      const image = sharp(buffer, {
-        failOn: "error",
-        limitInputPixels: 268402689,
-      });
-      metadata = await image.metadata();
+      sharpFn = (await import("sharp")).default;
+    } catch (loadErr) {
+      console.error("[admin-media-library] sharp unavailable, using header probe:", loadErr);
+    }
+
+    try {
+      const image = sharpFn
+        ? sharpFn(buffer, {
+          failOn: "error",
+          limitInputPixels: 268402689,
+        })
+        : null;
+      if (image) {
+        metadata = await image.metadata();
+      } else {
+        const probed = probeImage(buffer);
+        if (!probed) {
+          throw new Error("Invalid or unreadable image format.");
+        }
+        if (probed.width * probed.height > 268402689) {
+          throw new Error("Image dimensions are too large.");
+        }
+        metadata = { format: probed.format, width: probed.width, height: probed.height } as SharpMetadata;
+      }
 
       if (!metadata.width || !metadata.height || !metadata.format) {
         throw new Error("Invalid or unreadable image format.");
@@ -342,6 +362,7 @@ export async function finalizeMediaLibraryUploadAction(
 
       // Compute dominant color
       try {
+        if (!image) throw new Error("sharp unavailable");
         const stats = await image.stats();
         const d = stats.dominant;
         dominantHex = `#${((1 << 24) + (d.r << 16) + (d.g << 8) + d.b).toString(16).slice(1)}`;
@@ -349,6 +370,7 @@ export async function finalizeMediaLibraryUploadAction(
 
       // Compute LQIP WebP
       try {
+        if (!image) throw new Error("sharp unavailable");
         const lqipBuffer = await image
           .resize(16, 16, { fit: "inside" })
           .webp({ quality: 20 })
