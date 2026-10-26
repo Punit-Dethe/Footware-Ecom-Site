@@ -7,8 +7,8 @@ import { Dialog as DialogPrimitive } from "radix-ui";
 import {
   archiveProductAction,
   restoreProductAction,
-  saveProductAction,
 } from "@/lib/actions/admin-catalog";
+import { saveProductRequest as saveProductAction } from "@/lib/admin/catalog-api";
 import type {
   AdminCategoryRecord,
   AdminProductDetail,
